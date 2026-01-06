@@ -1,0 +1,69 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Manga {
+  pid           Int        @id @default(autoincrement())
+  uuid          String     @unique @default(uuid())
+  fullname      String     @unique
+  displayTitle  String     @map("display_title")
+  originalTitle String     @map("original_title")
+  publishDate   DateTime?  @map("publish_date")
+  pages         Json
+  createAt      DateTime   @default(now()) @map("create_at")
+  updateAt      DateTime   @updatedAt @map("update_at")
+  mangaTags     MangaTag[]
+
+  @@index([updateAt, originalTitle])
+  @@map("manga")
+}
+
+model Tag {
+  pid         Int        @id @default(autoincrement())
+  uuid        String     @unique @default(uuid())
+  name        String     @unique
+  tagTypeUuid String     @map("tag_type_uuid")
+  createAt    DateTime   @default(now()) @map("create_at")
+  updateAt    DateTime   @updatedAt @map("update_at")
+  tagType     TagType    @relation(fields: [tagTypeUuid], references: [uuid], onDelete: Restrict)
+  mangaTags   MangaTag[]
+
+  @@map("tag")
+}
+
+model MangaTag {
+  pid       Int      @id @default(autoincrement())
+  mangaUuid String   @map("manga_uuid")
+  tagUuid   String   @map("tag_uuid")
+  createAt  DateTime @default(now()) @map("create_at")
+  updateAt  DateTime @updatedAt @map("update_at")
+  manga     Manga    @relation(fields: [mangaUuid], references: [uuid], onDelete: Cascade)
+  tag       Tag      @relation(fields: [tagUuid], references: [uuid], onDelete: Cascade)
+
+  @@unique([mangaUuid, tagUuid])
+  @@index([tagUuid])
+  @@map("manga_tag")
+}
+
+model TagType {
+  pid      Int      @id @default(autoincrement())
+  uuid     String   @unique @default(uuid())
+  name     String   @unique
+  createAt DateTime @default(now()) @map("create_at")
+  updateAt DateTime @updatedAt @map("update_at")
+  tags     Tag[]
+
+  @@map("tag_type")
+}
