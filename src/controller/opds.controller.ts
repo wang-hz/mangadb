@@ -120,7 +120,7 @@ async function getMangasResContent(mangas) {
 
 export class OpdsController {
   async getAllTagTypes(req: Request, res: Response) {
-    const tagTypes = await tagService.getAllTagTypes();
+    const tagTypes = await tagService.getTagTypesByPage(1, 100);
     const entry = Object.values(tagTypes).map(tagType => {
       return {
         id: tagType.uuid,

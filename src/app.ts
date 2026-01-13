@@ -1,6 +1,7 @@
 import prisma from '@/config/database';
 import { PORT } from '@/config/env';
 import fileRouter from '@/route/file.route';
+import mangadbRouter from '@/route/mangadb.route';
 import opdsRouter from '@/route/opds.route';
 import cors from 'cors';
 import express from 'express';
@@ -22,6 +23,7 @@ app.get('/health', async (req, res) => {
 
 app.use('/api/opds/v1.2', opdsRouter);
 app.use('/api/file', fileRouter);
+app.use('/api/mangadb', mangadbRouter);
 
 const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server is running on port ${PORT}`);

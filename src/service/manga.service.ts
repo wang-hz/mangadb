@@ -1,8 +1,76 @@
 import prisma from '@/config/database';
 
+const mangaSelect = {
+  uuid: true,
+  fullname: true,
+  displayTitle: true,
+  originalTitle: true,
+  publishDate: true,
+  createAt: true,
+  updateAt: true,
+  mangaTags: {
+    select: {
+      tag: {
+        select: {
+          uuid: true,
+          name: true,
+          tagType: {
+            select: {
+              uuid: true,
+              name: true,
+            },
+          },
+        },
+      },
+    },
+  },
+};
+
+function buildWhere(search?: string) {
+  if (!search) {
+    return {};
+  }
+  return {
+    OR: [
+      { displayTitle: { contains: search, mode: 'insensitive' } },
+      { originalTitle: { contains: search, mode: 'insensitive' } },
+    ],
+  };
+}
+
+function buildOrderBy(
+  sortBy: PaginationQuery['sortBy'],
+  sortOrder: PaginationQuery['sortOrder'],
+) {
+  return {
+    [sortBy ?? 'createAt']: sortOrder ?? 'desc',
+  } as const;
+}
+
 export class MangaService {
   async getMangaByUuid(uuid: string) {
     return prisma.manga.findUnique({ where: { uuid } });
+  }
+
+  async getMangasByPage(
+    pageIndex: number,
+    pageSize: number,
+    sortBy: 'createAt' | 'updateAt' | undefined,
+    sortOrder: 'asc' | 'desc' | undefined,
+    search?: string,
+  ) {
+    const where = buildWhere(search);
+    const orderBy = buildOrderBy(sortBy, sortOrder);
+    return prisma.$transaction([
+      prisma.manga.count({ where }),
+      prisma.manga.findMany({
+        select: mangaSelect,
+        where,
+        orderBy,
+        skip: pageIndex * pageSize,
+        take: pageSize,
+      }),
+    ]);
   }
 
   async getMangasByTagUuid(tagUuid: string, pageIndex: number, pageSize: number) {

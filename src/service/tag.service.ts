@@ -1,5 +1,33 @@
 import prisma from '@/config/database';
 
+const tagSelect = {
+  uuid: true,
+  name: true,
+  createAt: true,
+  updateAt: true,
+  tagType: {
+    select: {
+      name: true,
+    },
+  },
+}
+
+function buildWhere(search?: string) {
+  if (!search) {
+    return {};
+  }
+  return { name: { contains: search, mode: 'insensitive' } };
+}
+
+function buildOrderBy(
+  sortBy: PaginationQuery['sortBy'],
+  sortOrder: PaginationQuery['sortOrder'],
+) {
+  return {
+    [sortBy ?? 'createAt']: sortOrder ?? 'desc',
+  } as const;
+}
+
 export class TagService {
   async getTagsByType(tagType: string, pageIndex: number, pageSize: number) {
     const where = { tagType: { name: tagType } };
@@ -34,7 +62,34 @@ export class TagService {
     });
   }
 
-  async getAllTagTypes() {
-    return prisma.tagType.findMany();
+  async getTagsByPage(
+    pageIndex: number,
+    pageSize: number,
+    sortBy: 'createAt' | 'updateAt' | undefined,
+    sortOrder: 'asc' | 'desc' | undefined,
+    search?: string,
+  ) {
+    const where = buildWhere(search);
+    const orderBy = buildOrderBy(sortBy, sortOrder);
+    return prisma.$transaction([
+      prisma.tag.count({ where }),
+      prisma.tag.findMany({
+        select: tagSelect,
+        where,
+        orderBy,
+        skip: pageIndex * pageSize,
+        take: pageSize,
+      }),
+    ]);
+  }
+
+  async getTagTypesByPage(pageIndex: number, pageSize: number) {
+    return prisma.$transaction([
+      prisma.tag.count(),
+      prisma.tag.findMany({
+        skip: pageIndex * pageSize,
+        take: pageSize,
+      }),
+    ]);
   }
 }
