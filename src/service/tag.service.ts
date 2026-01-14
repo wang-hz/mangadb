@@ -85,11 +85,15 @@ export class TagService {
 
   async getTagTypesByPage(pageIndex: number, pageSize: number) {
     return prisma.$transaction([
-      prisma.tag.count(),
-      prisma.tag.findMany({
+      prisma.tagType.count(),
+      prisma.tagType.findMany({
         skip: pageIndex * pageSize,
         take: pageSize,
       }),
     ]);
+  }
+
+  async getAllTagTypes() {
+    return prisma.tagType.findMany();
   }
 }
