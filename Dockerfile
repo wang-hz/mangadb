@@ -4,15 +4,17 @@ WORKDIR /app
 
 COPY package*.json ./
 COPY prisma ./prisma/
-
 RUN npm ci
 
 COPY . .
 
+ARG DATABASE_URL
+ENV DATABASE_URL=${DATABASE_URL}
+
 RUN npx prisma generate
 RUN npm run build
 
-FROM --platform=linux/amd64 node:20-alpine
+FROM node:20-alpine
 
 WORKDIR /app
 
@@ -20,19 +22,15 @@ RUN apk add --no-cache dumb-init
 
 COPY package*.json ./
 COPY prisma ./prisma/
-
 RUN npm ci --omit=dev --ignore-scripts
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 
-RUN npx prisma generate
-
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001
 
 RUN chown -R nodejs:nodejs /app
-
 USER nodejs
 
 EXPOSE 3000

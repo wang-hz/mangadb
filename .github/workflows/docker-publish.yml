@@ -33,6 +33,8 @@ jobs:
           context: .
           push: true
           platforms: linux/amd64
+          build-args: |
+            DATABASE_URL=postgresql://user:pass@localhost:5432/dummy
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
