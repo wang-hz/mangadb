@@ -17,24 +17,19 @@ RUN npm run build
 FROM node:20-alpine
 
 WORKDIR /app
-
 RUN apk add --no-cache dumb-init
 
-COPY package*.json ./
-COPY prisma ./prisma/
-RUN npm ci --omit=dev --ignore-scripts
-
+COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY prisma ./prisma
 
 RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001
+    adduser -S nodejs -u 1001 && \
+    chown -R nodejs:nodejs /app
 
-RUN chown -R nodejs:nodejs /app
 USER nodejs
 
 EXPOSE 3000
-
 ENTRYPOINT ["dumb-init", "--"]
 
 CMD ["sh", "-c", "npx prisma migrate deploy && node dist/app.js"]
