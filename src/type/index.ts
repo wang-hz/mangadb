@@ -1,6 +1,6 @@
 interface PaginationQuery {
   page?: string;
-  pageSize?: string;
+  limit?: string;
   search?: string;
   sortBy?: 'createAt' | 'updateAt';
   sortOrder?: 'asc' | 'desc';

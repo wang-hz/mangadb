@@ -49,12 +49,15 @@ function buildOrderBy(
 
 export class MangaService {
   async getMangaByUuid(uuid: string) {
-    return prisma.manga.findUnique({ where: { uuid } });
+    return prisma.manga.findUnique({
+      where: { uuid },
+      select: mangaSelect,
+    });
   }
 
   async getMangasByPage(
-    pageIndex: number,
-    pageSize: number,
+    page: number,
+    limit: number,
     sortBy: 'createAt' | 'updateAt' | undefined,
     sortOrder: 'asc' | 'desc' | undefined,
     search?: string,
@@ -62,15 +65,33 @@ export class MangaService {
     const where = buildWhere(search);
     const orderBy = buildOrderBy(sortBy, sortOrder);
     return prisma.$transaction([
-      prisma.manga.count({ where }),
       prisma.manga.findMany({
         select: mangaSelect,
         where,
         orderBy,
-        skip: pageIndex * pageSize,
-        take: pageSize,
+        skip: page * limit,
+        take: limit,
       }),
+      prisma.manga.count({ where }),
     ]);
+  }
+
+  async updateManga(uuid: string, fullname?: string, displayTitle?: string, originalTitle?: string) {
+    return prisma.manga.update({
+      where: { uuid },
+      data: {
+        fullname, displayTitle, originalTitle,
+        updateAt: new Date(),
+      },
+    });
+  }
+
+  async createMangaTags(mangaUuid: string, tagUuids: string[]) {
+    return prisma.mangaTag.createMany({
+      data: tagUuids.map(tagUuid => {
+        return { mangaUuid, tagUuid };
+      }),
+    });
   }
 
   async getMangasByTagUuid(tagUuid: string, pageIndex: number, pageSize: number) {

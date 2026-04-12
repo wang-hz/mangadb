@@ -1,4 +1,4 @@
-import { Manga, Tag } from '@/generated/prisma/client';
+import { Manga } from '@/generated/prisma/client';
 import { MangaService } from '@/service/manga.service';
 import { TagService } from '@/service/tag.service';
 import type { Request, Response } from 'express';
@@ -7,9 +7,9 @@ import { create } from 'xmlbuilder2';
 const mangaService = new MangaService();
 const tagService = new TagService();
 
-const pageSize = 10;
+const PAGE_SIZE = 10;
 
-async function getTagsResContent(tags: Tag[]) {
+async function getTagsResContent(tags) {
   const tagUuidManga = new Map<string, Manga>();
   for (const tag of tags) {
     const manga = await mangaService.getLatestMangaByTagUuid(tag.uuid)
@@ -118,6 +118,10 @@ async function getMangasResContent(mangas) {
   };
 }
 
+function getPage(query) {
+  return typeof query === 'string' ? parseInt(query) : 1;
+}
+
 export class OpdsController {
   async getAllTagTypes(req: Request, res: Response) {
     const tagTypes = await tagService.getAllTagTypes();
@@ -177,9 +181,8 @@ export class OpdsController {
     if (!tagType) {
       return res.sendStatus(400);
     }
-    const page = req.query.page;
-    const pageNumber = typeof page === 'string' ? parseInt(page) : 1;
-    const [tags, count] = await tagService.getTagsByType(tagType, pageNumber - 1, pageSize);
+    const page = getPage(req.query.page);
+    const [tags, total] = await tagService.getTagsByType(tagType, page-1, PAGE_SIZE);
     const content = await getTagsResContent(tags);
     content.feed.id = tagType;
     content.feed.title = tagType;
@@ -188,17 +191,17 @@ export class OpdsController {
       '@href': req.originalUrl,
       '@type': 'application/atom+xml;profile=opds-catalog;kind=navigation'
     });
-    if (pageNumber > 1) {
+    if (page > 1) {
       content.feed.link.push({
         '@rel': 'previous',
-        '@href': `/api/opds/v1.2/tag_types/${tagType}?page=${pageNumber-1}`,
+        '@href': `/api/opds/v1.2/tag_types/${tagType}?page=${page-1}`,
         '@type': 'application/atom+xml;profile=opds-catalog;kind=navigation'
       });
     }
-    if (count > pageNumber * pageSize) {
+    if (total > page * PAGE_SIZE) {
       content.feed.link.push({
         '@rel': 'next',
-        '@href': `/api/opds/v1.2/tag_types/${tagType}?page=${pageNumber+1}`,
+        '@href': `/api/opds/v1.2/tag_types/${tagType}?page=${page+1}`,
         '@type': 'application/atom+xml;profile=opds-catalog;kind=navigation'
       });
     }
@@ -215,9 +218,8 @@ export class OpdsController {
     if (!tag) {
       return res.sendStatus(404);
     }
-    const page = req.query.page;
-    const pageNumber = typeof page === 'string' ? parseInt(page) : 1;
-    const [mangas, count] = await mangaService.getMangasByTagUuid(tagUuid, pageNumber - 1, pageSize);
+    const page = getPage(req.query.page);
+    const [mangas, total] = await mangaService.getMangasByTagUuid(tagUuid, page-1, PAGE_SIZE);
     const content = await getMangasResContent(mangas);
     content.feed.id = tagUuid;
     content.feed.title = tag.name;
@@ -226,17 +228,17 @@ export class OpdsController {
       '@href': req.originalUrl,
       '@type': 'application/atom+xml;profile=opds-catalog;kind=navigation'
     });
-    if (pageNumber > 1) {
+    if (page > 1) {
       content.feed.link.push({
         '@rel': 'previous',
-        '@href': `/api/opds/v1.2/tags/${tagUuid}?page=${pageNumber-1}`,
+        '@href': `/api/opds/v1.2/tags/${tagUuid}?page=${page-1}`,
         '@type': 'application/atom+xml;profile=opds-catalog;kind=navigation'
       });
     }
-    if (count > pageNumber * pageSize) {
+    if (total > page * PAGE_SIZE) {
       content.feed.link.push({
         '@rel': 'next',
-        '@href': `/api/opds/v1.2/tags/${tagUuid}?page=${pageNumber+1}`,
+        '@href': `/api/opds/v1.2/tags/${tagUuid}?page=${page+1}`,
         '@type': 'application/atom+xml;profile=opds-catalog;kind=navigation'
       });
     }
@@ -308,9 +310,8 @@ export class OpdsController {
   }
 
   async getLatestMangas(req: Request, res: Response) {
-    const page = req.query.page;
-    const pageNumber = typeof page === 'string' ? parseInt(page) : 1;
-    const [mangas, count] = await mangaService.getLatestMangas(pageNumber - 1, pageSize);
+    const page = getPage(req.query.page);
+    const [mangas, total] = await mangaService.getLatestMangas(page-1, PAGE_SIZE);
     const content = await getMangasResContent(mangas);
     content.feed.id = 'latest';
     content.feed.title = 'latest';
@@ -319,17 +320,17 @@ export class OpdsController {
       '@href': req.originalUrl,
       '@type': 'application/atom+xml;profile=opds-catalog;kind=navigation'
     });
-    if (pageNumber > 1) {
+    if (page > 1) {
       content.feed.link.push({
         '@rel': 'previous',
-        '@href': `/api/opds/v1.2/mangas/latest?page=${pageNumber-1}`,
+        '@href': `/api/opds/v1.2/mangas/latest?page=${page-1}`,
         '@type': 'application/atom+xml;profile=opds-catalog;kind=navigation'
       });
     }
-    if (count > pageNumber * pageSize) {
+    if (total > page * PAGE_SIZE) {
       content.feed.link.push({
         '@rel': 'next',
-        '@href': `/api/opds/v1.2/mangas/latest?page=${pageNumber+1}`,
+        '@href': `/api/opds/v1.2/mangas/latest?page=${page+1}`,
         '@type': 'application/atom+xml;profile=opds-catalog;kind=navigation'
       });
     }

@@ -7,9 +7,17 @@ const tagSelect = {
   updateAt: true,
   tagType: {
     select: {
+      uuid: true,
       name: true,
     },
   },
+};
+
+const tagTypeSelect = {
+  uuid: true,
+  name: true,
+  createAt: true,
+  updateAt: true,
 }
 
 function buildWhere(search?: string) {
@@ -29,7 +37,7 @@ function buildOrderBy(
 }
 
 export class TagService {
-  async getTagsByType(tagType: string, pageIndex: number, pageSize: number) {
+  async getTagsByType(tagType: string, page: number, limit: number) {
     const where = { tagType: { name: tagType } };
     return prisma.$transaction([
       prisma.tag.findMany({
@@ -39,8 +47,8 @@ export class TagService {
           { updateAt: 'desc' },
           { pid: 'desc' },
         ],
-        skip: pageIndex * pageSize,
-        take: pageSize,
+        skip: page * limit,
+        take: limit,
       }),
       prisma.tag.count({ where }),
     ]);
@@ -52,7 +60,7 @@ export class TagService {
 
   async getTagsByKeyword(keyword: string) {
     return prisma.tag.findMany({
-      include: { tagType: { select: { name: true } } },
+      select: tagSelect,
       where: {
         name: {
           contains: keyword,
@@ -63,8 +71,8 @@ export class TagService {
   }
 
   async getTagsByPage(
-    pageIndex: number,
-    pageSize: number,
+    page: number,
+    limit: number,
     sortBy: 'createAt' | 'updateAt' | undefined,
     sortOrder: 'asc' | 'desc' | undefined,
     search?: string,
@@ -72,28 +80,40 @@ export class TagService {
     const where = buildWhere(search);
     const orderBy = buildOrderBy(sortBy, sortOrder);
     return prisma.$transaction([
-      prisma.tag.count({ where }),
       prisma.tag.findMany({
         select: tagSelect,
         where,
         orderBy,
-        skip: pageIndex * pageSize,
-        take: pageSize,
+        skip: page * limit,
+        take: limit,
       }),
+      prisma.tag.count({ where }),
     ]);
   }
 
-  async getTagTypesByPage(pageIndex: number, pageSize: number) {
+  async createTag(name: string, tagTypeUuid: string) {
+    return prisma.tag.create({ data: { name, tagTypeUuid } });
+  }
+
+  async getTagTypesByPage(page: number, limit: number) {
     return prisma.$transaction([
-      prisma.tagType.count(),
       prisma.tagType.findMany({
-        skip: pageIndex * pageSize,
-        take: pageSize,
+        select: tagTypeSelect,
+        skip: page * limit,
+        take: limit,
       }),
+      prisma.tagType.count(),
     ]);
   }
 
   async getAllTagTypes() {
-    return prisma.tagType.findMany();
+    return prisma.tagType.findMany({ select: tagTypeSelect });
+  }
+
+  async getTagTypeByName(name: string) {
+    return prisma.tagType.findUnique({
+      select: tagTypeSelect,
+      where: { name },
+    });
   }
 }
