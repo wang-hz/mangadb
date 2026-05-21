@@ -7,6 +7,9 @@ COPY prisma ./prisma/
 
 RUN npm ci
 
+COPY web/package*.json ./web/
+RUN cd web && npm ci
+
 COPY . .
 
 ARG DATABASE_URL
@@ -14,6 +17,7 @@ ENV DATABASE_URL=${DATABASE_URL}
 
 RUN npx prisma generate
 RUN npm run build
+RUN npm run web:build
 
 FROM --platform=linux/amd64 node:20-alpine
 
@@ -27,6 +31,7 @@ COPY prisma ./prisma/
 RUN npm ci --omit=dev --ignore-scripts
 
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/web/dist ./web/dist
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 
 RUN npx prisma generate
