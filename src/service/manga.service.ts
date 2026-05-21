@@ -6,6 +6,7 @@ const mangaSelect = {
   displayTitle: true,
   originalTitle: true,
   publishDate: true,
+  pages: true,
   createAt: true,
   updateAt: true,
   mangaTags: {

@@ -30,7 +30,10 @@ export class FileController {
       throw err;
     });
     archive.pipe(res);
-    const pages = manga.pages as string[];
+    const pages = manga.pages as string[] | null;
+    if (!Array.isArray(pages)) {
+      return res.sendStatus(404);
+    }
     for (const imgFilename of pages) {
       archive.file(path.join(mangaPath, imgFilename), { name: imgFilename });
     }
@@ -48,7 +51,10 @@ export class FileController {
     if (!manga) {
       return res.sendStatus(404);
     }
-    const pages = manga.pages as string[];
+    const pages = manga.pages as string[] | null;
+    if (!Array.isArray(pages)) {
+      return res.sendStatus(404);
+    }
     const imgFilename = pages[pageIndex];
     if (!imgFilename) {
       return res.sendStatus(404);
