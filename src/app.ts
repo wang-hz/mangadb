@@ -26,6 +26,8 @@ app.use('/api/opds/v1.2', opdsRouter);
 app.use('/api/file', fileRouter);
 app.use('/api/mangadb', mangadbRouter);
 
+app.use('/api', (_req, res) => res.status(404).json({ error: 'Not Found' }));
+
 const webDistPath = path.resolve(process.cwd(), 'web/dist');
 app.use(express.static(webDistPath));
 app.get('/{*path}', (_req, res) => res.sendFile(path.join(webDistPath, 'index.html')));
