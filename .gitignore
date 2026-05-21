@@ -1,5 +1,7 @@
 /.idea/
 /http/
 /node_modules/
+/web/node_modules/
+/web/dist/
 /src/generated/prisma/
 .env
