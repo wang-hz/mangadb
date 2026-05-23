@@ -4,6 +4,7 @@ export interface Manga {
   displayTitle: string
   originalTitle: string
   publishDate: string | null
+  pages: string[]
   cover: number | null
   createAt: string
   updateAt: string
