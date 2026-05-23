@@ -1,5 +1,5 @@
 import { SearchOutlined } from '@ant-design/icons'
-import { Input, Select, Space, Table } from 'antd'
+import { Input, message, Select, Space, Table } from 'antd'
 import type { TableColumnsType, TablePaginationConfig } from 'antd'
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -42,6 +42,7 @@ export default function MangaListPage() {
     setLoading(true)
     api.getMangas({ page, limit: pageSize, search: search || undefined, sortBy, sortOrder })
       .then(res => { setData(res.items); setTotal(res.total) })
+      .catch(() => message.error('加载漫画列表失败'))
       .finally(() => setLoading(false))
   }, [page, pageSize, search, sort])
 

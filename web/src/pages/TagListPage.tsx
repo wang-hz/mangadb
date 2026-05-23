@@ -45,11 +45,14 @@ export default function TagListPage() {
     setLoading(true)
     api.getTags({ page, limit: pageSize, search: search || undefined, sortBy, sortOrder, tagTypeName: tagTypeFilter })
       .then(res => { setData(res.items); setTotal(res.total) })
+      .catch(() => message.error('加载标签列表失败'))
       .finally(() => setLoading(false))
   }, [page, pageSize, search, sort, tagTypeFilter, refreshKey])
 
   useEffect(() => {
-    api.getTagTypes({ page: 1, limit: 100 }).then(res => setTagTypes(res.items))
+    api.getTagTypes({ page: 1, limit: 100 })
+      .then(res => setTagTypes(res.items))
+      .catch(() => message.error('加载标签类型失败'))
   }, [])
 
   const handleCreate = async (values: { name: string; type: string }) => {

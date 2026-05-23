@@ -1,5 +1,5 @@
 import { ArrowLeftOutlined, SearchOutlined } from '@ant-design/icons'
-import { Button, Descriptions, Input, Select, Space, Table, Tag } from 'antd'
+import { Button, Descriptions, Input, message, Select, Space, Table, Tag } from 'antd'
 import type { TableColumnsType, TablePaginationConfig } from 'antd'
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
@@ -64,7 +64,9 @@ export default function TagMangaListPage() {
 
   useEffect(() => {
     if (!uuid) return
-    api.getTag(uuid).then(setTag)
+    api.getTag(uuid)
+      .then(setTag)
+      .catch(() => message.error('加载标签信息失败'))
   }, [uuid])
 
   useEffect(() => {
@@ -73,6 +75,7 @@ export default function TagMangaListPage() {
     setLoading(true)
     api.getMangasByTag(uuid, { page, limit: pageSize, search: search || undefined, sortBy, sortOrder })
       .then(res => { setData(res.items); setTotal(res.total) })
+      .catch(() => message.error('加载漫画列表失败'))
       .finally(() => setLoading(false))
   }, [uuid, page, pageSize, search, sort])
 

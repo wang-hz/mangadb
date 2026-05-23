@@ -30,6 +30,7 @@ export default function MangaDetailPage() {
         setManga(m)
         form.setFieldsValue({ fullname: m.fullname, displayTitle: m.displayTitle, originalTitle: m.originalTitle })
       })
+      .catch(() => message.error('加载漫画失败'))
       .finally(() => setLoading(false))
   }
 
@@ -38,6 +39,7 @@ export default function MangaDetailPage() {
   useEffect(() => {
     api.getTags({ page: 1, limit: 50, search: tagSearch || undefined })
       .then(res => setTagOptions(res.items))
+      .catch(() => message.error('加载标签失败'))
   }, [tagSearch])
 
   const handleSave = async () => {
