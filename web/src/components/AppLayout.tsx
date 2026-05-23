@@ -2,7 +2,7 @@ import { BookOutlined, TagOutlined } from '@ant-design/icons'
 import { Layout, Menu } from 'antd'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 
-const { Sider, Content } = Layout
+const { Header, Content } = Layout
 
 export default function AppLayout() {
   const navigate = useNavigate()
@@ -14,37 +14,35 @@ export default function AppLayout() {
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      <Sider>
-        <div style={{
+      <Header style={{ display: 'flex', alignItems: 'center', padding: '0 24px', gap: 24 }}>
+        <span style={{
           color: 'white',
-          padding: '16px 20px',
           fontWeight: 'bold',
           fontSize: '18px',
-          borderBottom: '1px solid rgba(255,255,255,0.1)',
+          whiteSpace: 'nowrap',
         }}>
           MangaDB
-        </div>
+        </span>
         <Menu
           theme="dark"
-          mode="inline"
+          mode="horizontal"
           selectedKeys={[selectedKey]}
+          style={{ flex: 1, minWidth: 0, borderBottom: 'none' }}
           items={[
             { key: 'mangas', icon: <BookOutlined />, label: '漫画', onClick: () => navigate('/mangas') },
             { key: 'tags', icon: <TagOutlined />, label: '标签', onClick: () => navigate('/tags') },
           ]}
         />
-      </Sider>
-      <Layout>
-        <Content style={{
-          margin: '24px',
-          padding: '24px',
-          background: '#fff',
-          borderRadius: '8px',
-          minHeight: 280,
-        }}>
-          <Outlet />
-        </Content>
-      </Layout>
+      </Header>
+      <Content style={{
+        margin: '24px',
+        padding: '24px',
+        background: '#fff',
+        borderRadius: '8px',
+        minHeight: 280,
+      }}>
+        <Outlet />
+      </Content>
     </Layout>
   )
 }
