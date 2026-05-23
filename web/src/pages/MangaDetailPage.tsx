@@ -101,8 +101,7 @@ export default function MangaDetailPage() {
           style={{ width: 180, borderRadius: 4, flexShrink: 0 }}
         />
         <Descriptions bordered column={2} size="small">
-          <Descriptions.Item label="UUID" span={2}>{manga.uuid}</Descriptions.Item>
-          <Descriptions.Item label="封面页码">
+<Descriptions.Item label="封面页码">
             {savedCoverIndex}
             {pendingCover !== null && pendingCover !== savedCoverIndex && (
               <span style={{ color: '#faad14', marginLeft: 4 }}>→ {pendingCover}（待保存）</span>
