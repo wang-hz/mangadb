@@ -8,6 +8,7 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
     const text = await res.text()
     throw new Error(`${res.status}: ${text}`)
   }
+  if (res.status === 204) return undefined as T
   return res.json()
 }
 
@@ -40,6 +41,12 @@ export const api = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(tagUuids),
+    })
+  },
+
+  deleteMangaTag(mangaUuid: string, tagUuid: string) {
+    return request<void>(`${BASE}/mangas/${mangaUuid}/tags/${tagUuid}`, {
+      method: 'DELETE',
     })
   },
 

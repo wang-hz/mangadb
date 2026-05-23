@@ -97,6 +97,12 @@ export class MangaService {
     });
   }
 
+  async deleteMangaTag(mangaUuid: string, tagUuid: string) {
+    return prisma.mangaTag.delete({
+      where: { mangaUuid_tagUuid: { mangaUuid, tagUuid } },
+    });
+  }
+
   async getMangasByTagUuid(
     tagUuid: string,
     pageIndex: number,

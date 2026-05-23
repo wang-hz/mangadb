@@ -49,6 +49,13 @@ export class MangadbController {
     res.status(201).json(payload);
   }
 
+  async deleteMangaTag(req: Request, res: Response) {
+    const mangaUuid: string = req.params.uuid;
+    const tagUuid: string = req.params.tagUuid;
+    await mangaService.deleteMangaTag(mangaUuid, tagUuid);
+    res.sendStatus(204);
+  }
+
   async getTagByUuid(req: Request, res: Response) {
     const tag = await tagService.getTagByUuid(req.params.uuid);
     if (!tag) { res.status(404).json({ msg: 'Not found' }); return; }

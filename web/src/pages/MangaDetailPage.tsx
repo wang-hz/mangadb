@@ -72,6 +72,16 @@ export default function MangaDetailPage() {
     }
   }
 
+  const handleDeleteTag = async (tagUuid: string) => {
+    if (!uuid) return
+    try {
+      await api.deleteMangaTag(uuid, tagUuid)
+      loadManga(uuid)
+    } catch {
+      message.error('删除标签失败')
+    }
+  }
+
   const handleStageTags = () => {
     if (!manga || selectedTagUuids.length === 0) return
     const existingUuids = new Set(manga.mangaTags.map(mt => mt.tag.uuid))
@@ -186,7 +196,12 @@ export default function MangaDetailPage() {
             ? <span style={{ color: '#999' }}>暂无标签</span>
             : <>
                 {manga.mangaTags.map(mt => (
-                  <Tag key={mt.tag.uuid} color="blue">
+                  <Tag
+                    key={mt.tag.uuid}
+                    color="blue"
+                    closable
+                    onClose={() => handleDeleteTag(mt.tag.uuid)}
+                  >
                     {mt.tag.tagType.name}: {mt.tag.name}
                   </Tag>
                 ))}

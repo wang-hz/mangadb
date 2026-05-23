@@ -8,6 +8,7 @@ router.get('/mangas', mangadbController.getMangasByPage);
 router.get('/mangas/:uuid', mangadbController.getMangaByUuid);
 router.patch('/mangas/:uuid', mangadbController.updateManga);
 router.post('/mangas/:uuid/tags', mangadbController.createMangaTags);
+router.delete('/mangas/:uuid/tags/:tagUuid', mangadbController.deleteMangaTag);
 router.get('/tags/:uuid/mangas', mangadbController.getMangasByTagUuid);
 router.get('/tags/:uuid', mangadbController.getTagByUuid);
 router.get('/tags', mangadbController.getTagsByPage);
