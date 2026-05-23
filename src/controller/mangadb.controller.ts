@@ -48,11 +48,12 @@ export class MangadbController {
     res.status(201).json(payload);
   }
 
-  async getMangasByTagUuid(req: Request, res: Response) {
+  async getMangasByTagUuid(req: Request<any, any, any, PaginationQuery>, res: Response) {
     const tagUuid = req.params.uuid;
-    const page = parsePositiveInt(req.query.page as string, 1);
-    const limit = parsePositiveInt(req.query.limit as string, 10);
-    const [items, total] = await mangaService.getMangasByTagUuid(tagUuid, page - 1, limit);
+    const page = parsePositiveInt(req.query.page, 1);
+    const limit = parsePositiveInt(req.query.limit, 10);
+    const { search, sortBy, sortOrder } = req.query;
+    const [items, total] = await mangaService.getMangasByTagUuid(tagUuid, page - 1, limit, sortBy, sortOrder, search);
     res.json({ items, total, page, limit });
   }
 

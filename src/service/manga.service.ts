@@ -95,17 +95,22 @@ export class MangaService {
     });
   }
 
-  async getMangasByTagUuid(tagUuid: string, pageIndex: number, pageSize: number) {
-    const where = { mangaTags: { some: { tag: { uuid: tagUuid } } } };
+  async getMangasByTagUuid(
+    tagUuid: string,
+    pageIndex: number,
+    pageSize: number,
+    sortBy: 'createAt' | 'updateAt' | 'publishDate' | undefined,
+    sortOrder: 'asc' | 'desc' | undefined,
+    search?: string,
+  ) {
+    const tagFilter = { mangaTags: { some: { tag: { uuid: tagUuid } } } };
+    const where = search ? { AND: [tagFilter, buildWhere(search)] } : tagFilter;
+    const orderBy = buildOrderBy(sortBy, sortOrder);
     return prisma.$transaction([
       prisma.manga.findMany({
-        include: { mangaTags: { include: { tag: { include: { tagType: true } } } } },
+        select: mangaSelect,
         where,
-        orderBy: [
-          { updateAt: 'desc' },
-          { originalTitle: 'desc' },
-          { pid: 'desc' },
-        ],
+        orderBy,
         skip: pageIndex * pageSize,
         take: pageSize,
       }),
