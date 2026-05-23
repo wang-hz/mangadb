@@ -120,20 +120,24 @@ export class MangaService {
     ]);
   }
 
-  async getLatestMangaByTagUuid(tagUuid: string) {
-    const mangas = await prisma.manga.findMany({
-      where: { mangaTags: { some: { tag: { uuid: tagUuid } } } },
+  async getLatestMangasByTagUuids(tagUuids: string[]) {
+    if (tagUuids.length === 0) return new Map();
+    const rows = await prisma.mangaTag.findMany({
+      where: { tagUuid: { in: tagUuids } },
+      include: { manga: true },
       orderBy: [
-        { updateAt: 'desc' },
-        { originalTitle: 'desc' },
-        { pid: 'desc' },
+        { manga: { updateAt: 'desc' } },
+        { manga: { originalTitle: 'desc' } },
+        { manga: { pid: 'desc' } },
       ],
-      take: 1,
     });
-    if (mangas.length === 0) {
-      return null;
+    const result = new Map<string, (typeof rows)[number]['manga']>();
+    for (const row of rows) {
+      if (!result.has(row.tagUuid)) {
+        result.set(row.tagUuid, row.manga);
+      }
     }
-    return mangas[0];
+    return result;
   }
 
   async getMangasByKeyword(keyword: string) {

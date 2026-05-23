@@ -1,4 +1,3 @@
-import { Manga } from '@/generated/prisma/client';
 import { MangaService } from '@/service/manga.service';
 import { TagService } from '@/service/tag.service';
 import type { Request, Response } from 'express';
@@ -10,14 +9,7 @@ const tagService = new TagService();
 const PAGE_SIZE = 10;
 
 async function getTagsResContent(tags) {
-  const tagUuidManga = new Map<string, Manga>();
-  for (const tag of tags) {
-    const manga = await mangaService.getLatestMangaByTagUuid(tag.uuid)
-    if (!manga) {
-      continue;
-    }
-    tagUuidManga.set(tag.uuid, manga);
-  }
+  const tagUuidManga = await mangaService.getLatestMangasByTagUuids(tags.map((t: { uuid: string }) => t.uuid));
   return {
     feed: {
       '@xmlns': 'http://www.w3.org/2005/Atom',
