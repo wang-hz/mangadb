@@ -59,7 +59,7 @@ export class MangaService {
   async getMangasByPage(
     page: number,
     limit: number,
-    sortBy: 'createAt' | 'updateAt' | undefined,
+    sortBy: 'createAt' | 'updateAt' | 'publishDate' | undefined,
     sortOrder: 'asc' | 'desc' | undefined,
     search?: string,
   ) {

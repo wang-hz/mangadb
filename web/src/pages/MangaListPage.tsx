@@ -1,5 +1,5 @@
 import { SearchOutlined } from '@ant-design/icons'
-import { Input, Space, Table, Tag, Typography } from 'antd'
+import { Input, Select, Space, Table, Tag, Typography } from 'antd'
 import type { TableColumnsType, TablePaginationConfig } from 'antd'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -7,6 +7,18 @@ import { api } from '../api'
 import type { Manga } from '../types'
 
 const { Title } = Typography
+
+type SortBy = 'updateAt' | 'createAt' | 'publishDate'
+type SortOrder = 'asc' | 'desc'
+
+const SORT_OPTIONS: { label: string; value: `${SortBy}-${SortOrder}` }[] = [
+  { label: '更新时间（最新）', value: 'updateAt-desc' },
+  { label: '更新时间（最早）', value: 'updateAt-asc' },
+  { label: '创建时间（最新）', value: 'createAt-desc' },
+  { label: '创建时间（最早）', value: 'createAt-asc' },
+  { label: '出版日期（最新）', value: 'publishDate-desc' },
+  { label: '出版日期（最早）', value: 'publishDate-asc' },
+]
 
 export default function MangaListPage() {
   const navigate = useNavigate()
@@ -17,13 +29,15 @@ export default function MangaListPage() {
   const [pageSize, setPageSize] = useState(10)
   const [search, setSearch] = useState('')
   const [searchInput, setSearchInput] = useState('')
+  const [sort, setSort] = useState<`${SortBy}-${SortOrder}`>('updateAt-desc')
 
   useEffect(() => {
+    const [sortBy, sortOrder] = sort.split('-') as [SortBy, SortOrder]
     setLoading(true)
-    api.getMangas({ page, limit: pageSize, search: search || undefined, sortBy: 'updateAt', sortOrder: 'desc' })
+    api.getMangas({ page, limit: pageSize, search: search || undefined, sortBy, sortOrder })
       .then(res => { setData(res.items); setTotal(res.total) })
       .finally(() => setLoading(false))
-  }, [page, pageSize, search])
+  }, [page, pageSize, search, sort])
 
   const columns: TableColumnsType<Manga> = [
     { title: '显示标题', dataIndex: 'displayTitle', ellipsis: true },
@@ -67,18 +81,26 @@ export default function MangaListPage() {
   return (
     <Space direction="vertical" style={{ width: '100%' }} size="middle">
       <Title level={4} style={{ margin: 0 }}>漫画列表</Title>
-      <Input
-        prefix={<SearchOutlined />}
-        placeholder="搜索显示标题或原始标题，按回车搜索"
-        value={searchInput}
-        onChange={e => {
-          setSearchInput(e.target.value)
-          if (!e.target.value) { setSearch(''); setPage(1) }
-        }}
-        onPressEnter={() => { setPage(1); setSearch(searchInput) }}
-        allowClear
-        style={{ maxWidth: 420 }}
-      />
+      <Space>
+        <Input
+          prefix={<SearchOutlined />}
+          placeholder="搜索显示标题或原始标题，按回车搜索"
+          value={searchInput}
+          onChange={e => {
+            setSearchInput(e.target.value)
+            if (!e.target.value) { setSearch(''); setPage(1) }
+          }}
+          onPressEnter={() => { setPage(1); setSearch(searchInput) }}
+          allowClear
+          style={{ width: 360 }}
+        />
+        <Select
+          value={sort}
+          onChange={v => { setPage(1); setSort(v) }}
+          options={SORT_OPTIONS}
+          style={{ width: 180 }}
+        />
+      </Space>
       <Table
         rowKey="uuid"
         dataSource={data}
