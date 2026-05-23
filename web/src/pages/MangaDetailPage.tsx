@@ -92,7 +92,7 @@ export default function MangaDetailPage() {
 
   return (
     <Space direction="vertical" style={{ width: '100%' }} size="large">
-      <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/mangas')}>返回</Button>
+      <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)}>返回</Button>
 
       <Space align="start" size="large">
         <img
