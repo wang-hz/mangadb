@@ -127,6 +127,7 @@ volumes:
 | GET    | `/api/mangadb/mangas/:uuid`   | Get manga by UUID             |
 | PATCH  | `/api/mangadb/mangas/:uuid`   | Update manga metadata         |
 | POST   | `/api/mangadb/mangas/:uuid/tags` | Add tags to a manga        |
+| DELETE | `/api/mangadb/mangas/:uuid/tags/:tagUuid` | Remove a tag from a manga |
 
 ### Tags
 
