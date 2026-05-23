@@ -2,7 +2,7 @@ import { SearchOutlined } from '@ant-design/icons'
 import { Input, Select, Space, Table } from 'antd'
 import type { TableColumnsType, TablePaginationConfig } from 'antd'
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
 import type { Manga } from '../types'
 import { formatDate, formatDateTime } from '../utils/date'
@@ -19,16 +19,23 @@ const SORT_OPTIONS: { label: string; value: `${SortBy}-${SortOrder}` }[] = [
   { label: '出版日期（最早）', value: 'publishDate-asc' },
 ]
 
+const VALID_SORTS: Set<string> = new Set(SORT_OPTIONS.map(o => o.value))
+
 export default function MangaListPage() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  const page = Math.max(1, parseInt(searchParams.get('page') ?? '1') || 1)
+  const pageSize = parseInt(searchParams.get('limit') ?? '10') || 10
+  const search = searchParams.get('search') ?? ''
+  const sort = (VALID_SORTS.has(searchParams.get('sort') ?? '') ? searchParams.get('sort')! : 'updateAt-desc') as `${SortBy}-${SortOrder}`
+
   const [data, setData] = useState<Manga[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
-  const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(10)
-  const [search, setSearch] = useState('')
-  const [searchInput, setSearchInput] = useState('')
-  const [sort, setSort] = useState<`${SortBy}-${SortOrder}`>('updateAt-desc')
+  const [searchInput, setSearchInput] = useState(search)
+
+  useEffect(() => { setSearchInput(search) }, [search])
 
   useEffect(() => {
     const [sortBy, sortOrder] = sort.split('-') as [SortBy, SortOrder]
@@ -65,8 +72,8 @@ export default function MangaListPage() {
     current: page,
     pageSize,
     total,
-    onChange: setPage,
-    onShowSizeChange: (_, size) => { setPage(1); setPageSize(size) },
+    onChange: p => setSearchParams(prev => { prev.set('page', String(p)); return prev }, { replace: true }),
+    onShowSizeChange: (_, size) => setSearchParams(prev => { prev.set('page', '1'); prev.set('limit', String(size)); return prev }, { replace: true }),
     showSizeChanger: true,
     showTotal: t => `共 ${t} 条`,
     position: ['topRight', 'bottomRight'],
@@ -81,15 +88,19 @@ export default function MangaListPage() {
           value={searchInput}
           onChange={e => {
             setSearchInput(e.target.value)
-            if (!e.target.value) { setSearch(''); setPage(1) }
+            if (!e.target.value) setSearchParams(prev => { prev.delete('search'); prev.set('page', '1'); return prev }, { replace: true })
           }}
-          onPressEnter={() => { setPage(1); setSearch(searchInput) }}
+          onPressEnter={() => setSearchParams(prev => {
+            if (searchInput) prev.set('search', searchInput); else prev.delete('search')
+            prev.set('page', '1')
+            return prev
+          }, { replace: true })}
           allowClear
           style={{ width: 360 }}
         />
         <Select
           value={sort}
-          onChange={v => { setPage(1); setSort(v) }}
+          onChange={v => setSearchParams(prev => { prev.set('sort', v); prev.set('page', '1'); return prev }, { replace: true })}
           options={SORT_OPTIONS}
           style={{ width: 180 }}
         />

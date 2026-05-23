@@ -2,7 +2,7 @@ import { PlusOutlined, SearchOutlined } from '@ant-design/icons'
 import { Button, Form, Input, message, Modal, Select as AntSelect, Space, Table, Tag } from 'antd'
 import type { TableColumnsType, TablePaginationConfig } from 'antd'
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
 import type { Tag as TagData, TagType } from '../types'
 import { formatDateTime } from '../utils/date'
@@ -16,22 +16,29 @@ const SORT_OPTIONS: { label: string; value: SortKey }[] = [
   { label: '创建时间（最早）', value: 'createAt-asc' },
 ]
 
+const VALID_SORTS: Set<string> = new Set(SORT_OPTIONS.map(o => o.value))
+
 export default function TagListPage() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  const page = Math.max(1, parseInt(searchParams.get('page') ?? '1') || 1)
+  const pageSize = parseInt(searchParams.get('limit') ?? '10') || 10
+  const search = searchParams.get('search') ?? ''
+  const sort = (VALID_SORTS.has(searchParams.get('sort') ?? '') ? searchParams.get('sort')! : 'updateAt-desc') as SortKey
+  const tagTypeFilter = searchParams.get('tagType') ?? undefined
+
   const [data, setData] = useState<TagData[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
-  const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(10)
-  const [search, setSearch] = useState('')
-  const [searchInput, setSearchInput] = useState('')
+  const [searchInput, setSearchInput] = useState(search)
   const [refreshKey, setRefreshKey] = useState(0)
-  const [sort, setSort] = useState<SortKey>('updateAt-desc')
-  const [tagTypeFilter, setTagTypeFilter] = useState<string | undefined>(undefined)
   const [modalOpen, setModalOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   const [tagTypes, setTagTypes] = useState<TagType[]>([])
   const [form] = Form.useForm()
+
+  useEffect(() => { setSearchInput(search) }, [search])
 
   useEffect(() => {
     const [sortBy, sortOrder] = sort.split('-') as ['updateAt' | 'createAt', 'asc' | 'desc']
@@ -85,8 +92,8 @@ export default function TagListPage() {
     current: page,
     pageSize,
     total,
-    onChange: setPage,
-    onShowSizeChange: (_, size) => { setPage(1); setPageSize(size) },
+    onChange: p => setSearchParams(prev => { prev.set('page', String(p)); return prev }, { replace: true }),
+    onShowSizeChange: (_, size) => setSearchParams(prev => { prev.set('page', '1'); prev.set('limit', String(size)); return prev }, { replace: true }),
     showSizeChanger: true,
     showTotal: t => `共 ${t} 条`,
     position: ['topRight', 'bottomRight'],
@@ -102,15 +109,23 @@ export default function TagListPage() {
           value={searchInput}
           onChange={e => {
             setSearchInput(e.target.value)
-            if (!e.target.value) { setSearch(''); setPage(1) }
+            if (!e.target.value) setSearchParams(prev => { prev.delete('search'); prev.set('page', '1'); return prev }, { replace: true })
           }}
-          onPressEnter={() => { setPage(1); setSearch(searchInput) }}
+          onPressEnter={() => setSearchParams(prev => {
+            if (searchInput) prev.set('search', searchInput); else prev.delete('search')
+            prev.set('page', '1')
+            return prev
+          }, { replace: true })}
           allowClear
           style={{ width: 300 }}
         />
         <AntSelect
           value={tagTypeFilter}
-          onChange={v => { setPage(1); setTagTypeFilter(v) }}
+          onChange={v => setSearchParams(prev => {
+            if (v) prev.set('tagType', v); else prev.delete('tagType')
+            prev.set('page', '1')
+            return prev
+          }, { replace: true })}
           placeholder="全部类型"
           allowClear
           options={tagTypes.map(t => ({ value: t.name, label: t.name }))}
@@ -118,7 +133,7 @@ export default function TagListPage() {
         />
         <AntSelect
           value={sort}
-          onChange={v => { setPage(1); setSort(v) }}
+          onChange={v => setSearchParams(prev => { prev.set('sort', v); prev.set('page', '1'); return prev }, { replace: true })}
           options={SORT_OPTIONS}
           style={{ width: 180 }}
         />
