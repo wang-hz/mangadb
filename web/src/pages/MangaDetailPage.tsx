@@ -13,12 +13,12 @@ export default function MangaDetailPage() {
   const [manga, setManga] = useState<Manga | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [settingCover, setSettingCover] = useState(false)
   const [form] = Form.useForm()
   const [tagOptions, setTagOptions] = useState<TagData[]>([])
   const [tagSearch, setTagSearch] = useState('')
   const [selectedTagUuids, setSelectedTagUuids] = useState<string[]>([])
-  const [addingTags, setAddingTags] = useState(false)
+  const [pendingCover, setPendingCover] = useState<number | null>(null)
+  const [pendingAddTags, setPendingAddTags] = useState<TagData[]>([])
   const [imgPage, setImgPage] = useState(1)
   const [imgPageSize, setImgPageSize] = useState(10)
 
@@ -39,12 +39,28 @@ export default function MangaDetailPage() {
       .then(res => setTagOptions(res.items))
   }, [tagSearch])
 
-  const handleSave = async (values: { fullname: string; displayTitle: string; originalTitle: string }) => {
+  const handleSave = async () => {
     if (!uuid) return
+    let values: { fullname: string; displayTitle: string; originalTitle: string }
+    try {
+      values = await form.validateFields()
+    } catch {
+      return
+    }
     setSaving(true)
     try {
-      const updated = await api.updateManga(uuid, values)
-      setManga(prev => prev ? { ...prev, ...updated } : prev)
+      const savedCoverIndex = manga?.cover ?? 0
+      const updateData = {
+        ...values,
+        ...(pendingCover !== null && pendingCover !== savedCoverIndex ? { cover: pendingCover } : {}),
+      }
+      await api.updateManga(uuid, updateData)
+      if (pendingAddTags.length > 0) {
+        await api.createMangaTags(uuid, pendingAddTags.map(t => t.uuid))
+      }
+      setPendingCover(null)
+      setPendingAddTags([])
+      loadManga(uuid)
       message.success('保存成功')
     } catch {
       message.error('保存失败')
@@ -53,39 +69,25 @@ export default function MangaDetailPage() {
     }
   }
 
-  const handleSetCover = async (index: number) => {
-    if (!uuid || !manga || manga.cover === index) return
-    setSettingCover(true)
-    try {
-      await api.updateManga(uuid, { cover: index })
-      setManga(prev => prev ? { ...prev, cover: index } : prev)
-    } catch {
-      message.error('封面设置失败')
-    } finally {
-      setSettingCover(false)
-    }
-  }
-
-  const handleAddTags = async () => {
-    if (!uuid || selectedTagUuids.length === 0) return
-    setAddingTags(true)
-    try {
-      await api.createMangaTags(uuid, selectedTagUuids)
-      loadManga(uuid)
-      setSelectedTagUuids([])
-      message.success('标签添加成功')
-    } catch {
-      message.error('添加标签失败')
-    } finally {
-      setAddingTags(false)
-    }
+  const handleStageTags = () => {
+    if (!manga || selectedTagUuids.length === 0) return
+    const existingUuids = new Set(manga.mangaTags.map(mt => mt.tag.uuid))
+    const pendingUuids = new Set(pendingAddTags.map(t => t.uuid))
+    const newTags = tagOptions.filter(t =>
+      selectedTagUuids.includes(t.uuid) &&
+      !existingUuids.has(t.uuid) &&
+      !pendingUuids.has(t.uuid)
+    )
+    if (newTags.length > 0) setPendingAddTags(prev => [...prev, ...newTags])
+    setSelectedTagUuids([])
   }
 
   if (loading) return <Spin style={{ display: 'block', paddingTop: 48 }} />
   if (!manga) return <div>未找到漫画</div>
 
   const existingTagUuids = new Set(manga.mangaTags.map(mt => mt.tag.uuid))
-  const coverIndex = manga.cover ?? 0
+  const savedCoverIndex = manga.cover ?? 0
+  const coverIndex = pendingCover ?? savedCoverIndex
 
   return (
     <Space direction="vertical" style={{ width: '100%' }} size="large">
@@ -102,11 +104,16 @@ export default function MangaDetailPage() {
         />
         <Descriptions bordered column={2} size="small">
           <Descriptions.Item label="UUID" span={2}>{manga.uuid}</Descriptions.Item>
-          <Descriptions.Item label="封面页码">{coverIndex}</Descriptions.Item>
+          <Descriptions.Item label="封面页码">
+            {savedCoverIndex}
+            {pendingCover !== null && pendingCover !== savedCoverIndex && (
+              <span style={{ color: '#faad14', marginLeft: 4 }}>→ {pendingCover}（待保存）</span>
+            )}
+          </Descriptions.Item>
           <Descriptions.Item label="出版日期">
             {manga.publishDate ? new Date(manga.publishDate).toLocaleDateString() : '-'}
           </Descriptions.Item>
-          <Descriptions.Item label="标签数量">{manga.mangaTags.length}</Descriptions.Item>
+          <Descriptions.Item label="标签数量">{manga.mangaTags.length + pendingAddTags.length}</Descriptions.Item>
           <Descriptions.Item label="创建时间">{new Date(manga.createAt).toLocaleString()}</Descriptions.Item>
           <Descriptions.Item label="更新时间" span={2}>{new Date(manga.updateAt).toLocaleString()}</Descriptions.Item>
         </Descriptions>
@@ -124,17 +131,17 @@ export default function MangaDetailPage() {
           showTotal={t => `共 ${t} 张`}
           style={{ marginBottom: 12 }}
         />
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 8, opacity: settingCover ? 0.6 : 1 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 8 }}>
           {manga.pages.slice((imgPage - 1) * imgPageSize, imgPage * imgPageSize).map((_, i) => {
             const index = (imgPage - 1) * imgPageSize + i
             const isCover = index === coverIndex
             return (
               <div
                 key={index}
-                onClick={() => handleSetCover(index)}
+                onClick={() => { if (index !== coverIndex) setPendingCover(index) }}
                 style={{
                   position: 'relative',
-                  cursor: settingCover ? 'not-allowed' : 'pointer',
+                  cursor: isCover ? 'default' : 'pointer',
                   borderRadius: 4,
                   border: isCover ? '2px solid #1677ff' : '2px solid transparent',
                   overflow: 'hidden',
@@ -159,7 +166,7 @@ export default function MangaDetailPage() {
 
       <div>
         <Title level={5}>编辑信息</Title>
-        <Form form={form} layout="vertical" onFinish={handleSave} style={{ maxWidth: 600 }}>
+        <Form form={form} layout="vertical" style={{ maxWidth: 600 }}>
           <Form.Item label="完整文件名" name="fullname" rules={[{ required: true, message: '请输入完整文件名' }]}>
             <Input />
           </Form.Item>
@@ -169,22 +176,32 @@ export default function MangaDetailPage() {
           <Form.Item label="原始标题" name="originalTitle" rules={[{ required: true, message: '请输入原始标题' }]}>
             <Input />
           </Form.Item>
-          <Form.Item>
-            <Button type="primary" htmlType="submit" loading={saving}>保存</Button>
-          </Form.Item>
         </Form>
       </div>
 
       <div>
         <Title level={5}>当前标签</Title>
         <Space wrap size={[6, 8]}>
-          {manga.mangaTags.length === 0
+          {manga.mangaTags.length === 0 && pendingAddTags.length === 0
             ? <span style={{ color: '#999' }}>暂无标签</span>
-            : manga.mangaTags.map(mt => (
-              <Tag key={mt.tag.uuid} color="blue">
-                {mt.tag.tagType.name}: {mt.tag.name}
-              </Tag>
-            ))}
+            : <>
+                {manga.mangaTags.map(mt => (
+                  <Tag key={mt.tag.uuid} color="blue">
+                    {mt.tag.tagType.name}: {mt.tag.name}
+                  </Tag>
+                ))}
+                {pendingAddTags.map(t => (
+                  <Tag
+                    key={t.uuid}
+                    color="orange"
+                    closable
+                    onClose={() => setPendingAddTags(prev => prev.filter(pt => pt.uuid !== t.uuid))}
+                  >
+                    {t.tagType.name}: {t.name}（待保存）
+                  </Tag>
+                ))}
+              </>
+          }
         </Space>
       </div>
 
@@ -201,19 +218,21 @@ export default function MangaDetailPage() {
             filterOption={false}
             showSearch
             options={tagOptions
-              .filter(t => !existingTagUuids.has(t.uuid))
+              .filter(t => !existingTagUuids.has(t.uuid) && !pendingAddTags.some(pt => pt.uuid === t.uuid))
               .map(t => ({ value: t.uuid, label: `${t.tagType.name}: ${t.name}` }))}
           />
           <Button
-            type="primary"
-            onClick={handleAddTags}
-            loading={addingTags}
+            onClick={handleStageTags}
             disabled={selectedTagUuids.length === 0}
           >
             添加
           </Button>
         </Space>
       </div>
+
+      <Button type="primary" size="large" loading={saving} onClick={handleSave}>
+        保存
+      </Button>
     </Space>
   )
 }
