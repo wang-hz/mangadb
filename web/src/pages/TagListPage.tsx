@@ -93,12 +93,8 @@ export default function TagListPage() {
 
   return (
     <Space direction="vertical" style={{ width: '100%' }} size="middle">
-      <Space style={{ justifyContent: 'flex-end', width: '100%' }}>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>
-          新建标签
-        </Button>
-      </Space>
-      <Space>
+      <Space style={{ justifyContent: 'space-between', width: '100%' }}>
+        <Space>
         <Input
           prefix={<SearchOutlined />}
           placeholder="搜索标签名称，按回车搜索"
@@ -125,6 +121,10 @@ export default function TagListPage() {
           options={SORT_OPTIONS}
           style={{ width: 180 }}
         />
+        </Space>
+        <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>
+          新建标签
+        </Button>
       </Space>
       <Table
         rowKey="uuid"
