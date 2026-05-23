@@ -1,5 +1,5 @@
 import prisma from '@/config/database';
-import { PORT } from '@/config/env';
+import { CORS_ORIGIN, PORT } from '@/config/env';
 import fileRouter from '@/route/file.route';
 import mangadbRouter from '@/route/mangadb.route';
 import opdsRouter from '@/route/opds.route';
@@ -9,7 +9,7 @@ import path from 'path';
 
 const app = express();
 
-app.use(cors());
+app.use(cors({ origin: CORS_ORIGIN }));
 app.use(express.json());
 
 app.get('/health', async (req, res) => {
