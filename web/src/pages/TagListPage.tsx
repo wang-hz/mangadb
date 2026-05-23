@@ -28,6 +28,7 @@ export default function TagListPage() {
   const [searchInput, setSearchInput] = useState('')
   const [refreshKey, setRefreshKey] = useState(0)
   const [sort, setSort] = useState<SortKey>('updateAt-desc')
+  const [tagTypeFilter, setTagTypeFilter] = useState<string | undefined>(undefined)
   const [modalOpen, setModalOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   const [tagTypes, setTagTypes] = useState<TagType[]>([])
@@ -36,10 +37,10 @@ export default function TagListPage() {
   useEffect(() => {
     const [sortBy, sortOrder] = sort.split('-') as ['updateAt' | 'createAt', 'asc' | 'desc']
     setLoading(true)
-    api.getTags({ page, limit: pageSize, search: search || undefined, sortBy, sortOrder })
+    api.getTags({ page, limit: pageSize, search: search || undefined, sortBy, sortOrder, tagTypeName: tagTypeFilter })
       .then(res => { setData(res.items); setTotal(res.total) })
       .finally(() => setLoading(false))
-  }, [page, pageSize, search, sort, refreshKey])
+  }, [page, pageSize, search, sort, tagTypeFilter, refreshKey])
 
   useEffect(() => {
     api.getTagTypes({ page: 1, limit: 100 }).then(res => setTagTypes(res.items))
@@ -112,6 +113,14 @@ export default function TagListPage() {
           onPressEnter={() => { setPage(1); setSearch(searchInput) }}
           allowClear
           style={{ width: 300 }}
+        />
+        <AntSelect
+          value={tagTypeFilter}
+          onChange={v => { setPage(1); setTagTypeFilter(v) }}
+          placeholder="全部类型"
+          allowClear
+          options={tagTypes.map(t => ({ value: t.name, label: t.name }))}
+          style={{ width: 160 }}
         />
         <AntSelect
           value={sort}

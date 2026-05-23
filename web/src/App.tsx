@@ -4,7 +4,6 @@ import MangaDetailPage from './pages/MangaDetailPage'
 import MangaListPage from './pages/MangaListPage'
 import TagListPage from './pages/TagListPage'
 import TagMangaListPage from './pages/TagMangaListPage'
-import TagTypePage from './pages/TagTypePage'
 
 export default function App() {
   return (
@@ -16,7 +15,6 @@ export default function App() {
           <Route path="mangas/:uuid" element={<MangaDetailPage />} />
           <Route path="tags" element={<TagListPage />} />
           <Route path="tags/:uuid/mangas" element={<TagMangaListPage />} />
-          <Route path="tag-types" element={<TagTypePage />} />
         </Route>
       </Routes>
     </BrowserRouter>

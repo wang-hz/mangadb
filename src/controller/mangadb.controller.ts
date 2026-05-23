@@ -63,13 +63,11 @@ export class MangadbController {
     res.json({ items, total, page, limit });
   }
 
-  async getTagsByPage(req: Request<any, any, any, PaginationQuery>, res: Response) {
+  async getTagsByPage(req: Request<any, any, any, PaginationQuery & { tagTypeName?: string }>, res: Response) {
     const page = parsePositiveInt(req.query.page, 1);
     const limit = parsePositiveInt(req.query.limit, 10);
-    const search = req.query.search;
-    const sortBy = req.query.sortBy;
-    const sortOrder = req.query.sortOrder;
-    const [items, total] = await tagService.getTagsByPage(page-1, limit, sortBy, sortOrder, search);
+    const { search, sortBy, sortOrder, tagTypeName } = req.query;
+    const [items, total] = await tagService.getTagsByPage(page-1, limit, sortBy, sortOrder, search, tagTypeName);
     res.json({ items, total, page, limit });
   }
 

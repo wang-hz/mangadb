@@ -1,4 +1,4 @@
-import { AppstoreOutlined, BookOutlined, TagOutlined } from '@ant-design/icons'
+import { BookOutlined, TagOutlined } from '@ant-design/icons'
 import { Layout, Menu } from 'antd'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 
@@ -10,7 +10,6 @@ export default function AppLayout() {
 
   const selectedKey = location.pathname.startsWith('/mangas') ? 'mangas'
     : location.pathname.startsWith('/tags') ? 'tags'
-    : location.pathname.startsWith('/tag-types') ? 'tag-types'
     : 'mangas'
 
   return (
@@ -32,7 +31,6 @@ export default function AppLayout() {
           items={[
             { key: 'mangas', icon: <BookOutlined />, label: '漫画', onClick: () => navigate('/mangas') },
             { key: 'tags', icon: <TagOutlined />, label: '标签', onClick: () => navigate('/tags') },
-            { key: 'tag-types', icon: <AppstoreOutlined />, label: '标签类型', onClick: () => navigate('/tag-types') },
           ]}
         />
       </Sider>

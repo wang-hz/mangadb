@@ -76,8 +76,12 @@ export class TagService {
     sortBy: 'createAt' | 'updateAt' | undefined,
     sortOrder: 'asc' | 'desc' | undefined,
     search?: string,
+    tagTypeName?: string,
   ) {
-    const where = buildWhere(search);
+    const where = {
+      ...buildWhere(search),
+      ...(tagTypeName ? { tagType: { name: tagTypeName } } : {}),
+    };
     const orderBy = buildOrderBy(sortBy, sortOrder);
     return prisma.$transaction([
       prisma.tag.findMany({
