@@ -59,18 +59,6 @@ export class TagService {
     return prisma.tag.findUnique({ select: tagSelect, where: { uuid } });
   }
 
-  async getTagsByKeyword(keyword: string) {
-    return prisma.tag.findMany({
-      select: tagSelect,
-      where: {
-        name: {
-          contains: keyword,
-          mode: 'insensitive',
-        }
-      },
-    });
-  }
-
   async getTagsByPage(
     page: number,
     limit: number,

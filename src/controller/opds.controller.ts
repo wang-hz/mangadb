@@ -270,7 +270,8 @@ export class OpdsController {
     if (typeof keyword !== 'string') {
       return res.sendStatus(400);
     }
-    const tags = await tagService.getTagsByKeyword(keyword);
+    const page = getPage(req.query.page);
+    const [tags, total] = await tagService.getTagsByPage(page - 1, PAGE_SIZE, undefined, undefined, keyword);
     const content = await getTagsResContent(tags);
     content.feed.id = keyword;
     content.feed.title = keyword;
@@ -279,13 +280,27 @@ export class OpdsController {
       '@href': req.originalUrl,
       '@type': 'application/atom+xml;profile=opds-catalog;kind=navigation'
     });
+    if (page > 1) {
+      content.feed.link.push({
+        '@rel': 'previous',
+        '@href': `/api/opds/v1.2/tags?search=${encodeURIComponent(keyword)}&page=${page - 1}`,
+        '@type': 'application/atom+xml;profile=opds-catalog;kind=navigation'
+      });
+    }
+    if (total > page * PAGE_SIZE) {
+      content.feed.link.push({
+        '@rel': 'next',
+        '@href': `/api/opds/v1.2/tags?search=${encodeURIComponent(keyword)}&page=${page + 1}`,
+        '@type': 'application/atom+xml;profile=opds-catalog;kind=navigation'
+      });
+    }
     content.feed.entry.unshift({
-      id: '1',
+      id: '0',
       title: 'Search in title',
       link: [{
         '@type': 'application/atom+xml;profile=opds-catalog;kind=navigation',
         '@rel': 'subsection',
-        '@href': `/api/opds/v1.2/mangas?search=${keyword}`,
+        '@href': `/api/opds/v1.2/mangas?search=${encodeURIComponent(keyword)}`,
       }],
     });
     res.type('application/atom+xml');
@@ -297,7 +312,8 @@ export class OpdsController {
     if (typeof keyword !== 'string') {
       return res.sendStatus(400);
     }
-    const mangas = await mangaService.getMangasByKeyword(keyword);
+    const page = getPage(req.query.page);
+    const [mangas, total] = await mangaService.getMangasByPage(page - 1, PAGE_SIZE, undefined, undefined, keyword);
     const content = await getMangasResContent(mangas);
     content.feed.id = keyword;
     content.feed.title = keyword;
@@ -306,6 +322,20 @@ export class OpdsController {
       '@href': req.originalUrl,
       '@type': 'application/atom+xml;profile=opds-catalog;kind=navigation'
     });
+    if (page > 1) {
+      content.feed.link.push({
+        '@rel': 'previous',
+        '@href': `/api/opds/v1.2/mangas?search=${encodeURIComponent(keyword)}&page=${page - 1}`,
+        '@type': 'application/atom+xml;profile=opds-catalog;kind=navigation'
+      });
+    }
+    if (total > page * PAGE_SIZE) {
+      content.feed.link.push({
+        '@rel': 'next',
+        '@href': `/api/opds/v1.2/mangas?search=${encodeURIComponent(keyword)}&page=${page + 1}`,
+        '@type': 'application/atom+xml;profile=opds-catalog;kind=navigation'
+      });
+    }
     res.type('application/atom+xml');
     res.send(create({ version: '1.0', encoding: 'UTF-8' }, content).end({ prettyPrint: true }));
   }

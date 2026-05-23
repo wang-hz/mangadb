@@ -140,30 +140,6 @@ export class MangaService {
     return result;
   }
 
-  async getMangasByKeyword(keyword: string) {
-    return prisma.manga.findMany({
-      include: { mangaTags: { include: { tag: { include: { tagType: true } } } } },
-      where: {
-        OR: [{
-          displayTitle: {
-            contains: keyword,
-            mode: 'insensitive' as const,
-          },
-        },
-        {
-          originalTitle: {
-            contains: keyword,
-            mode: 'insensitive' as const,
-          },
-        }],
-      },
-      orderBy: [
-        { updateAt: 'desc' },
-        { originalTitle: 'desc' },
-      ],
-    });
-  }
-
   async getLatestMangas(pageIndex: number, pageSize: number) {
     const oneWeekAgo = new Date();
     oneWeekAgo.setHours(oneWeekAgo.getHours() - 24 * 7);
