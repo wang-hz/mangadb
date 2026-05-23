@@ -11,14 +11,14 @@ export default function TagTypePage() {
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
   const [page, setPage] = useState(1)
-  const pageSize = 20
+  const [pageSize, setPageSize] = useState(10)
 
   useEffect(() => {
     setLoading(true)
     api.getTagTypes({ page, limit: pageSize })
       .then(res => { setData(res.items); setTotal(res.total) })
       .finally(() => setLoading(false))
-  }, [page])
+  }, [page, pageSize])
 
   const columns: TableColumnsType<TagType> = [
     { title: '类型名称', dataIndex: 'name' },
@@ -41,6 +41,8 @@ export default function TagTypePage() {
     pageSize,
     total,
     onChange: setPage,
+    onShowSizeChange: (_, size) => { setPage(1); setPageSize(size) },
+    showSizeChanger: true,
     showTotal: t => `共 ${t} 条`,
   }
 

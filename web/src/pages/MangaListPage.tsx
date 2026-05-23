@@ -14,7 +14,7 @@ export default function MangaListPage() {
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
   const [page, setPage] = useState(1)
-  const pageSize = 20
+  const [pageSize, setPageSize] = useState(10)
   const [search, setSearch] = useState('')
   const [searchInput, setSearchInput] = useState('')
 
@@ -23,7 +23,7 @@ export default function MangaListPage() {
     api.getMangas({ page, limit: pageSize, search: search || undefined, sortBy: 'updateAt', sortOrder: 'desc' })
       .then(res => { setData(res.items); setTotal(res.total) })
       .finally(() => setLoading(false))
-  }, [page, search])
+  }, [page, pageSize, search])
 
   const columns: TableColumnsType<Manga> = [
     { title: '显示标题', dataIndex: 'displayTitle', ellipsis: true },
@@ -58,6 +58,8 @@ export default function MangaListPage() {
     pageSize,
     total,
     onChange: setPage,
+    onShowSizeChange: (_, size) => { setPage(1); setPageSize(size) },
+    showSizeChanger: true,
     showTotal: t => `共 ${t} 条`,
   }
 

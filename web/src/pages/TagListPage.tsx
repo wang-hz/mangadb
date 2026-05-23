@@ -12,7 +12,7 @@ export default function TagListPage() {
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
   const [page, setPage] = useState(1)
-  const pageSize = 20
+  const [pageSize, setPageSize] = useState(10)
   const [search, setSearch] = useState('')
   const [searchInput, setSearchInput] = useState('')
   const [refreshKey, setRefreshKey] = useState(0)
@@ -26,7 +26,7 @@ export default function TagListPage() {
     api.getTags({ page, limit: pageSize, search: search || undefined })
       .then(res => { setData(res.items); setTotal(res.total) })
       .finally(() => setLoading(false))
-  }, [page, search, refreshKey])
+  }, [page, pageSize, search, refreshKey])
 
   useEffect(() => {
     api.getTagTypes({ page: 1, limit: 100 }).then(res => setTagTypes(res.items))
@@ -67,6 +67,8 @@ export default function TagListPage() {
     pageSize,
     total,
     onChange: setPage,
+    onShowSizeChange: (_, size) => { setPage(1); setPageSize(size) },
+    showSizeChanger: true,
     showTotal: t => `共 ${t} 条`,
   }
 
