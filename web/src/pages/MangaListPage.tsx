@@ -1,12 +1,10 @@
 import { SearchOutlined } from '@ant-design/icons'
-import { Input, Select, Space, Table, Typography } from 'antd'
+import { Input, Select, Space, Table } from 'antd'
 import type { TableColumnsType, TablePaginationConfig } from 'antd'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import type { Manga } from '../types'
-
-const { Title } = Typography
 
 type SortBy = 'updateAt' | 'createAt' | 'publishDate'
 type SortOrder = 'asc' | 'desc'
@@ -75,7 +73,6 @@ export default function MangaListPage() {
 
   return (
     <Space direction="vertical" style={{ width: '100%' }} size="middle">
-      <Title level={4} style={{ margin: 0 }}>漫画列表</Title>
       <Space>
         <Input
           prefix={<SearchOutlined />}

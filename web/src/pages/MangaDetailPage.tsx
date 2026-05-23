@@ -91,10 +91,7 @@ export default function MangaDetailPage() {
 
   return (
     <Space direction="vertical" style={{ width: '100%' }} size="large">
-      <Space align="center">
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/mangas')}>返回</Button>
-        <Title level={4} style={{ margin: 0 }}>{manga.displayTitle}</Title>
-      </Space>
+      <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/mangas')}>返回</Button>
 
       <Space align="start" size="large">
         <img

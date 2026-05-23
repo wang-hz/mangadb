@@ -1,12 +1,10 @@
 import { ArrowLeftOutlined, SearchOutlined } from '@ant-design/icons'
-import { Button, Descriptions, Input, Select, Space, Table, Tag, Typography } from 'antd'
+import { Button, Descriptions, Input, Select, Space, Table, Tag } from 'antd'
 import type { TableColumnsType, TablePaginationConfig } from 'antd'
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api'
 import type { Manga, Tag as TagData } from '../types'
-
-const { Title } = Typography
 
 type SortBy = 'updateAt' | 'createAt' | 'publishDate'
 type SortOrder = 'asc' | 'desc'
@@ -83,10 +81,7 @@ export default function TagMangaListPage() {
 
   return (
     <Space direction="vertical" style={{ width: '100%' }} size="middle">
-      <Space>
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/tags')} />
-        <Title level={4} style={{ margin: 0 }}>标签漫画列表</Title>
-      </Space>
+      <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/tags')} />
       {tag && (
         <Descriptions bordered size="small" column={2}>
           <Descriptions.Item label="标签名称">{tag.name}</Descriptions.Item>

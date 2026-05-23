@@ -1,12 +1,10 @@
 import { PlusOutlined, SearchOutlined } from '@ant-design/icons'
-import { Button, Form, Input, message, Modal, Select as AntSelect, Space, Table, Tag, Typography } from 'antd'
+import { Button, Form, Input, message, Modal, Select as AntSelect, Space, Table, Tag } from 'antd'
 import type { TableColumnsType, TablePaginationConfig } from 'antd'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import type { Tag as TagData, TagType } from '../types'
-
-const { Title } = Typography
 
 type SortKey = 'updateAt-desc' | 'updateAt-asc' | 'createAt-desc' | 'createAt-asc'
 
@@ -95,8 +93,7 @@ export default function TagListPage() {
 
   return (
     <Space direction="vertical" style={{ width: '100%' }} size="middle">
-      <Space style={{ justifyContent: 'space-between', width: '100%' }}>
-        <Title level={4} style={{ margin: 0 }}>标签管理</Title>
+      <Space style={{ justifyContent: 'flex-end', width: '100%' }}>
         <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>
           新建标签
         </Button>
