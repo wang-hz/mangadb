@@ -2,12 +2,14 @@ import { PlusOutlined, SearchOutlined } from '@ant-design/icons'
 import { Button, Form, Input, message, Modal, Select, Space, Table, Tag, Typography } from 'antd'
 import type { TableColumnsType, TablePaginationConfig } from 'antd'
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import type { Tag as TagData, TagType } from '../types'
 
 const { Title } = Typography
 
 export default function TagListPage() {
+  const navigate = useNavigate()
   const [data, setData] = useState<TagData[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
@@ -100,6 +102,10 @@ export default function TagListPage() {
         pagination={pagination}
         loading={loading}
         size="middle"
+        onRow={record => ({
+          onClick: () => navigate(`/tags/${record.uuid}/mangas?name=${encodeURIComponent(record.name)}`),
+          style: { cursor: 'pointer' },
+        })}
       />
 
       <Modal

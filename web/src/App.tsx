@@ -3,6 +3,7 @@ import AppLayout from './components/AppLayout'
 import MangaDetailPage from './pages/MangaDetailPage'
 import MangaListPage from './pages/MangaListPage'
 import TagListPage from './pages/TagListPage'
+import TagMangaListPage from './pages/TagMangaListPage'
 import TagTypePage from './pages/TagTypePage'
 
 export default function App() {
@@ -14,6 +15,7 @@ export default function App() {
           <Route path="mangas" element={<MangaListPage />} />
           <Route path="mangas/:uuid" element={<MangaDetailPage />} />
           <Route path="tags" element={<TagListPage />} />
+          <Route path="tags/:uuid/mangas" element={<TagMangaListPage />} />
           <Route path="tag-types" element={<TagTypePage />} />
         </Route>
       </Routes>

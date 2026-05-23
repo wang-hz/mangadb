@@ -43,6 +43,11 @@ export const api = {
     })
   },
 
+  getMangasByTag(tagUuid: string, params: { page: number; limit: number }) {
+    const q = new URLSearchParams({ page: String(params.page), limit: String(params.limit) })
+    return request<PageResult<Manga>>(`${BASE}/tags/${tagUuid}/mangas?${q}`)
+  },
+
   getTags(params: { page: number; limit: number; search?: string }) {
     const q = new URLSearchParams({
       page: String(params.page),
