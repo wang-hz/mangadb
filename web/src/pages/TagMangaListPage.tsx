@@ -1,12 +1,12 @@
 import { ArrowLeftOutlined, SearchOutlined } from '@ant-design/icons'
-import { Button, Input, Select, Space, Table, Typography } from 'antd'
+import { Button, Descriptions, Input, Select, Space, Table, Tag, Typography } from 'antd'
 import type { TableColumnsType, TablePaginationConfig } from 'antd'
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api'
-import type { Manga } from '../types'
+import type { Manga, Tag as TagData } from '../types'
 
-const { Title, Text } = Typography
+const { Title } = Typography
 
 type SortBy = 'updateAt' | 'createAt' | 'publishDate'
 type SortOrder = 'asc' | 'desc'
@@ -45,9 +45,8 @@ const columns: TableColumnsType<Manga> = [
 
 export default function TagMangaListPage() {
   const { uuid } = useParams<{ uuid: string }>()
-  const [searchParams] = useSearchParams()
-  const tagName = searchParams.get('name') ?? '标签'
   const navigate = useNavigate()
+  const [tag, setTag] = useState<TagData | null>(null)
   const [data, setData] = useState<Manga[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
@@ -56,6 +55,11 @@ export default function TagMangaListPage() {
   const [search, setSearch] = useState('')
   const [searchInput, setSearchInput] = useState('')
   const [sort, setSort] = useState<`${SortBy}-${SortOrder}`>('updateAt-desc')
+
+  useEffect(() => {
+    if (!uuid) return
+    api.getTag(uuid).then(setTag)
+  }, [uuid])
 
   useEffect(() => {
     if (!uuid) return
@@ -81,10 +85,18 @@ export default function TagMangaListPage() {
     <Space direction="vertical" style={{ width: '100%' }} size="middle">
       <Space>
         <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/tags')} />
-        <Title level={4} style={{ margin: 0 }}>
-          标签：<Text type="secondary">{tagName}</Text>
-        </Title>
+        <Title level={4} style={{ margin: 0 }}>标签漫画列表</Title>
       </Space>
+      {tag && (
+        <Descriptions bordered size="small" column={2}>
+          <Descriptions.Item label="标签名称">{tag.name}</Descriptions.Item>
+          <Descriptions.Item label="标签类型">
+            <Tag color="geekblue">{tag.tagType.name}</Tag>
+          </Descriptions.Item>
+          <Descriptions.Item label="创建时间">{new Date(tag.createAt).toLocaleString()}</Descriptions.Item>
+          <Descriptions.Item label="更新时间">{new Date(tag.updateAt).toLocaleString()}</Descriptions.Item>
+        </Descriptions>
+      )}
       <Space>
         <Input
           prefix={<SearchOutlined />}

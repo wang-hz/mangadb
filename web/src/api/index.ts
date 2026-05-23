@@ -54,11 +54,17 @@ export const api = {
     return request<PageResult<Manga>>(`${BASE}/tags/${tagUuid}/mangas?${q}`)
   },
 
-  getTags(params: { page: number; limit: number; search?: string }) {
+  getTag(uuid: string) {
+    return request<Tag>(`${BASE}/tags/${uuid}`)
+  },
+
+  getTags(params: { page: number; limit: number; search?: string; sortBy?: string; sortOrder?: string }) {
     const q = new URLSearchParams({
       page: String(params.page),
       limit: String(params.limit),
       ...(params.search ? { search: params.search } : {}),
+      ...(params.sortBy ? { sortBy: params.sortBy } : {}),
+      ...(params.sortOrder ? { sortOrder: params.sortOrder } : {}),
     })
     return request<PageResult<Tag>>(`${BASE}/tags?${q}`)
   },

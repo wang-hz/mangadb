@@ -48,6 +48,12 @@ export class MangadbController {
     res.status(201).json(payload);
   }
 
+  async getTagByUuid(req: Request, res: Response) {
+    const tag = await tagService.getTagByUuid(req.params.uuid);
+    if (!tag) { res.status(404).json({ msg: 'Not found' }); return; }
+    res.json(tag);
+  }
+
   async getMangasByTagUuid(req: Request<any, any, any, PaginationQuery>, res: Response) {
     const tagUuid = req.params.uuid;
     const page = parsePositiveInt(req.query.page, 1);
