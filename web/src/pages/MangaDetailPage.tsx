@@ -147,6 +147,7 @@ export default function MangaDetailPage() {
                 <img
                   src={`/api/file/mangas/${manga.uuid}/pages/${index}`}
                   alt={`page ${index}`}
+                  loading="lazy"
                   style={{ width: '100%', display: 'block' }}
                 />
                 <div style={{ textAlign: 'center', fontSize: 11, color: isCover ? '#1677ff' : '#999', padding: '2px 0' }}>
