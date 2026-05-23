@@ -41,12 +41,12 @@ async function getTagsResContent(tags) {
             {
               '@type': 'image/jpeg',
               '@rel': 'http://opds-spec.org/image/thumbnail',
-              '@href': `/api/file/mangas/${manga?.uuid}/pages/0`,
+              '@href': `/api/file/mangas/${manga?.uuid}/pages/${manga?.cover ?? 0}`,
             },
             {
               '@type': 'image/jpeg',
               '@rel': 'http://opds-spec.org/image',
-              '@href': `/api/file/mangas/${manga?.uuid}/pages/0`,
+              '@href': `/api/file/mangas/${manga?.uuid}/pages/${manga?.cover ?? 0}`,
             },
             {
               '@type': 'application/atom+xml;profile=opds-catalog;kind=navigation',
@@ -92,12 +92,12 @@ async function getMangasResContent(mangas) {
             {
               '@type': 'image/jpeg',
               '@rel': 'http://opds-spec.org/image/thumbnail',
-              '@href': `/api/file/mangas/${mangaUuid}/pages/0`,
+              '@href': `/api/file/mangas/${mangaUuid}/pages/${manga.cover ?? 0}`,
             },
             {
               '@type': 'image/jpeg',
               '@rel': 'http://opds-spec.org/image',
-              '@href': `/api/file/mangas/${mangaUuid}/pages/0`,
+              '@href': `/api/file/mangas/${mangaUuid}/pages/${manga.cover ?? 0}`,
             },
             {
               '@type': 'application/vnd.comicbook+zip',

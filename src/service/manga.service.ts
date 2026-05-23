@@ -7,6 +7,7 @@ const mangaSelect = {
   originalTitle: true,
   publishDate: true,
   pages: true,
+  cover: true,
   createAt: true,
   updateAt: true,
   mangaTags: {
@@ -77,11 +78,12 @@ export class MangaService {
     ]);
   }
 
-  async updateManga(uuid: string, fullname?: string, displayTitle?: string, originalTitle?: string) {
+  async updateManga(uuid: string, fullname?: string, displayTitle?: string, originalTitle?: string, cover?: number | null) {
     return prisma.manga.update({
       where: { uuid },
       data: {
         fullname, displayTitle, originalTitle,
+        ...(cover !== undefined ? { cover } : {}),
         updateAt: new Date(),
       },
     });

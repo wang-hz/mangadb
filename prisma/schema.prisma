@@ -22,6 +22,7 @@ model Manga {
   originalTitle String     @map("original_title")
   publishDate   DateTime?  @map("publish_date")
   pages         Json
+  cover         Int?       @map("cover")
   createAt      DateTime   @default(now()) @map("create_at")
   updateAt      DateTime   @updatedAt @map("update_at")
   mangaTags     MangaTag[]

@@ -1,5 +1,5 @@
 import { ArrowLeftOutlined } from '@ant-design/icons'
-import { Button, Descriptions, Form, Input, message, Select, Space, Spin, Tag, Typography } from 'antd'
+import { Button, Descriptions, Form, Input, InputNumber, message, Select, Space, Spin, Tag, Typography } from 'antd'
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api'
@@ -24,7 +24,7 @@ export default function MangaDetailPage() {
     api.getManga(id)
       .then(m => {
         setManga(m)
-        form.setFieldsValue({ fullname: m.fullname, displayTitle: m.displayTitle, originalTitle: m.originalTitle })
+        form.setFieldsValue({ fullname: m.fullname, displayTitle: m.displayTitle, originalTitle: m.originalTitle, cover: m.cover })
       })
       .finally(() => setLoading(false))
   }
@@ -36,7 +36,7 @@ export default function MangaDetailPage() {
       .then(res => setTagOptions(res.items))
   }, [tagSearch])
 
-  const handleSave = async (values: { fullname: string; displayTitle: string; originalTitle: string }) => {
+  const handleSave = async (values: { fullname: string; displayTitle: string; originalTitle: string; cover: number | null }) => {
     if (!uuid) return
     setSaving(true)
     try {
@@ -77,15 +77,23 @@ export default function MangaDetailPage() {
         <Title level={4} style={{ margin: 0 }}>{manga.displayTitle}</Title>
       </Space>
 
-      <Descriptions bordered column={2} size="small">
-        <Descriptions.Item label="UUID" span={2}>{manga.uuid}</Descriptions.Item>
-        <Descriptions.Item label="出版日期">
-          {manga.publishDate ? new Date(manga.publishDate).toLocaleDateString() : '-'}
-        </Descriptions.Item>
-        <Descriptions.Item label="标签数量">{manga.mangaTags.length}</Descriptions.Item>
-        <Descriptions.Item label="创建时间">{new Date(manga.createAt).toLocaleString()}</Descriptions.Item>
-        <Descriptions.Item label="更新时间">{new Date(manga.updateAt).toLocaleString()}</Descriptions.Item>
-      </Descriptions>
+      <Space align="start" size="large">
+        <img
+          src={`/api/file/mangas/${manga.uuid}/pages/${manga.cover ?? 0}`}
+          alt="cover"
+          style={{ width: 180, borderRadius: 4, flexShrink: 0 }}
+        />
+        <Descriptions bordered column={2} size="small">
+          <Descriptions.Item label="UUID" span={2}>{manga.uuid}</Descriptions.Item>
+          <Descriptions.Item label="封面页码">{manga.cover ?? 0}</Descriptions.Item>
+          <Descriptions.Item label="出版日期">
+            {manga.publishDate ? new Date(manga.publishDate).toLocaleDateString() : '-'}
+          </Descriptions.Item>
+          <Descriptions.Item label="标签数量">{manga.mangaTags.length}</Descriptions.Item>
+          <Descriptions.Item label="创建时间">{new Date(manga.createAt).toLocaleString()}</Descriptions.Item>
+          <Descriptions.Item label="更新时间" span={2}>{new Date(manga.updateAt).toLocaleString()}</Descriptions.Item>
+        </Descriptions>
+      </Space>
 
       <div>
         <Title level={5}>编辑信息</Title>
@@ -98,6 +106,9 @@ export default function MangaDetailPage() {
           </Form.Item>
           <Form.Item label="原始标题" name="originalTitle" rules={[{ required: true, message: '请输入原始标题' }]}>
             <Input />
+          </Form.Item>
+          <Form.Item label="封面页码" name="cover" extra="留空则使用第 0 张图片作为封面">
+            <InputNumber min={0} style={{ width: 120 }} />
           </Form.Item>
           <Form.Item>
             <Button type="primary" htmlType="submit" loading={saving}>保存</Button>
