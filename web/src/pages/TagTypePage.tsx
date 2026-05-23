@@ -44,6 +44,7 @@ export default function TagTypePage() {
     onShowSizeChange: (_, size) => { setPage(1); setPageSize(size) },
     showSizeChanger: true,
     showTotal: t => `共 ${t} 条`,
+    position: ['topRight', 'bottomRight'],
   }
 
   return (
