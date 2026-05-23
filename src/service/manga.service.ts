@@ -1,4 +1,5 @@
 import prisma from '@/config/database';
+import type { PaginationQuery } from '@/type';
 
 const mangaSelect = {
   uuid: true,
@@ -34,8 +35,8 @@ function buildWhere(search?: string) {
   }
   return {
     OR: [
-      { displayTitle: { contains: search, mode: 'insensitive' } },
-      { originalTitle: { contains: search, mode: 'insensitive' } },
+      { displayTitle: { contains: search, mode: 'insensitive' as const } },
+      { originalTitle: { contains: search, mode: 'insensitive' as const } },
     ],
   };
 }
@@ -100,8 +101,8 @@ export class MangaService {
     tagUuid: string,
     pageIndex: number,
     pageSize: number,
-    sortBy: 'createAt' | 'updateAt' | 'publishDate' | undefined,
-    sortOrder: 'asc' | 'desc' | undefined,
+    sortBy?: 'createAt' | 'updateAt' | 'publishDate',
+    sortOrder?: 'asc' | 'desc',
     search?: string,
   ) {
     const tagFilter = { mangaTags: { some: { tag: { uuid: tagUuid } } } };
@@ -146,13 +147,13 @@ export class MangaService {
         OR: [{
           displayTitle: {
             contains: keyword,
-            mode: 'insensitive',
+            mode: 'insensitive' as const,
           },
         },
         {
           originalTitle: {
             contains: keyword,
-            mode: 'insensitive',
+            mode: 'insensitive' as const,
           },
         }],
       },

@@ -8,7 +8,16 @@ const tagService = new TagService();
 
 const PAGE_SIZE = 10;
 
-async function getTagsResContent(tags) {
+type TagItem = { uuid: string; name: string };
+type MangaItem = {
+  uuid: string;
+  displayTitle: string;
+  cover: number | null;
+  pages: unknown;
+  mangaTags: Array<{ tag: { name: string; tagType: { name: string } } }>;
+};
+
+async function getTagsResContent(tags: TagItem[]) {
   const tagUuidManga = await mangaService.getLatestMangasByTagUuids(tags.map((t: { uuid: string }) => t.uuid));
   return {
     feed: {
@@ -52,7 +61,7 @@ async function getTagsResContent(tags) {
   };
 }
 
-async function getMangasResContent(mangas) {
+async function getMangasResContent(mangas: MangaItem[]) {
   return {
     feed: {
       '@xmlns': 'http://www.w3.org/2005/Atom',
@@ -110,7 +119,7 @@ async function getMangasResContent(mangas) {
   };
 }
 
-function getPage(query) {
+function getPage(query: unknown): number {
   return typeof query === 'string' ? parseInt(query) : 1;
 }
 
@@ -211,7 +220,7 @@ export class OpdsController {
       return res.sendStatus(404);
     }
     const page = getPage(req.query.page);
-    const [mangas, total] = await mangaService.getMangasByTagUuid(tagUuid, page-1, PAGE_SIZE);
+    const [mangas, total] = await mangaService.getMangasByTagUuid(tagUuid, page-1, PAGE_SIZE, undefined, undefined);
     const content = await getMangasResContent(mangas);
     content.feed.id = tagUuid;
     content.feed.title = tag.name;
@@ -273,11 +282,11 @@ export class OpdsController {
     content.feed.entry.unshift({
       id: '1',
       title: 'Search in title',
-      link: {
+      link: [{
         '@type': 'application/atom+xml;profile=opds-catalog;kind=navigation',
         '@rel': 'subsection',
         '@href': `/api/opds/v1.2/mangas?search=${keyword}`,
-      },
+      }],
     });
     res.type('application/atom+xml');
     res.send(create({ version: '1.0', encoding: 'UTF-8' }, content).end({ prettyPrint: true }));

@@ -2,6 +2,7 @@ import { Manga, Tag } from '@/generated/prisma/client';
 import { MangaService } from '@/service/manga.service';
 import { TagService } from '@/service/tag.service';
 import { Request, Response } from 'express';
+import type { PaginationQuery } from '@/type';
 
 const mangaService = new MangaService();
 const tagService = new TagService();
@@ -67,7 +68,8 @@ export class MangadbController {
     const page = parsePositiveInt(req.query.page, 1);
     const limit = parsePositiveInt(req.query.limit, 10);
     const { search, sortBy, sortOrder, tagTypeName } = req.query;
-    const [items, total] = await tagService.getTagsByPage(page-1, limit, sortBy, sortOrder, search, tagTypeName);
+    const tagSortBy = sortBy === 'publishDate' ? undefined : sortBy;
+    const [items, total] = await tagService.getTagsByPage(page-1, limit, tagSortBy, sortOrder, search, tagTypeName);
     res.json({ items, total, page, limit });
   }
 

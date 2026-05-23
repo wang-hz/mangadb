@@ -1,4 +1,5 @@
 import prisma from '@/config/database';
+import type { PaginationQuery } from '@/type';
 
 const tagSelect = {
   uuid: true,
@@ -24,7 +25,7 @@ function buildWhere(search?: string) {
   if (!search) {
     return {};
   }
-  return { name: { contains: search, mode: 'insensitive' } };
+  return { name: { contains: search, mode: 'insensitive' as const } };
 }
 
 function buildOrderBy(
