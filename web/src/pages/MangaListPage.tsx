@@ -1,5 +1,5 @@
 import { SearchOutlined } from '@ant-design/icons'
-import { Input, Select, Space, Table, Tag, Typography } from 'antd'
+import { Input, Select, Space, Table, Typography } from 'antd'
 import type { TableColumnsType, TablePaginationConfig } from 'antd'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -43,21 +43,16 @@ export default function MangaListPage() {
     { title: '显示标题', dataIndex: 'displayTitle', ellipsis: true },
     { title: '原始标题', dataIndex: 'originalTitle', ellipsis: true },
     {
-      title: '标签',
-      render: (_, record) => (
-        <Space wrap size={4}>
-          {record.mangaTags.slice(0, 3).map(mt => (
-            <Tag key={mt.tag.uuid} color="blue">{mt.tag.name}</Tag>
-          ))}
-          {record.mangaTags.length > 3 && <Tag>+{record.mangaTags.length - 3}</Tag>}
-        </Space>
-      ),
-    },
-    {
       title: '出版日期',
       dataIndex: 'publishDate',
       width: 110,
       render: (v: string | null) => v ? new Date(v).toLocaleDateString() : '-',
+    },
+    {
+      title: '创建时间',
+      dataIndex: 'createAt',
+      width: 160,
+      render: (v: string) => new Date(v).toLocaleString(),
     },
     {
       title: '更新时间',
