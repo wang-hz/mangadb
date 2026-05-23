@@ -7,12 +7,14 @@ import fs from 'fs';
 import mime from 'mime-types';
 import path from 'path';
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 const mangaService = new MangaService();
 
 export class FileController {
   async getZip(req: Request, res: Response) {
     const mangaUuid = req.params.mangaUuid;
-    if (!mangaUuid) {
+    if (!mangaUuid || !UUID_RE.test(mangaUuid)) {
       return res.sendStatus(400);
     }
     const manga = await mangaService.getMangaByUuid(mangaUuid);
@@ -43,10 +45,13 @@ export class FileController {
   async getImg(req: Request, res: Response) {
     const mangaUuid = req.params.mangaUuid;
     const pageNumber = req.params.pageNumber;
-    if (!mangaUuid || !pageNumber) {
+    if (!mangaUuid || !UUID_RE.test(mangaUuid) || !pageNumber) {
       return res.sendStatus(400);
     }
     const pageIndex = parseInt(pageNumber);
+    if (!Number.isInteger(pageIndex) || pageIndex < 0) {
+      return res.sendStatus(400);
+    }
     const manga = await mangaService.getMangaByUuid(mangaUuid);
     if (!manga) {
       return res.sendStatus(404);
