@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api'
 import type { Manga, Tag as TagData } from '../types'
+import { formatDate, formatDateTime } from '../utils/date'
 
 const { Title } = Typography
 
@@ -108,11 +109,11 @@ export default function MangaDetailPage() {
             )}
           </Descriptions.Item>
           <Descriptions.Item label="出版日期">
-            {manga.publishDate ? new Date(manga.publishDate).toLocaleDateString() : '-'}
+            {manga.publishDate ? formatDate(manga.publishDate) : '-'}
           </Descriptions.Item>
           <Descriptions.Item label="标签数量">{manga.mangaTags.length + pendingAddTags.length}</Descriptions.Item>
-          <Descriptions.Item label="创建时间">{new Date(manga.createAt).toLocaleString()}</Descriptions.Item>
-          <Descriptions.Item label="更新时间" span={2}>{new Date(manga.updateAt).toLocaleString()}</Descriptions.Item>
+          <Descriptions.Item label="创建时间">{formatDateTime(manga.createAt)}</Descriptions.Item>
+          <Descriptions.Item label="更新时间" span={2}>{formatDateTime(manga.updateAt)}</Descriptions.Item>
         </Descriptions>
       </Space>
 

@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import type { Tag as TagData, TagType } from '../types'
+import { formatDateTime } from '../utils/date'
 
 type SortKey = 'updateAt-desc' | 'updateAt-asc' | 'createAt-desc' | 'createAt-asc'
 
@@ -70,13 +71,13 @@ export default function TagListPage() {
       title: '创建时间',
       dataIndex: 'createAt',
       width: 160,
-      render: (v: string) => new Date(v).toLocaleString(),
+      render: (v: string) => formatDateTime(v),
     },
     {
       title: '更新时间',
       dataIndex: 'updateAt',
       width: 160,
-      render: (v: string) => new Date(v).toLocaleString(),
+      render: (v: string) => formatDateTime(v),
     },
   ]
 
