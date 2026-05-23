@@ -52,6 +52,7 @@ The server runs at `http://localhost:3000` by default.
 | `DATABASE_URL` | `postgres://user:pass@localhost:5432/mangadb`    | PostgreSQL connection string           |
 | `PORT`         | `3000`                                           | HTTP port the server listens on        |
 | `DATA_DIR`     | `/data`                                          | Root directory where manga files live  |
+| `CORS_ORIGIN`  | _(unset)_                                        | Allowed CORS origin(s), comma-separated. Leave unset in production; set to `http://localhost:5173` for local development. |
 
 ## Data Directory
 
@@ -78,17 +79,26 @@ The container automatically runs `prisma migrate deploy` on startup.
 services:
   db:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_USER: manga
       POSTGRES_PASSWORD: manga
       POSTGRES_DB: mangadb
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U manga -d mangadb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   app:
     image: ghcr.io/wang-hz/mangadb:latest
+    restart: unless-stopped
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     environment:
       DATABASE_URL: postgres://manga:manga@db:5432/mangadb
       DATA_DIR: /data

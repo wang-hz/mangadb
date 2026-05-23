@@ -12,14 +12,11 @@ RUN cd web && npm ci
 
 COPY . .
 
-ARG DATABASE_URL
-ENV DATABASE_URL=${DATABASE_URL}
-
 RUN npx prisma generate
 RUN npm run build
 RUN npm run web:build
 
-FROM --platform=linux/amd64 node:20-alpine
+FROM --platform=$TARGETPLATFORM node:20-alpine
 
 WORKDIR /app
 
@@ -44,6 +41,9 @@ RUN chown -R nodejs:nodejs /app
 USER nodejs
 
 EXPOSE 3000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD wget -qO- http://localhost:3000/health || exit 1
 
 ENTRYPOINT ["dumb-init", "--"]
 
