@@ -84,7 +84,6 @@ export class MangaService {
       data: {
         fullname, displayTitle, originalTitle,
         ...(cover !== undefined ? { cover } : {}),
-        updateAt: new Date(),
       },
     });
   }
