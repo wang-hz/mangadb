@@ -10,6 +10,7 @@ router.patch('/mangas/:uuid', mangadbController.updateManga);
 router.post('/mangas/:uuid/tags', mangadbController.createMangaTags);
 router.delete('/mangas/:uuid/tags/:tagUuid', mangadbController.deleteMangaTag);
 router.get('/tags/:uuid/mangas', mangadbController.getMangasByTagUuid);
+router.post('/tags/:uuid/batch-add-tag', mangadbController.batchAddTagToMangasByTag);
 router.get('/tags/:uuid', mangadbController.getTagByUuid);
 router.get('/tags', mangadbController.getTagsByPage);
 router.post('/tags', mangadbController.createTag);

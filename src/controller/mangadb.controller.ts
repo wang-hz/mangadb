@@ -49,6 +49,14 @@ export class MangadbController {
     res.status(201).json(payload);
   }
 
+  async batchAddTagToMangasByTag(req: Request, res: Response) {
+    const sourceTagUuid = req.params.uuid;
+    const { tagUuid: targetTagUuid } = req.body;
+    if (!targetTagUuid) { res.status(400).json({ msg: 'tagUuid is required' }); return; }
+    const result = await mangaService.batchAddTagToMangasByTag(sourceTagUuid, targetTagUuid);
+    res.json(result);
+  }
+
   async deleteMangaTag(req: Request, res: Response) {
     const mangaUuid: string = req.params.uuid;
     const tagUuid: string = req.params.tagUuid;

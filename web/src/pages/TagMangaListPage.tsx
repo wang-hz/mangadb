@@ -1,5 +1,5 @@
-import { ArrowLeftOutlined, SearchOutlined } from '@ant-design/icons'
-import { Button, Descriptions, Input, message, Select, Space, Table, Tag } from 'antd'
+import { ArrowLeftOutlined, SearchOutlined, TagsOutlined } from '@ant-design/icons'
+import { Button, Descriptions, Input, message, Modal, Select, Space, Table, Tag } from 'antd'
 import type { TableColumnsType, TablePaginationConfig } from 'antd'
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
@@ -59,8 +59,36 @@ export default function TagMangaListPage() {
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
   const [searchInput, setSearchInput] = useState(search)
+  const [batchModalOpen, setBatchModalOpen] = useState(false)
+  const [batchTagOptions, setBatchTagOptions] = useState<TagData[]>([])
+  const [batchTagSearch, setBatchTagSearch] = useState('')
+  const [batchSelectedTagUuid, setBatchSelectedTagUuid] = useState<string | undefined>()
+  const [batchLoading, setBatchLoading] = useState(false)
 
   useEffect(() => { setSearchInput(search) }, [search])
+
+  useEffect(() => {
+    if (!batchModalOpen) return
+    api.getTags({ page: 1, limit: 50, search: batchTagSearch || undefined })
+      .then(res => setBatchTagOptions(res.items))
+      .catch(() => message.error('加载标签失败'))
+  }, [batchTagSearch, batchModalOpen])
+
+  const handleBatchAddTag = async () => {
+    if (!uuid || !batchSelectedTagUuid) return
+    setBatchLoading(true)
+    try {
+      const { added } = await api.batchAddTagToMangasByTag(uuid, batchSelectedTagUuid)
+      message.success(`已为 ${added} 部漫画添加标签`)
+      setBatchModalOpen(false)
+      setBatchSelectedTagUuid(undefined)
+      setBatchTagSearch('')
+    } catch {
+      message.error('批量添加失败')
+    } finally {
+      setBatchLoading(false)
+    }
+  }
 
   useEffect(() => {
     if (!uuid) return
@@ -103,7 +131,8 @@ export default function TagMangaListPage() {
           <Descriptions.Item label="更新时间">{formatDateTime(tag.updateAt)}</Descriptions.Item>
         </Descriptions>
       )}
-      <Space>
+      <Space style={{ justifyContent: 'space-between', width: '100%' }}>
+        <Space>
         <Input
           prefix={<SearchOutlined />}
           placeholder="搜索显示标题或原始标题，按回车搜索"
@@ -126,7 +155,35 @@ export default function TagMangaListPage() {
           options={SORT_OPTIONS}
           style={{ width: 180 }}
         />
+        </Space>
+        <Button icon={<TagsOutlined />} onClick={() => setBatchModalOpen(true)}>
+          批量添加标签
+        </Button>
       </Space>
+      <Modal
+        title="批量添加标签"
+        open={batchModalOpen}
+        onCancel={() => { setBatchModalOpen(false); setBatchSelectedTagUuid(undefined); setBatchTagSearch('') }}
+        onOk={handleBatchAddTag}
+        okText="确认添加"
+        cancelText="取消"
+        confirmLoading={batchLoading}
+        okButtonProps={{ disabled: !batchSelectedTagUuid }}
+      >
+        <p style={{ marginBottom: 12, color: '#666' }}>
+          将选中的标签添加至「{tag?.tagType.name}: {tag?.name}」下的所有 {total} 部漫画（已有该标签的漫画会自动跳过）。
+        </p>
+        <Select
+          style={{ width: '100%' }}
+          placeholder="搜索并选择标签"
+          value={batchSelectedTagUuid}
+          onChange={setBatchSelectedTagUuid}
+          onSearch={setBatchTagSearch}
+          filterOption={false}
+          showSearch
+          options={batchTagOptions.map(t => ({ value: t.uuid, label: `${t.tagType.name}: ${t.name}` }))}
+        />
+      </Modal>
       <Table
         rowKey="uuid"
         dataSource={data}

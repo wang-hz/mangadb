@@ -85,6 +85,14 @@ export const api = {
     })
   },
 
+  batchAddTagToMangasByTag(sourceTagUuid: string, targetTagUuid: string) {
+    return request<{ added: number }>(`${BASE}/tags/${sourceTagUuid}/batch-add-tag`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tagUuid: targetTagUuid }),
+    })
+  },
+
   getTagTypes(params: { page: number; limit: number }) {
     const q = new URLSearchParams({ page: String(params.page), limit: String(params.limit) })
     return request<PageResult<TagType>>(`${BASE}/tag_types?${q}`)

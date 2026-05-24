@@ -98,6 +98,26 @@ export class MangaService {
     });
   }
 
+  async batchAddTagToMangasByTag(sourceTagUuid: string, targetTagUuid: string) {
+    const mangaTags = await prisma.mangaTag.findMany({
+      where: { tagUuid: sourceTagUuid },
+      select: { mangaUuid: true },
+    });
+    const mangaUuids = mangaTags.map(mt => mt.mangaUuid);
+    if (mangaUuids.length === 0) return { added: 0 };
+    const existing = await prisma.mangaTag.findMany({
+      where: { tagUuid: targetTagUuid, mangaUuid: { in: mangaUuids } },
+      select: { mangaUuid: true },
+    });
+    const existingUuids = new Set(existing.map(e => e.mangaUuid));
+    const toAdd = mangaUuids.filter(uuid => !existingUuids.has(uuid));
+    if (toAdd.length === 0) return { added: 0 };
+    await prisma.mangaTag.createMany({
+      data: toAdd.map(mangaUuid => ({ mangaUuid, tagUuid: targetTagUuid })),
+    });
+    return { added: toAdd.length };
+  }
+
   async deleteMangaTag(mangaUuid: string, tagUuid: string) {
     return prisma.mangaTag.delete({
       where: { mangaUuid_tagUuid: { mangaUuid, tagUuid } },
