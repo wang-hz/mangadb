@@ -201,6 +201,8 @@ export default function MangaDetailPage() {
                     color="blue"
                     closable
                     onClose={() => handleDeleteTag(mt.tag.uuid)}
+                    onClick={() => navigate(`/tags/${mt.tag.uuid}/mangas`)}
+                    style={{ cursor: 'pointer' }}
                   >
                     {mt.tag.tagType.name}: {mt.tag.name}
                   </Tag>
