@@ -92,7 +92,7 @@ export default function TagMangaListPage() {
 
   return (
     <Space direction="vertical" style={{ width: '100%' }} size="middle">
-      <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/tags')} />
+      <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)} />
       {tag && (
         <Descriptions bordered size="small" column={2}>
           <Descriptions.Item label="标签名称">{tag.name}</Descriptions.Item>
