@@ -85,6 +85,14 @@ export const api = {
     })
   },
 
+  batchSetPublishDateByTag(tagUuid: string, publishDate: string | null) {
+    return request<{ updated: number }>(`${BASE}/tags/${tagUuid}/batch-set-publish-date`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ publishDate }),
+    })
+  },
+
   batchAddTagToMangasByTag(sourceTagUuid: string, targetTagUuid: string) {
     return request<{ added: number }>(`${BASE}/tags/${sourceTagUuid}/batch-add-tag`, {
       method: 'POST',

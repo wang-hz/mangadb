@@ -1,5 +1,6 @@
-import { ArrowLeftOutlined, SearchOutlined, TagsOutlined } from '@ant-design/icons'
-import { Button, Descriptions, Input, message, Modal, Select, Space, Table, Tag } from 'antd'
+import { ArrowLeftOutlined, CalendarOutlined, SearchOutlined, TagsOutlined } from '@ant-design/icons'
+import { Button, DatePicker, Descriptions, Input, message, Modal, Select, Space, Table, Tag } from 'antd'
+import dayjs from 'dayjs'
 import type { TableColumnsType, TablePaginationConfig } from 'antd'
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
@@ -59,34 +60,52 @@ export default function TagMangaListPage() {
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
   const [searchInput, setSearchInput] = useState(search)
-  const [batchModalOpen, setBatchModalOpen] = useState(false)
+  const [batchTagModalOpen, setBatchTagModalOpen] = useState(false)
   const [batchTagOptions, setBatchTagOptions] = useState<TagData[]>([])
   const [batchTagSearch, setBatchTagSearch] = useState('')
   const [batchSelectedTagUuid, setBatchSelectedTagUuid] = useState<string | undefined>()
-  const [batchLoading, setBatchLoading] = useState(false)
+  const [batchTagLoading, setBatchTagLoading] = useState(false)
+  const [batchDateModalOpen, setBatchDateModalOpen] = useState(false)
+  const [batchDate, setBatchDate] = useState<ReturnType<typeof dayjs> | null>(null)
+  const [batchDateLoading, setBatchDateLoading] = useState(false)
 
   useEffect(() => { setSearchInput(search) }, [search])
 
   useEffect(() => {
-    if (!batchModalOpen) return
+    if (!batchTagModalOpen) return
     api.getTags({ page: 1, limit: 50, search: batchTagSearch || undefined })
       .then(res => setBatchTagOptions(res.items))
       .catch(() => message.error('加载标签失败'))
-  }, [batchTagSearch, batchModalOpen])
+  }, [batchTagSearch, batchTagModalOpen])
 
   const handleBatchAddTag = async () => {
     if (!uuid || !batchSelectedTagUuid) return
-    setBatchLoading(true)
+    setBatchTagLoading(true)
     try {
       const { added } = await api.batchAddTagToMangasByTag(uuid, batchSelectedTagUuid)
       message.success(`已为 ${added} 部漫画添加标签`)
-      setBatchModalOpen(false)
+      setBatchTagModalOpen(false)
       setBatchSelectedTagUuid(undefined)
       setBatchTagSearch('')
     } catch {
       message.error('批量添加失败')
     } finally {
-      setBatchLoading(false)
+      setBatchTagLoading(false)
+    }
+  }
+
+  const handleBatchSetDate = async () => {
+    if (!uuid || !batchDate) return
+    setBatchDateLoading(true)
+    try {
+      const { updated } = await api.batchSetPublishDateByTag(uuid, batchDate.format('YYYY-MM-DD'))
+      message.success(`已为 ${updated} 部漫画设置出版日期`)
+      setBatchDateModalOpen(false)
+      setBatchDate(null)
+    } catch {
+      message.error('批量设置失败')
+    } finally {
+      setBatchDateLoading(false)
     }
   }
 
@@ -156,18 +175,23 @@ export default function TagMangaListPage() {
           style={{ width: 180 }}
         />
         </Space>
-        <Button icon={<TagsOutlined />} onClick={() => setBatchModalOpen(true)}>
-          批量添加标签
-        </Button>
+        <Space>
+          <Button icon={<TagsOutlined />} onClick={() => setBatchTagModalOpen(true)}>
+            批量添加标签
+          </Button>
+          <Button icon={<CalendarOutlined />} onClick={() => setBatchDateModalOpen(true)}>
+            批量设置出版日期
+          </Button>
+        </Space>
       </Space>
       <Modal
         title="批量添加标签"
-        open={batchModalOpen}
-        onCancel={() => { setBatchModalOpen(false); setBatchSelectedTagUuid(undefined); setBatchTagSearch('') }}
+        open={batchTagModalOpen}
+        onCancel={() => { setBatchTagModalOpen(false); setBatchSelectedTagUuid(undefined); setBatchTagSearch('') }}
         onOk={handleBatchAddTag}
         okText="确认添加"
         cancelText="取消"
-        confirmLoading={batchLoading}
+        confirmLoading={batchTagLoading}
         okButtonProps={{ disabled: !batchSelectedTagUuid }}
       >
         <p style={{ marginBottom: 12, color: '#666' }}>
@@ -182,6 +206,25 @@ export default function TagMangaListPage() {
           filterOption={false}
           showSearch
           options={batchTagOptions.map(t => ({ value: t.uuid, label: `${t.tagType.name}: ${t.name}` }))}
+        />
+      </Modal>
+      <Modal
+        title="批量设置出版日期"
+        open={batchDateModalOpen}
+        onCancel={() => { setBatchDateModalOpen(false); setBatchDate(null) }}
+        onOk={handleBatchSetDate}
+        okText="确认设置"
+        cancelText="取消"
+        confirmLoading={batchDateLoading}
+        okButtonProps={{ disabled: !batchDate }}
+      >
+        <p style={{ marginBottom: 12, color: '#666' }}>
+          将选中日期设置为「{tag?.tagType.name}: {tag?.name}」下所有 {total} 部漫画的出版日期。
+        </p>
+        <DatePicker
+          style={{ width: '100%' }}
+          value={batchDate}
+          onChange={setBatchDate}
         />
       </Modal>
       <Table

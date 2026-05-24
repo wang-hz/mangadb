@@ -98,6 +98,20 @@ export class MangaService {
     });
   }
 
+  async batchSetPublishDateByTag(tagUuid: string, publishDate: string | null) {
+    const mangaTags = await prisma.mangaTag.findMany({
+      where: { tagUuid },
+      select: { mangaUuid: true },
+    });
+    const mangaUuids = mangaTags.map(mt => mt.mangaUuid);
+    if (mangaUuids.length === 0) return { updated: 0 };
+    const result = await prisma.manga.updateMany({
+      where: { uuid: { in: mangaUuids } },
+      data: { publishDate: publishDate ? new Date(publishDate) : null },
+    });
+    return { updated: result.count };
+  }
+
   async batchAddTagToMangasByTag(sourceTagUuid: string, targetTagUuid: string) {
     const mangaTags = await prisma.mangaTag.findMany({
       where: { tagUuid: sourceTagUuid },

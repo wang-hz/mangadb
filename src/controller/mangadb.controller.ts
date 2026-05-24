@@ -49,6 +49,12 @@ export class MangadbController {
     res.status(201).json(payload);
   }
 
+  async batchSetPublishDateByTag(req: Request, res: Response) {
+    const { publishDate } = req.body;
+    const result = await mangaService.batchSetPublishDateByTag(req.params.uuid, publishDate ?? null);
+    res.json(result);
+  }
+
   async batchAddTagToMangasByTag(req: Request, res: Response) {
     const sourceTagUuid = req.params.uuid;
     const { tagUuid: targetTagUuid } = req.body;
