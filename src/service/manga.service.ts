@@ -79,12 +79,13 @@ export class MangaService {
     ]);
   }
 
-  async updateManga(uuid: string, fullname?: string, displayTitle?: string, originalTitle?: string, cover?: number | null) {
+  async updateManga(uuid: string, fullname?: string, displayTitle?: string, originalTitle?: string, cover?: number | null, publishDate?: string | null) {
     return prisma.manga.update({
       where: { uuid },
       data: {
         fullname, displayTitle, originalTitle,
         ...(cover !== undefined ? { cover } : {}),
+        ...(publishDate !== undefined ? { publishDate: publishDate ? new Date(publishDate) : null } : {}),
       },
     });
   }

@@ -1,10 +1,11 @@
 import { ArrowLeftOutlined, CheckCircleFilled } from '@ant-design/icons'
-import { Button, Descriptions, Form, Input, message, Pagination, Select, Space, Spin, Tag, Typography } from 'antd'
+import { Button, DatePicker, Descriptions, Form, Input, message, Pagination, Select, Space, Spin, Tag, Typography } from 'antd'
+import dayjs from 'dayjs'
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api'
 import type { Manga, Tag as TagData } from '../types'
-import { formatDate, formatDateTime } from '../utils/date'
+import { formatDateTime } from '../utils/date'
 
 const { Title } = Typography
 
@@ -28,7 +29,7 @@ export default function MangaDetailPage() {
     api.getManga(id)
       .then(m => {
         setManga(m)
-        form.setFieldsValue({ fullname: m.fullname, displayTitle: m.displayTitle, originalTitle: m.originalTitle })
+        form.setFieldsValue({ fullname: m.fullname, displayTitle: m.displayTitle, originalTitle: m.originalTitle, publishDate: m.publishDate ? dayjs(m.publishDate) : null })
       })
       .catch(() => message.error('加载漫画失败'))
       .finally(() => setLoading(false))
@@ -44,7 +45,7 @@ export default function MangaDetailPage() {
 
   const handleSave = async () => {
     if (!uuid) return
-    let values: { fullname: string; displayTitle: string; originalTitle: string }
+    let values: { fullname: string; displayTitle: string; originalTitle: string; publishDate: ReturnType<typeof dayjs> | null }
     try {
       values = await form.validateFields()
     } catch {
@@ -53,8 +54,10 @@ export default function MangaDetailPage() {
     setSaving(true)
     try {
       const savedCoverIndex = manga?.cover ?? 0
+      const { publishDate, ...textValues } = values
       const updateData = {
-        ...values,
+        ...textValues,
+        publishDate: publishDate ? publishDate.format('YYYY-MM-DD') : null,
         ...(pendingCover !== null && pendingCover !== savedCoverIndex ? { cover: pendingCover } : {}),
       }
       await api.updateManga(uuid, updateData)
@@ -106,27 +109,92 @@ export default function MangaDetailPage() {
     <Space direction="vertical" style={{ width: '100%' }} size="large">
       <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)}>返回</Button>
 
-      <Space align="start" size="large">
+      <Space align="start" size="large" style={{ width: '100%' }}>
         <img
           src={`/api/file/mangas/${manga.uuid}/pages/${coverIndex}`}
           alt="cover"
-          style={{ width: 180, borderRadius: 4, flexShrink: 0 }}
+          style={{ width: 280, borderRadius: 4, flexShrink: 0 }}
         />
-        <Descriptions bordered column={2} size="small">
-<Descriptions.Item label="封面页码">
-            {savedCoverIndex}
-            {pendingCover !== null && pendingCover !== savedCoverIndex && (
-              <span style={{ color: '#faad14', marginLeft: 4 }}>→ {pendingCover}（待保存）</span>
-            )}
-          </Descriptions.Item>
-          <Descriptions.Item label="出版日期">
-            {manga.publishDate ? formatDate(manga.publishDate) : '-'}
-          </Descriptions.Item>
-          <Descriptions.Item label="标签数量">{manga.mangaTags.length + pendingAddTags.length}</Descriptions.Item>
-          <Descriptions.Item label="创建时间">{formatDateTime(manga.createAt)}</Descriptions.Item>
-          <Descriptions.Item label="更新时间" span={2}>{formatDateTime(manga.updateAt)}</Descriptions.Item>
-        </Descriptions>
+        <Space direction="vertical" style={{ flex: 1 }} size="middle">
+          <Descriptions bordered column={2} size="small">
+            <Descriptions.Item label="创建时间">{formatDateTime(manga.createAt)}</Descriptions.Item>
+            <Descriptions.Item label="更新时间">{formatDateTime(manga.updateAt)}</Descriptions.Item>
+          </Descriptions>
+          <div>
+            <Form form={form} layout="vertical">
+              <Form.Item label="完整文件名" name="fullname" rules={[{ required: true, message: '请输入完整文件名' }]}>
+                <Input />
+              </Form.Item>
+              <Form.Item label="显示标题" name="displayTitle" rules={[{ required: true, message: '请输入显示标题' }]}>
+                <Input />
+              </Form.Item>
+              <Form.Item label="原始标题" name="originalTitle" rules={[{ required: true, message: '请输入原始标题' }]}>
+                <Input />
+              </Form.Item>
+              <Form.Item label="出版日期" name="publishDate">
+                <DatePicker style={{ width: '100%' }} />
+              </Form.Item>
+            </Form>
+          </div>
+        </Space>
       </Space>
+
+      <div>
+        <Title level={5}>编辑标签</Title>
+        <Space wrap size={[6, 8]}>
+          {manga.mangaTags.length === 0 && pendingAddTags.length === 0
+            ? <span style={{ color: '#999' }}>暂无标签</span>
+            : <>
+                {manga.mangaTags.map(mt => (
+                  <Tag
+                    key={mt.tag.uuid}
+                    color="blue"
+                    closable
+                    onClose={() => handleDeleteTag(mt.tag.uuid)}
+                    onClick={() => navigate(`/tags/${mt.tag.uuid}/mangas`)}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    {mt.tag.tagType.name}: {mt.tag.name}
+                  </Tag>
+                ))}
+                {pendingAddTags.map(t => (
+                  <Tag
+                    key={t.uuid}
+                    color="orange"
+                    closable
+                    onClose={() => setPendingAddTags(prev => prev.filter(pt => pt.uuid !== t.uuid))}
+                  >
+                    {t.tagType.name}: {t.name}（待保存）
+                  </Tag>
+                ))}
+              </>
+          }
+        </Space>
+      </div>
+
+      <div>
+        <Space>
+          <Select
+            mode="multiple"
+            style={{ minWidth: 360 }}
+            placeholder="搜索并选择标签"
+            value={selectedTagUuids}
+            onChange={setSelectedTagUuids}
+            onSearch={setTagSearch}
+            filterOption={false}
+            showSearch
+            options={tagOptions
+              .filter(t => !existingTagUuids.has(t.uuid) && !pendingAddTags.some(pt => pt.uuid === t.uuid))
+              .map(t => ({ value: t.uuid, label: `${t.tagType.name}: ${t.name}` }))}
+          />
+          <Button
+            onClick={handleStageTags}
+            disabled={selectedTagUuids.length === 0}
+          >
+            添加
+          </Button>
+        </Space>
+      </div>
 
       <div>
         <Title level={5}>选择封面</Title>
@@ -172,79 +240,6 @@ export default function MangaDetailPage() {
             )
           })}
         </div>
-      </div>
-
-      <div>
-        <Title level={5}>编辑信息</Title>
-        <Form form={form} layout="vertical" style={{ maxWidth: 600 }}>
-          <Form.Item label="完整文件名" name="fullname" rules={[{ required: true, message: '请输入完整文件名' }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item label="显示标题" name="displayTitle" rules={[{ required: true, message: '请输入显示标题' }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item label="原始标题" name="originalTitle" rules={[{ required: true, message: '请输入原始标题' }]}>
-            <Input />
-          </Form.Item>
-        </Form>
-      </div>
-
-      <div>
-        <Title level={5}>当前标签</Title>
-        <Space wrap size={[6, 8]}>
-          {manga.mangaTags.length === 0 && pendingAddTags.length === 0
-            ? <span style={{ color: '#999' }}>暂无标签</span>
-            : <>
-                {manga.mangaTags.map(mt => (
-                  <Tag
-                    key={mt.tag.uuid}
-                    color="blue"
-                    closable
-                    onClose={() => handleDeleteTag(mt.tag.uuid)}
-                    onClick={() => navigate(`/tags/${mt.tag.uuid}/mangas`)}
-                    style={{ cursor: 'pointer' }}
-                  >
-                    {mt.tag.tagType.name}: {mt.tag.name}
-                  </Tag>
-                ))}
-                {pendingAddTags.map(t => (
-                  <Tag
-                    key={t.uuid}
-                    color="orange"
-                    closable
-                    onClose={() => setPendingAddTags(prev => prev.filter(pt => pt.uuid !== t.uuid))}
-                  >
-                    {t.tagType.name}: {t.name}（待保存）
-                  </Tag>
-                ))}
-              </>
-          }
-        </Space>
-      </div>
-
-      <div>
-        <Title level={5}>添加标签</Title>
-        <Space>
-          <Select
-            mode="multiple"
-            style={{ minWidth: 360 }}
-            placeholder="搜索并选择标签"
-            value={selectedTagUuids}
-            onChange={setSelectedTagUuids}
-            onSearch={setTagSearch}
-            filterOption={false}
-            showSearch
-            options={tagOptions
-              .filter(t => !existingTagUuids.has(t.uuid) && !pendingAddTags.some(pt => pt.uuid === t.uuid))
-              .map(t => ({ value: t.uuid, label: `${t.tagType.name}: ${t.name}` }))}
-          />
-          <Button
-            onClick={handleStageTags}
-            disabled={selectedTagUuids.length === 0}
-          >
-            添加
-          </Button>
-        </Space>
       </div>
 
       <Button type="primary" size="large" loading={saving} onClick={handleSave}>

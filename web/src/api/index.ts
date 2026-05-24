@@ -28,7 +28,7 @@ export const api = {
     return request<Manga>(`${BASE}/mangas/${uuid}`)
   },
 
-  updateManga(uuid: string, data: Partial<Pick<Manga, 'fullname' | 'displayTitle' | 'originalTitle' | 'cover'>>) {
+  updateManga(uuid: string, data: Partial<Pick<Manga, 'fullname' | 'displayTitle' | 'originalTitle' | 'cover' | 'publishDate'>>) {
     return request<Manga>(`${BASE}/mangas/${uuid}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },

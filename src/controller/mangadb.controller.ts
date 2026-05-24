@@ -35,10 +35,10 @@ export class MangadbController {
     res.json(manga);
   }
 
-  async updateManga(req: Request<any, any, any, Manga>, res: Response) {
+  async updateManga(req: Request, res: Response) {
     const uuid: string = req.params.uuid;
-    const { fullname, displayTitle, originalTitle, cover }: Manga = req.body;
-    const manga: Manga = await mangaService.updateManga(uuid, fullname, displayTitle, originalTitle, cover);
+    const { fullname, displayTitle, originalTitle, cover, publishDate } = req.body;
+    const manga = await mangaService.updateManga(uuid, fullname, displayTitle, originalTitle, cover, publishDate);
     res.status(201).json(manga);
   }
 
