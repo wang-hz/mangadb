@@ -80,13 +80,13 @@ export default function TagListPage() {
     {
       title: '创建时间',
       dataIndex: 'createAt',
-      width: 160,
+      width: 180,
       render: (v: string) => formatDateTime(v),
     },
     {
       title: '更新时间',
       dataIndex: 'updateAt',
-      width: 160,
+      width: 180,
       render: (v: string) => formatDateTime(v),
     },
   ]
