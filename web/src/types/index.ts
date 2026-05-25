@@ -46,3 +46,10 @@ export interface PageResult<T> {
   page: number
   limit: number
 }
+
+export interface User {
+  uuid: string
+  username: string
+  role: string
+  createAt: string
+}

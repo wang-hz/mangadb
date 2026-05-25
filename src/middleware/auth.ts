@@ -1,15 +1,17 @@
-import { AUTH_PASSWORD_HASH, AUTH_USERNAME, JWT_SECRET } from '@/config/env';
+import { JWT_SECRET } from '@/config/env';
+import { UserService } from '@/service/user.service';
 import bcrypt from 'bcryptjs';
 import type { NextFunction, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 
-function verifyBearer(authHeader: string): boolean {
-  if (!authHeader.startsWith('Bearer ')) return false;
+const userService = new UserService();
+
+function verifyBearer(authHeader: string): { sub: string; role: string } | null {
+  if (!authHeader.startsWith('Bearer ')) return null;
   try {
-    jwt.verify(authHeader.slice(7), JWT_SECRET);
-    return true;
+    return jwt.verify(authHeader.slice(7), JWT_SECRET) as { sub: string; role: string };
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -20,13 +22,13 @@ async function verifyBasic(authHeader: string): Promise<boolean> {
   if (colonIdx === -1) return false;
   const username = decoded.slice(0, colonIdx);
   const password = decoded.slice(colonIdx + 1);
-  if (username !== AUTH_USERNAME) return false;
-  return bcrypt.compare(password, AUTH_PASSWORD_HASH);
+  const user = await userService.findByUsername(username);
+  if (!user) return false;
+  return bcrypt.compare(password, user.passwordHash);
 }
 
 export function requireAuth(req: Request, res: Response, next: NextFunction) {
-  const auth = req.headers.authorization ?? '';
-  if (verifyBearer(auth)) { next(); return; }
+  if (verifyBearer(req.headers.authorization ?? '')) { next(); return; }
   res.status(401).json({ error: 'Unauthorized' });
 }
 
@@ -36,4 +38,11 @@ export async function requireBasicOrBearer(req: Request, res: Response, next: Ne
   if (await verifyBasic(auth)) { next(); return; }
   res.set('WWW-Authenticate', 'Basic realm="MangaDB"');
   res.status(401).json({ error: 'Unauthorized' });
+}
+
+export function requireAdmin(req: Request, res: Response, next: NextFunction) {
+  const payload = verifyBearer(req.headers.authorization ?? '');
+  if (!payload) { res.status(401).json({ error: 'Unauthorized' }); return; }
+  if (payload.role !== 'admin') { res.status(403).json({ error: 'Forbidden' }); return; }
+  next();
 }

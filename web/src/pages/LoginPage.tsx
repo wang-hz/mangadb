@@ -1,7 +1,7 @@
 import { Button, Card, Form, Input, message } from 'antd'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { login } from '../api/auth'
+import { checkSetupStatus, login } from '../api/auth'
 import { setToken } from '../utils/token'
 
 export default function LoginPage() {
@@ -9,6 +9,12 @@ export default function LoginPage() {
   const location = useLocation()
   const from = (location.state as { from?: { pathname?: string } })?.from?.pathname || '/mangas'
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    checkSetupStatus().then(({ needsSetup }) => {
+      if (needsSetup) navigate('/setup', { replace: true })
+    })
+  }, [navigate])
 
   async function onFinish(values: { username: string; password: string }) {
     setLoading(true)

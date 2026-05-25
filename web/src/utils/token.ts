@@ -11,3 +11,14 @@ export function setToken(token: string) {
 export function removeToken() {
   localStorage.removeItem(KEY)
 }
+
+export function getRole(): string | null {
+  const token = getToken()
+  if (!token) return null
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
+    return payload.role ?? null
+  } catch {
+    return null
+  }
+}
