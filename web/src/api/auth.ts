@@ -44,3 +44,11 @@ export function createUser(username: string, password: string, role: string): Pr
 export function deleteUser(uuid: string): Promise<void> {
   return request<void>(`/api/auth/users/${uuid}`, { method: 'DELETE' })
 }
+
+export function changePassword(uuid: string, newPassword: string, currentPassword?: string): Promise<void> {
+  return request<void>(`/api/auth/users/${uuid}/password`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ newPassword, ...(currentPassword !== undefined ? { currentPassword } : {}) }),
+  })
+}

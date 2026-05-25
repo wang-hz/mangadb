@@ -40,7 +40,7 @@ export class AuthController {
       return;
     }
     const token = jwt.sign(
-      { sub: user.username, role: user.role },
+      { sub: user.username, uuid: user.uuid, role: user.role },
       JWT_SECRET,
       { expiresIn: JWT_EXPIRES_IN } as jwt.SignOptions,
     );
@@ -65,6 +65,48 @@ export class AuthController {
 
   async deleteUser(req: Request, res: Response) {
     await userService.delete(req.params.uuid);
+    res.sendStatus(204);
+  }
+
+  async changePassword(req: Request, res: Response) {
+    const { uuid } = req.params;
+    const { currentPassword, newPassword } = req.body as { currentPassword?: string; newPassword?: string };
+
+    if (!newPassword || newPassword.length < 8) {
+      res.status(400).json({ error: 'newPassword must be at least 8 characters' });
+      return;
+    }
+
+    const payload = jwt.verify(
+      (req.headers.authorization ?? '').slice(7),
+      JWT_SECRET,
+    ) as { sub: string; uuid: string; role: string };
+
+    const target = await userService.findFullByUuid(uuid);
+    if (!target) { res.status(404).json({ error: 'User not found' }); return; }
+
+    const isSelf = payload.uuid === uuid;
+    const isAdmin = payload.role === 'admin';
+
+    if (!isSelf && !isAdmin) {
+      res.status(403).json({ error: 'Forbidden' });
+      return;
+    }
+
+    if (isSelf) {
+      if (!currentPassword) {
+        res.status(400).json({ error: 'currentPassword required' });
+        return;
+      }
+      const valid = await bcrypt.compare(currentPassword, target.passwordHash);
+      if (!valid) {
+        res.status(401).json({ error: 'Current password is incorrect' });
+        return;
+      }
+    }
+
+    const hash = await bcrypt.hash(newPassword, 10);
+    await userService.updatePassword(uuid, hash);
     res.sendStatus(204);
   }
 }

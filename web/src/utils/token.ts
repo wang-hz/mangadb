@@ -12,13 +12,25 @@ export function removeToken() {
   localStorage.removeItem(KEY)
 }
 
-export function getRole(): string | null {
-  const token = getToken()
-  if (!token) return null
+function decodePayload(token: string): Record<string, string> | null {
   try {
-    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
-    return payload.role ?? null
+    return JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
   } catch {
     return null
   }
+}
+
+export function getRole(): string | null {
+  const token = getToken()
+  return token ? (decodePayload(token)?.role ?? null) : null
+}
+
+export function getUsername(): string | null {
+  const token = getToken()
+  return token ? (decodePayload(token)?.sub ?? null) : null
+}
+
+export function getUuid(): string | null {
+  const token = getToken()
+  return token ? (decodePayload(token)?.uuid ?? null) : null
 }

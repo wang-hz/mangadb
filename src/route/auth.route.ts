@@ -1,5 +1,5 @@
 import { AuthController } from '@/controller/auth.controller';
-import { requireAdmin } from '@/middleware/auth';
+import { requireAdmin, requireAuth } from '@/middleware/auth';
 import { Router } from 'express';
 
 const router = Router();
@@ -11,5 +11,6 @@ router.post('/login', authController.login);
 router.get('/users', requireAdmin, authController.getUsers);
 router.post('/users', requireAdmin, authController.createUser);
 router.delete('/users/:uuid', requireAdmin, authController.deleteUser);
+router.patch('/users/:uuid/password', requireAuth, authController.changePassword);
 
 export default router;

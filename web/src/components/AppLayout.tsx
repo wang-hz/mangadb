@@ -1,8 +1,10 @@
-import { BookOutlined, LogoutOutlined, TagOutlined, UserOutlined } from '@ant-design/icons'
-import { Button, Layout, Menu } from 'antd'
+import { BookOutlined, DownOutlined, KeyOutlined, LogoutOutlined, TagOutlined, UserOutlined } from '@ant-design/icons'
+import type { MenuProps } from 'antd'
+import { Dropdown, Layout, Menu } from 'antd'
+import { useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { removeToken } from '../utils/token'
-import { getRole } from '../utils/token'
+import ChangePasswordModal from './ChangePasswordModal'
+import { getRole, getUsername, getUuid, removeToken } from '../utils/token'
 
 const { Header, Content } = Layout
 
@@ -10,6 +12,9 @@ export default function AppLayout() {
   const navigate = useNavigate()
   const location = useLocation()
   const isAdmin = getRole() === 'admin'
+  const username = getUsername()
+  const uuid = getUuid()
+  const [changePwOpen, setChangePwOpen] = useState(false)
 
   const selectedKey = location.pathname.startsWith('/mangas') ? 'mangas'
     : location.pathname.startsWith('/tags') ? 'tags'
@@ -21,10 +26,16 @@ export default function AppLayout() {
     navigate('/login', { replace: true })
   }
 
-  const menuItems = [
+  const navItems = [
     { key: 'mangas', icon: <BookOutlined />, label: '漫画', onClick: () => navigate('/mangas') },
     { key: 'tags', icon: <TagOutlined />, label: '标签', onClick: () => navigate('/tags') },
     ...(isAdmin ? [{ key: 'admin', icon: <UserOutlined />, label: '用户管理', onClick: () => navigate('/admin/users') }] : []),
+  ]
+
+  const userMenuItems: MenuProps['items'] = [
+    { key: 'change-password', icon: <KeyOutlined />, label: '修改密码', onClick: () => setChangePwOpen(true) },
+    { type: 'divider' },
+    { key: 'logout', icon: <LogoutOutlined />, label: '退出登录', danger: true, onClick: handleLogout },
   ]
 
   return (
@@ -38,16 +49,15 @@ export default function AppLayout() {
           mode="horizontal"
           selectedKeys={[selectedKey]}
           style={{ flex: 1, minWidth: 0, borderBottom: 'none' }}
-          items={menuItems}
+          items={navItems}
         />
-        <Button
-          type="text"
-          icon={<LogoutOutlined />}
-          onClick={handleLogout}
-          style={{ color: 'rgba(255,255,255,0.65)' }}
-        >
-          退出
-        </Button>
+        <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
+          <span style={{ color: 'rgba(255,255,255,0.85)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+            <UserOutlined style={{ marginRight: 6 }} />
+            {username}
+            <DownOutlined style={{ marginLeft: 6, fontSize: 11 }} />
+          </span>
+        </Dropdown>
       </Header>
       <Content style={{
         margin: '24px',
@@ -58,6 +68,15 @@ export default function AppLayout() {
       }}>
         <Outlet />
       </Content>
+
+      {uuid && (
+        <ChangePasswordModal
+          open={changePwOpen}
+          onClose={() => setChangePwOpen(false)}
+          targetUuid={uuid}
+          isSelf
+        />
+      )}
     </Layout>
   )
 }

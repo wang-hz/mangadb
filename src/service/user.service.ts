@@ -31,6 +31,14 @@ export class UserService {
     return prisma.user.findMany({ select: userSelect, orderBy: { createAt: 'asc' } });
   }
 
+  async findFullByUuid(uuid: string) {
+    return prisma.user.findUnique({ where: { uuid } });
+  }
+
+  async updatePassword(uuid: string, passwordHash: string) {
+    return prisma.user.update({ where: { uuid }, data: { passwordHash } });
+  }
+
   async delete(uuid: string) {
     return prisma.user.delete({ where: { uuid } });
   }
