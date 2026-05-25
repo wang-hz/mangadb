@@ -44,6 +44,7 @@ export class AuthController {
       JWT_SECRET,
       { expiresIn: JWT_EXPIRES_IN } as jwt.SignOptions,
     );
+    res.cookie('token', token, { httpOnly: true, sameSite: 'strict' });
     res.json({ token });
   }
 

@@ -29,12 +29,14 @@ async function verifyBasic(authHeader: string): Promise<boolean> {
 
 export function requireAuth(req: Request, res: Response, next: NextFunction) {
   if (verifyBearer(req.headers.authorization ?? '')) { next(); return; }
+  if (verifyBearer(`Bearer ${req.cookies?.token ?? ''}`)) { next(); return; }
   res.status(401).json({ error: 'Unauthorized' });
 }
 
 export async function requireBasicOrBearer(req: Request, res: Response, next: NextFunction) {
   const auth = req.headers.authorization ?? '';
   if (verifyBearer(auth)) { next(); return; }
+  if (verifyBearer(`Bearer ${req.cookies?.token ?? ''}`)) { next(); return; }
   if (await verifyBasic(auth)) { next(); return; }
   res.set('WWW-Authenticate', 'Basic realm="MangaDB"');
   res.status(401).json({ error: 'Unauthorized' });

@@ -5,14 +5,16 @@ import authRouter from '@/route/auth.route';
 import fileRouter from '@/route/file.route';
 import mangadbRouter from '@/route/mangadb.route';
 import opdsRouter from '@/route/opds.route';
+import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import express from 'express';
 import path from 'path';
 
 const app = express();
 
-app.use(cors({ origin: CORS_ORIGIN }));
+app.use(cors({ origin: CORS_ORIGIN, credentials: true }));
 app.use(express.json());
+app.use(cookieParser());
 
 app.get('/health', async (req, res) => {
   try {
@@ -26,7 +28,7 @@ app.get('/health', async (req, res) => {
 
 app.use('/api/auth', authRouter);
 app.use('/api/opds/v1.2', requireBasicOrBearer, opdsRouter);
-app.use('/api/file', requireAuth, fileRouter);
+app.use('/api/file', requireBasicOrBearer, fileRouter);
 app.use('/api/mangadb', requireAuth, mangadbRouter);
 
 app.use('/api', (_req, res) => res.status(404).json({ error: 'Not Found' }));
