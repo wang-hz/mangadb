@@ -1,5 +1,7 @@
 import prisma from '@/config/database';
 import { CORS_ORIGIN, PORT } from '@/config/env';
+import { requireAuth, requireBasicOrBearer } from '@/middleware/auth';
+import authRouter from '@/route/auth.route';
 import fileRouter from '@/route/file.route';
 import mangadbRouter from '@/route/mangadb.route';
 import opdsRouter from '@/route/opds.route';
@@ -22,9 +24,10 @@ app.get('/health', async (req, res) => {
   }
 });
 
-app.use('/api/opds/v1.2', opdsRouter);
-app.use('/api/file', fileRouter);
-app.use('/api/mangadb', mangadbRouter);
+app.use('/api/auth', authRouter);
+app.use('/api/opds/v1.2', requireBasicOrBearer, opdsRouter);
+app.use('/api/file', requireAuth, fileRouter);
+app.use('/api/mangadb', requireAuth, mangadbRouter);
 
 app.use('/api', (_req, res) => res.status(404).json({ error: 'Not Found' }));
 

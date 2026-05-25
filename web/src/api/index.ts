@@ -1,9 +1,18 @@
 import type { Manga, PageResult, Tag, TagType } from '../types'
+import { getToken, removeToken } from '../utils/token'
 
 const BASE = '/api/mangadb'
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(url, options)
+  const token = getToken()
+  const headers: Record<string, string> = { ...(options?.headers as Record<string, string>) }
+  if (token) headers['Authorization'] = `Bearer ${token}`
+  const res = await fetch(url, { ...options, headers })
+  if (res.status === 401) {
+    removeToken()
+    window.location.href = '/login'
+    throw new Error('Unauthorized')
+  }
   if (!res.ok) {
     const text = await res.text()
     throw new Error(`${res.status}: ${text}`)
