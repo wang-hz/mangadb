@@ -68,8 +68,8 @@ Express 5 自动将 async 路由中的 rejected promise 传给 `next()`；在 `a
 ### ~~OPDS 封面图 Content-Type~~ ✅
 新增 `coverMimeType(pages, cover)` 辅助函数，从封面文件名通过 `mime-types` 推断类型，fallback 为 `image/jpeg`。`getTagsResContent` 和 `getMangasResContent`（含 PSE stream 链接）均改用动态类型。
 
-### 前端图片无降级处理
-漫画详情页和封面选择区域的 `<img>` 标签未处理加载失败，文件缺失时页面会显示破图。需添加 `onError` 回退占位图。
+### ~~前端图片无降级处理~~ ✅
+`MangaDetailPage` 的主封面和封面选择器缩略图均添加 `onError` 回调，加载失败时替换为 2:3 灰色 SVG 占位图，并置空 `onerror` 防止循环触发。
 
 ### 漫画列表缺少封面缩略图
 `MangaListPage` 只显示文字，浏览大量漫画时不直观。可增加可选的缩略图列/卡片视图模式。
