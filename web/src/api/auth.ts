@@ -45,6 +45,10 @@ export function deleteUser(uuid: string): Promise<void> {
   return request<void>(`/api/auth/users/${uuid}`, { method: 'DELETE' })
 }
 
+export async function logout(): Promise<void> {
+  await fetch('/api/auth/logout', { method: 'POST' })
+}
+
 export function changePassword(uuid: string, newPassword: string, currentPassword?: string): Promise<void> {
   return request<void>(`/api/auth/users/${uuid}/password`, {
     method: 'PATCH',

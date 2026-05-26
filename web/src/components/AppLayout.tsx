@@ -4,6 +4,7 @@ import { Dropdown, Layout, Menu } from 'antd'
 import { useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import ChangePasswordModal from './ChangePasswordModal'
+import { logout } from '../api/auth'
 import { getRole, getUsername, getUuid, removeToken } from '../utils/token'
 
 const { Header, Content } = Layout
@@ -21,7 +22,8 @@ export default function AppLayout() {
     : location.pathname.startsWith('/admin') ? 'admin'
     : 'mangas'
 
-  function handleLogout() {
+  async function handleLogout() {
+    await logout()
     removeToken()
     navigate('/login', { replace: true })
   }

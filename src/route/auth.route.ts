@@ -11,6 +11,7 @@ router.post('/login', authController.login);
 router.get('/users', requireAdmin, authController.getUsers);
 router.post('/users', requireAdmin, authController.createUser);
 router.delete('/users/:uuid', requireAdmin, authController.deleteUser);
+router.post('/logout', authController.logout);
 router.patch('/users/:uuid/password', requireAuth, authController.changePassword);
 
 export default router;

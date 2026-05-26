@@ -69,6 +69,11 @@ export class AuthController {
     res.sendStatus(204);
   }
 
+  logout(_req: Request, res: Response) {
+    res.clearCookie('token', { httpOnly: true, sameSite: 'strict' });
+    res.sendStatus(204);
+  }
+
   async changePassword(req: Request, res: Response) {
     const { uuid } = req.params;
     const { currentPassword, newPassword } = req.body as { currentPassword?: string; newPassword?: string };
