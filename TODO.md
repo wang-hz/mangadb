@@ -65,8 +65,8 @@ Express 5 自动将 async 路由中的 rejected promise 传给 `next()`；在 `a
 ### 下载文件名
 `GET /api/file/mangas/:uuid` 返回的 CBZ 文件名为 UUID（`Content-Disposition: attachment; filename=<uuid>.cbz`），不直观。应改为使用 `manga.displayTitle` 或 `manga.fullname`，并做文件名安全处理（去除特殊字符）。
 
-### OPDS 封面图 Content-Type
-OPDS feed 中封面链接 `@type` 写死为 `image/jpeg`，不适用于 PNG 等格式。`getImg` 接口已通过 `mime-types` 返回正确类型，OPDS 的 `@type` 也应动态推断（或改为通用的 `image/*`）。
+### ~~OPDS 封面图 Content-Type~~ ✅
+新增 `coverMimeType(pages, cover)` 辅助函数，从封面文件名通过 `mime-types` 推断类型，fallback 为 `image/jpeg`。`getTagsResContent` 和 `getMangasResContent`（含 PSE stream 链接）均改用动态类型。
 
 ### 前端图片无降级处理
 漫画详情页和封面选择区域的 `<img>` 标签未处理加载失败，文件缺失时页面会显示破图。需添加 `onError` 回退占位图。

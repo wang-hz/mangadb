@@ -1,6 +1,7 @@
 import { mangaService } from '@/service/manga.service';
 import { tagService } from '@/service/tag.service';
 import type { Request, Response } from 'express';
+import mime from 'mime-types';
 import { create } from 'xmlbuilder2';
 
 const PAGE_SIZE = 10;
@@ -13,6 +14,11 @@ type MangaItem = {
   pages: unknown;
   mangaTags: Array<{ tag: { name: string; tagType: { name: string } } }>;
 };
+
+function coverMimeType(pages: unknown, coverIndex: number | null): string {
+  const filename = Array.isArray(pages) ? (pages as string[])[coverIndex ?? 0] : undefined;
+  return (filename && mime.lookup(filename)) || 'image/jpeg';
+}
 
 async function getTagsResContent(tags: TagItem[]) {
   const tagUuidManga = await mangaService.getLatestMangasByTagUuids(tags.map((t: { uuid: string }) => t.uuid));
@@ -32,17 +38,18 @@ async function getTagsResContent(tags: TagItem[]) {
       ],
       entry: tags.map(tag => {
         const manga = tagUuidManga.get(tag.uuid);
+        const imgType = coverMimeType(manga?.pages, manga?.cover ?? null);
         return {
           id: tag.uuid,
           title: tag.name,
           link: [
             {
-              '@type': 'image/jpeg',
+              '@type': imgType,
               '@rel': 'http://opds-spec.org/image/thumbnail',
               '@href': `/api/file/mangas/${manga?.uuid}/pages/${manga?.cover ?? 0}`,
             },
             {
-              '@type': 'image/jpeg',
+              '@type': imgType,
               '@rel': 'http://opds-spec.org/image',
               '@href': `/api/file/mangas/${manga?.uuid}/pages/${manga?.cover ?? 0}`,
             },
@@ -75,6 +82,7 @@ function getMangasResContent(mangas: MangaItem[]) {
       ],
       entry: mangas.map(manga => {
         const mangaUuid = manga.uuid;
+        const imgType = coverMimeType(manga.pages, manga.cover);
         return {
           id: mangaUuid,
           title: manga.displayTitle,
@@ -88,12 +96,12 @@ function getMangasResContent(mangas: MangaItem[]) {
             .join(','),
           link: [
             {
-              '@type': 'image/jpeg',
+              '@type': imgType,
               '@rel': 'http://opds-spec.org/image/thumbnail',
               '@href': `/api/file/mangas/${mangaUuid}/pages/${manga.cover ?? 0}`,
             },
             {
-              '@type': 'image/jpeg',
+              '@type': imgType,
               '@rel': 'http://opds-spec.org/image',
               '@href': `/api/file/mangas/${mangaUuid}/pages/${manga.cover ?? 0}`,
             },
@@ -103,7 +111,7 @@ function getMangasResContent(mangas: MangaItem[]) {
               '@href': `/api/file/mangas/${mangaUuid}`,
             },
             {
-              '@type': 'image/jpeg',
+              '@type': imgType,
               '@rel': 'http://vaemendis.net/opds-pse/stream',
               '@href': `/api/file/mangas/${mangaUuid}/pages/{pageNumber}`,
               '@xmlns:pse': 'http://vaemendis.net/opds-pse/ns',
