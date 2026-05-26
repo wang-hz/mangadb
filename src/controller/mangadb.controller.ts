@@ -3,6 +3,28 @@ import { mangaService } from '@/service/manga.service';
 import { tagService } from '@/service/tag.service';
 import { Request, Response } from 'express';
 import type { PaginationQuery } from '@/type';
+import { z } from 'zod';
+
+const updateMangaSchema = z.object({
+  fullname: z.string().optional(),
+  displayTitle: z.string().optional(),
+  originalTitle: z.string().optional(),
+  cover: z.number().int().nonnegative().optional(),
+  publishDate: z.string().nullable().optional(),
+});
+
+const createTagSchema = z.object({
+  name: z.string().min(1),
+  type: z.string().min(1),
+});
+
+const batchAddTagSchema = z.object({
+  tagUuid: z.string().uuid(),
+});
+
+const batchSetDateSchema = z.object({
+  publishDate: z.string().nullable().optional(),
+});
 
 function parsePositiveInt(value: string | undefined, defaultValue: number) {
   if (!value) {
@@ -33,30 +55,31 @@ export class MangadbController {
   }
 
   async updateManga(req: Request, res: Response) {
-    const uuid: string = req.params.uuid;
-    const { fullname, displayTitle, originalTitle, cover, publishDate } = req.body;
-    const manga = await mangaService.updateManga(uuid, fullname, displayTitle, originalTitle, cover, publishDate);
+    const parsed = updateMangaSchema.safeParse(req.body);
+    if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+    const { fullname, displayTitle, originalTitle, cover, publishDate } = parsed.data;
+    const manga = await mangaService.updateManga(req.params.uuid, fullname, displayTitle, originalTitle, cover, publishDate);
     res.status(201).json(manga);
   }
 
   async createMangaTags(req: Request, res: Response) {
-    const mangaUuid: string = req.params.uuid;
-    const tagUuids: string[] = req.body;
-    const payload = await mangaService.createMangaTags(mangaUuid, tagUuids);
+    const parsed = z.array(z.string().uuid()).safeParse(req.body);
+    if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+    const payload = await mangaService.createMangaTags(req.params.uuid, parsed.data);
     res.status(201).json(payload);
   }
 
   async batchSetPublishDateByTag(req: Request, res: Response) {
-    const { publishDate } = req.body;
-    const result = await mangaService.batchSetPublishDateByTag(req.params.uuid, publishDate ?? null);
+    const parsed = batchSetDateSchema.safeParse(req.body);
+    if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+    const result = await mangaService.batchSetPublishDateByTag(req.params.uuid, parsed.data.publishDate ?? null);
     res.json(result);
   }
 
   async batchAddTagToMangasByTag(req: Request, res: Response) {
-    const sourceTagUuid = req.params.uuid;
-    const { tagUuid: targetTagUuid } = req.body;
-    if (!targetTagUuid) { res.status(400).json({ msg: 'tagUuid is required' }); return; }
-    const result = await mangaService.batchAddTagToMangasByTag(sourceTagUuid, targetTagUuid);
+    const parsed = batchAddTagSchema.safeParse(req.body);
+    if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+    const result = await mangaService.batchAddTagToMangasByTag(req.params.uuid, parsed.data.tagUuid);
     res.json(result);
   }
 
@@ -92,13 +115,14 @@ export class MangadbController {
   }
 
   async createTag(req: Request, res: Response) {
-    const { name, type }: { name: string, type: string } = req.body;
-    const tagType = await tagService.getTagTypeByName(type);
+    const parsed = createTagSchema.safeParse(req.body);
+    if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+    const tagType = await tagService.getTagTypeByName(parsed.data.type);
     if (!tagType) {
-      res.status(400).json({ msg: 'Tag type not found' });
+      res.status(400).json({ error: 'Tag type not found' });
       return;
     }
-    const tag: Tag = await tagService.createTag(name, tagType.uuid);
+    const tag: Tag = await tagService.createTag(parsed.data.name, tagType.uuid);
     res.status(201).json(tag);
   }
 

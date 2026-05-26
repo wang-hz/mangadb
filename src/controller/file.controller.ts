@@ -26,7 +26,8 @@ export class FileController {
     res.setHeader('Content-Disposition', `attachment; filename=${mangaUuid}.cbz`);
     const archive = archiver('zip', { zlib: { level: 0 } });
     archive.on('error', err => {
-      throw err;
+      console.error('Archive error:', err);
+      if (!res.headersSent) res.sendStatus(500);
     });
     archive.pipe(res);
     const pages = manga.pages as string[] | null;
@@ -64,6 +65,10 @@ export class FileController {
     const imgPath = path.join(DATA_DIR, mangaUuid, imgFilename);
     const mimeType = mime.lookup(imgPath) || 'image/jpeg';
     res.setHeader('Content-Type', mimeType);
-    fs.createReadStream(imgPath).pipe(res);
+    const stream = fs.createReadStream(imgPath);
+    stream.on('error', (err: NodeJS.ErrnoException) => {
+      if (!res.headersSent) res.sendStatus(err.code === 'ENOENT' ? 404 : 500);
+    });
+    stream.pipe(res);
   }
 }

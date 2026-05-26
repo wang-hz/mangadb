@@ -5,6 +5,23 @@ import bcrypt from 'bcryptjs';
 import { randomUUID } from 'crypto';
 import type { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
+import { z } from 'zod';
+
+const credentialsSchema = z.object({
+  username: z.string().min(1),
+  password: z.string().min(1),
+});
+
+const createUserSchema = z.object({
+  username: z.string().min(1),
+  password: z.string().min(1),
+  role: z.enum(['admin', 'user']).optional(),
+});
+
+const changePasswordSchema = z.object({
+  currentPassword: z.string().optional(),
+  newPassword: z.string().min(8),
+});
 
 export class AuthController {
   async setupStatus(_req: Request, res: Response) {
@@ -18,22 +35,18 @@ export class AuthController {
       res.status(400).json({ error: 'Already set up' });
       return;
     }
-    const { username, password } = req.body as { username?: string; password?: string };
-    if (!username || !password) {
-      res.status(400).json({ error: 'username and password required' });
-      return;
-    }
+    const parsed = credentialsSchema.safeParse(req.body);
+    if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+    const { username, password } = parsed.data;
     const passwordHash = await bcrypt.hash(password, 10);
     const user = await userService.create(username, passwordHash, 'admin');
     res.status(201).json(user);
   }
 
   async login(req: Request, res: Response) {
-    const { username, password } = req.body as { username?: string; password?: string };
-    if (!username || !password) {
-      res.status(400).json({ error: 'username and password required' });
-      return;
-    }
+    const parsed = credentialsSchema.safeParse(req.body);
+    if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+    const { username, password } = parsed.data;
     const user = await userService.findByUsername(username);
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
       res.status(401).json({ error: 'Invalid credentials' });
@@ -54,13 +67,11 @@ export class AuthController {
   }
 
   async createUser(req: Request, res: Response) {
-    const { username, password, role } = req.body as { username?: string; password?: string; role?: string };
-    if (!username || !password) {
-      res.status(400).json({ error: 'username and password required' });
-      return;
-    }
+    const parsed = createUserSchema.safeParse(req.body);
+    if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+    const { username, password, role } = parsed.data;
     const passwordHash = await bcrypt.hash(password, 10);
-    const user = await userService.create(username, passwordHash, role === 'admin' ? 'admin' : 'user');
+    const user = await userService.create(username, passwordHash, role ?? 'user');
     res.status(201).json(user);
   }
 
@@ -104,12 +115,9 @@ export class AuthController {
 
   async changePassword(req: Request, res: Response) {
     const { uuid } = req.params;
-    const { currentPassword, newPassword } = req.body as { currentPassword?: string; newPassword?: string };
-
-    if (!newPassword || newPassword.length < 8) {
-      res.status(400).json({ error: 'newPassword must be at least 8 characters' });
-      return;
-    }
+    const parsed = changePasswordSchema.safeParse(req.body);
+    if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+    const { currentPassword, newPassword } = parsed.data;
 
     const payload = jwt.verify(
       (req.headers.authorization ?? '').slice(7),

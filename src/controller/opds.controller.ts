@@ -117,7 +117,8 @@ function getMangasResContent(mangas: MangaItem[]) {
 }
 
 function getPage(query: unknown): number {
-  return typeof query === 'string' ? parseInt(query) : 1;
+  const n = typeof query === 'string' ? parseInt(query, 10) : NaN;
+  return Number.isInteger(n) && n > 0 ? n : 1;
 }
 
 export class OpdsController {

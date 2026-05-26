@@ -7,7 +7,7 @@ import mangadbRouter from '@/route/mangadb.route';
 import opdsRouter from '@/route/opds.route';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
-import express from 'express';
+import express, { NextFunction, Request, Response } from 'express';
 import path from 'path';
 
 const app = express();
@@ -32,6 +32,14 @@ app.use('/api/file', requireBasicOrBearer, fileRouter);
 app.use('/api/mangadb', requireAuth, mangadbRouter);
 
 app.use('/api', (_req, res) => res.status(404).json({ error: 'Not Found' }));
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
+  console.error(err.stack ?? err.message);
+  if (!res.headersSent) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
 
 const webDistPath = path.resolve(process.cwd(), 'web/dist');
 app.use(express.static(webDistPath));
