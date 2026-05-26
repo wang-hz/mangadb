@@ -1,6 +1,8 @@
+import prisma from '@/config/database';
 import { JWT_EXPIRES_IN, JWT_SECRET } from '@/config/env';
 import { UserService } from '@/service/user.service';
 import bcrypt from 'bcryptjs';
+import { randomUUID } from 'crypto';
 import type { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 
@@ -40,7 +42,7 @@ export class AuthController {
       return;
     }
     const token = jwt.sign(
-      { sub: user.username, uuid: user.uuid, role: user.role },
+      { sub: user.username, uuid: user.uuid, role: user.role, jti: randomUUID() },
       JWT_SECRET,
       { expiresIn: JWT_EXPIRES_IN } as jwt.SignOptions,
     );
@@ -69,7 +71,29 @@ export class AuthController {
     res.sendStatus(204);
   }
 
-  logout(_req: Request, res: Response) {
+  async logout(req: Request, res: Response) {
+    const authHeader = req.headers.authorization ?? '';
+    const rawToken = authHeader.startsWith('Bearer ')
+      ? authHeader.slice(7)
+      : req.cookies?.token;
+
+    if (rawToken) {
+      try {
+        const payload = jwt.verify(rawToken, JWT_SECRET) as { jti?: string; exp?: number };
+        if (payload.jti && payload.exp) {
+          await prisma.tokenBlacklist.upsert({
+            where: { jti: payload.jti },
+            update: {},
+            create: { jti: payload.jti, expiresAt: new Date(payload.exp * 1000) },
+          });
+          // lazily remove already-expired entries to keep the table small
+          prisma.tokenBlacklist.deleteMany({ where: { expiresAt: { lt: new Date() } } }).catch(() => {});
+        }
+      } catch {
+        // expired or invalid token — still clear the cookie
+      }
+    }
+
     res.clearCookie('token', { httpOnly: true, sameSite: 'strict' });
     res.sendStatus(204);
   }

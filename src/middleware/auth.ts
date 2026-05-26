@@ -1,3 +1,4 @@
+import prisma from '@/config/database';
 import { JWT_SECRET } from '@/config/env';
 import { UserService } from '@/service/user.service';
 import bcrypt from 'bcryptjs';
@@ -6,13 +7,22 @@ import jwt from 'jsonwebtoken';
 
 const userService = new UserService();
 
-function verifyBearer(authHeader: string): { sub: string; role: string } | null {
+type JwtPayload = { sub: string; role: string; jti: string };
+
+function parseBearerToken(authHeader: string): JwtPayload | null {
   if (!authHeader.startsWith('Bearer ')) return null;
   try {
-    return jwt.verify(authHeader.slice(7), JWT_SECRET) as { sub: string; role: string };
+    return jwt.verify(authHeader.slice(7), JWT_SECRET) as JwtPayload;
   } catch {
     return null;
   }
+}
+
+async function verifyBearer(authHeader: string): Promise<JwtPayload | null> {
+  const payload = parseBearerToken(authHeader);
+  if (!payload?.jti) return null;
+  const blocked = await prisma.tokenBlacklist.findUnique({ where: { jti: payload.jti } });
+  return blocked ? null : payload;
 }
 
 async function verifyBasic(authHeader: string): Promise<boolean> {
@@ -27,23 +37,23 @@ async function verifyBasic(authHeader: string): Promise<boolean> {
   return bcrypt.compare(password, user.passwordHash);
 }
 
-export function requireAuth(req: Request, res: Response, next: NextFunction) {
-  if (verifyBearer(req.headers.authorization ?? '')) { next(); return; }
-  if (verifyBearer(`Bearer ${req.cookies?.token ?? ''}`)) { next(); return; }
+export async function requireAuth(req: Request, res: Response, next: NextFunction) {
+  if (await verifyBearer(req.headers.authorization ?? '')) { next(); return; }
+  if (await verifyBearer(`Bearer ${req.cookies?.token ?? ''}`)) { next(); return; }
   res.status(401).json({ error: 'Unauthorized' });
 }
 
 export async function requireBasicOrBearer(req: Request, res: Response, next: NextFunction) {
   const auth = req.headers.authorization ?? '';
-  if (verifyBearer(auth)) { next(); return; }
-  if (verifyBearer(`Bearer ${req.cookies?.token ?? ''}`)) { next(); return; }
+  if (await verifyBearer(auth)) { next(); return; }
+  if (await verifyBearer(`Bearer ${req.cookies?.token ?? ''}`)) { next(); return; }
   if (await verifyBasic(auth)) { next(); return; }
   res.set('WWW-Authenticate', 'Basic realm="MangaDB"');
   res.status(401).json({ error: 'Unauthorized' });
 }
 
-export function requireAdmin(req: Request, res: Response, next: NextFunction) {
-  const payload = verifyBearer(req.headers.authorization ?? '');
+export async function requireAdmin(req: Request, res: Response, next: NextFunction) {
+  const payload = await verifyBearer(req.headers.authorization ?? '');
   if (!payload) { res.status(401).json({ error: 'Unauthorized' }); return; }
   if (payload.role !== 'admin') { res.status(403).json({ error: 'Forbidden' }); return; }
   next();

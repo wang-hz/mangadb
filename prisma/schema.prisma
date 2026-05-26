@@ -69,6 +69,13 @@ model TagType {
   @@map("tag_type")
 }
 
+model TokenBlacklist {
+  jti       String   @id
+  expiresAt DateTime
+
+  @@map("token_blacklist")
+}
+
 model User {
   pid          Int      @id @default(autoincrement())
   uuid         String   @unique @default(uuid())
