@@ -67,6 +67,12 @@ export class AuthController {
   }
 
   async deleteUser(req: Request, res: Response) {
+    const target = await userService.findByUuid(req.params.uuid);
+    if (!target) { res.status(404).json({ error: 'User not found' }); return; }
+    if (target.role === 'admin' && await userService.countAdmins() <= 1) {
+      res.status(400).json({ error: 'Cannot delete the last admin account' });
+      return;
+    }
     await userService.delete(req.params.uuid);
     res.sendStatus(204);
   }

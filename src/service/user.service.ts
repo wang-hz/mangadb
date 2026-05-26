@@ -39,6 +39,10 @@ export class UserService {
     return prisma.user.update({ where: { uuid }, data: { passwordHash } });
   }
 
+  async countAdmins() {
+    return prisma.user.count({ where: { role: 'admin' } });
+  }
+
   async delete(uuid: string) {
     return prisma.user.delete({ where: { uuid } });
   }
