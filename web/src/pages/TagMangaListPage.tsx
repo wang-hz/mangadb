@@ -5,6 +5,7 @@ import type { TableColumnsType, TablePaginationConfig } from 'antd'
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
+import { usePagedData } from '../hooks/usePagedData'
 import type { Manga, Tag as TagData } from '../types'
 import { formatDate, formatDateTime } from '../utils/date'
 
@@ -56,9 +57,6 @@ export default function TagMangaListPage() {
   const sort = (VALID_SORTS.has(searchParams.get('sort') ?? '') ? searchParams.get('sort')! : 'updateAt-desc') as `${SortBy}-${SortOrder}`
 
   const [tag, setTag] = useState<TagData | null>(null)
-  const [data, setData] = useState<Manga[]>([])
-  const [total, setTotal] = useState(0)
-  const [loading, setLoading] = useState(false)
   const [searchInput, setSearchInput] = useState(search)
   const [batchTagModalOpen, setBatchTagModalOpen] = useState(false)
   const [batchTagOptions, setBatchTagOptions] = useState<TagData[]>([])
@@ -68,6 +66,8 @@ export default function TagMangaListPage() {
   const [batchDateModalOpen, setBatchDateModalOpen] = useState(false)
   const [batchDate, setBatchDate] = useState<ReturnType<typeof dayjs> | null>(null)
   const [batchDateLoading, setBatchDateLoading] = useState(false)
+
+  const [sortBy, sortOrder] = sort.split('-') as [SortBy, SortOrder]
 
   useEffect(() => { setSearchInput(search) }, [search])
 
@@ -116,15 +116,11 @@ export default function TagMangaListPage() {
       .catch(() => message.error('加载标签信息失败'))
   }, [uuid])
 
-  useEffect(() => {
-    if (!uuid) return
-    const [sortBy, sortOrder] = sort.split('-') as [SortBy, SortOrder]
-    setLoading(true)
-    api.getMangasByTag(uuid, { page, limit: pageSize, search: search || undefined, sortBy, sortOrder })
-      .then(res => { setData(res.items); setTotal(res.total) })
-      .catch(() => message.error('加载漫画列表失败'))
-      .finally(() => setLoading(false))
-  }, [uuid, page, pageSize, search, sort])
+  const { items: data, total, loading } = usePagedData(
+    () => api.getMangasByTag(uuid!, { page, limit: pageSize, search: search || undefined, sortBy, sortOrder }),
+    [uuid, page, pageSize, search, sort],
+    '加载漫画列表失败',
+  )
 
   const pagination: TablePaginationConfig = {
     current: page,

@@ -4,6 +4,7 @@ import type { TableColumnsType, TablePaginationConfig } from 'antd'
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
+import { usePagedData } from '../hooks/usePagedData'
 import type { Tag as TagData, TagType } from '../types'
 import { formatDateTime } from '../utils/date'
 
@@ -28,26 +29,21 @@ export default function TagListPage() {
   const sort = (VALID_SORTS.has(searchParams.get('sort') ?? '') ? searchParams.get('sort')! : 'updateAt-desc') as SortKey
   const tagTypeFilter = searchParams.get('tagType') ?? undefined
 
-  const [data, setData] = useState<TagData[]>([])
-  const [total, setTotal] = useState(0)
-  const [loading, setLoading] = useState(false)
   const [searchInput, setSearchInput] = useState(search)
   const [refreshKey, setRefreshKey] = useState(0)
   const [modalOpen, setModalOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   const [tagTypes, setTagTypes] = useState<TagType[]>([])
   const [form] = Form.useForm()
+  const [sortBy, sortOrder] = sort.split('-') as ['updateAt' | 'createAt', 'asc' | 'desc']
 
   useEffect(() => { setSearchInput(search) }, [search])
 
-  useEffect(() => {
-    const [sortBy, sortOrder] = sort.split('-') as ['updateAt' | 'createAt', 'asc' | 'desc']
-    setLoading(true)
-    api.getTags({ page, limit: pageSize, search: search || undefined, sortBy, sortOrder, tagTypeName: tagTypeFilter })
-      .then(res => { setData(res.items); setTotal(res.total) })
-      .catch(() => message.error('加载标签列表失败'))
-      .finally(() => setLoading(false))
-  }, [page, pageSize, search, sort, tagTypeFilter, refreshKey])
+  const { items: data, total, loading } = usePagedData(
+    () => api.getTags({ page, limit: pageSize, search: search || undefined, sortBy, sortOrder, tagTypeName: tagTypeFilter }),
+    [page, pageSize, search, sort, tagTypeFilter, refreshKey],
+    '加载标签列表失败',
+  )
 
   useEffect(() => {
     api.getTagTypes({ page: 1, limit: 100 })

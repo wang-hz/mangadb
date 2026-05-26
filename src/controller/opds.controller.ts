@@ -1,10 +1,7 @@
-import { MangaService } from '@/service/manga.service';
-import { TagService } from '@/service/tag.service';
+import { mangaService } from '@/service/manga.service';
+import { tagService } from '@/service/tag.service';
 import type { Request, Response } from 'express';
 import { create } from 'xmlbuilder2';
-
-const mangaService = new MangaService();
-const tagService = new TagService();
 
 const PAGE_SIZE = 10;
 
@@ -61,7 +58,7 @@ async function getTagsResContent(tags: TagItem[]) {
   };
 }
 
-async function getMangasResContent(mangas: MangaItem[]) {
+function getMangasResContent(mangas: MangaItem[]) {
   return {
     feed: {
       '@xmlns': 'http://www.w3.org/2005/Atom',

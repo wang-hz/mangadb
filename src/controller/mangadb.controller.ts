@@ -1,11 +1,8 @@
 import { Manga, Tag } from '@/generated/prisma/client';
-import { MangaService } from '@/service/manga.service';
-import { TagService } from '@/service/tag.service';
+import { mangaService } from '@/service/manga.service';
+import { tagService } from '@/service/tag.service';
 import { Request, Response } from 'express';
 import type { PaginationQuery } from '@/type';
-
-const mangaService = new MangaService();
-const tagService = new TagService();
 
 function parsePositiveInt(value: string | undefined, defaultValue: number) {
   if (!value) {

@@ -1,11 +1,9 @@
 import prisma from '@/config/database';
 import { JWT_SECRET } from '@/config/env';
-import { UserService } from '@/service/user.service';
+import { userService } from '@/service/user.service';
 import bcrypt from 'bcryptjs';
 import type { NextFunction, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
-
-const userService = new UserService();
 
 type JwtPayload = { sub: string; role: string; jti: string };
 

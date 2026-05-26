@@ -47,3 +47,5 @@ export class UserService {
     return prisma.user.delete({ where: { uuid } });
   }
 }
+
+export const userService = new UserService();

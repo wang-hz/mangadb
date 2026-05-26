@@ -1,6 +1,5 @@
 import { DATA_DIR } from '@/config/env';
-import { MangaService } from '@/service/manga.service';
-
+import { mangaService } from '@/service/manga.service';
 import archiver from 'archiver';
 import { Request, Response } from 'express';
 import fs from 'fs';
@@ -8,8 +7,6 @@ import mime from 'mime-types';
 import path from 'path';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-const mangaService = new MangaService();
 
 export class FileController {
   async getZip(req: Request, res: Response) {

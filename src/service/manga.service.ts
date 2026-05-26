@@ -201,3 +201,5 @@ export class MangaService {
     ]);
   }
 }
+
+export const mangaService = new MangaService();

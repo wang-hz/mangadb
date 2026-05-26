@@ -1,9 +1,10 @@
 import { SearchOutlined } from '@ant-design/icons'
-import { Input, message, Select, Space, Table } from 'antd'
+import { Input, Select, Space, Table } from 'antd'
 import type { TableColumnsType, TablePaginationConfig } from 'antd'
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
+import { usePagedData } from '../hooks/usePagedData'
 import type { Manga } from '../types'
 import { formatDate, formatDateTime } from '../utils/date'
 
@@ -30,21 +31,16 @@ export default function MangaListPage() {
   const search = searchParams.get('search') ?? ''
   const sort = (VALID_SORTS.has(searchParams.get('sort') ?? '') ? searchParams.get('sort')! : 'updateAt-desc') as `${SortBy}-${SortOrder}`
 
-  const [data, setData] = useState<Manga[]>([])
-  const [total, setTotal] = useState(0)
-  const [loading, setLoading] = useState(false)
   const [searchInput, setSearchInput] = useState(search)
+  const [sortBy, sortOrder] = sort.split('-') as [SortBy, SortOrder]
 
   useEffect(() => { setSearchInput(search) }, [search])
 
-  useEffect(() => {
-    const [sortBy, sortOrder] = sort.split('-') as [SortBy, SortOrder]
-    setLoading(true)
-    api.getMangas({ page, limit: pageSize, search: search || undefined, sortBy, sortOrder })
-      .then(res => { setData(res.items); setTotal(res.total) })
-      .catch(() => message.error('加载漫画列表失败'))
-      .finally(() => setLoading(false))
-  }, [page, pageSize, search, sort])
+  const { items: data, total, loading } = usePagedData(
+    () => api.getMangas({ page, limit: pageSize, search: search || undefined, sortBy, sortOrder }),
+    [page, pageSize, search, sort],
+    '加载漫画列表失败',
+  )
 
   const columns: TableColumnsType<Manga> = [
     { title: '显示标题', dataIndex: 'displayTitle', ellipsis: true },
