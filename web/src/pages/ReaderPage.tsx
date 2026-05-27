@@ -1,5 +1,5 @@
-import { ArrowLeftOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons'
-import { Button, InputNumber, message, Segmented, Spin } from 'antd'
+import { ArrowLeftOutlined, LeftOutlined, RightOutlined, StarFilled, StarOutlined } from '@ant-design/icons'
+import { Button, InputNumber, message, Popconfirm, Segmented, Spin } from 'antd'
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
@@ -22,10 +22,12 @@ export default function ReaderPage() {
 
   const [manga, setManga] = useState<Manga | null>(null)
   const [loading, setLoading] = useState(true)
+  const [savingCover, setSavingCover] = useState(false)
 
   const mode = (searchParams.get('mode') === 'scroll' ? 'scroll' : 'flip') as Mode
   const currentPage = Math.max(0, parseInt(searchParams.get('page') ?? '0') || 0)
   const totalPages = manga?.pages.length ?? 0
+  const coverPage = manga?.cover ?? 0
 
   // ── Load manga ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -39,6 +41,21 @@ export default function ReaderPage() {
   const goToPage = (p: number) => {
     const clamped = Math.max(0, Math.min(totalPages - 1, p))
     setSearchParams(prev => { prev.set('page', String(clamped)); return prev }, { replace: true })
+  }
+
+  // ── Cover selection ───────────────────────────────────────────────────────
+  const handleSetCover = async (pageIndex: number) => {
+    if (!uuid || !manga) return
+    setSavingCover(true)
+    try {
+      await api.updateManga(uuid, { cover: pageIndex })
+      setManga(prev => prev ? { ...prev, cover: pageIndex } : prev)
+      message.success(`已将第 ${pageIndex + 1} 页设为封面`)
+    } catch {
+      message.error('更新封面失败')
+    } finally {
+      setSavingCover(false)
+    }
   }
 
   // ── Keyboard navigation ───────────────────────────────────────────────────
@@ -71,6 +88,7 @@ export default function ReaderPage() {
 
   const hasPrev = currentPage > 0
   const hasNext = currentPage < totalPages - 1
+  const isCover = currentPage === coverPage
 
   // ── Shared top bar ────────────────────────────────────────────────────────
   const topBar = (
@@ -172,6 +190,7 @@ export default function ReaderPage() {
           >
             上一页
           </Button>
+
           <span style={{ color: '#666', fontSize: 13 }}>第</span>
           <InputNumber
             value={currentPage + 1}
@@ -183,6 +202,27 @@ export default function ReaderPage() {
             onChange={v => { if (v != null) goToPage(v - 1) }}
           />
           <span style={{ color: '#666', fontSize: 13 }}>/ {totalPages} 页</span>
+
+          {/* Cover selection */}
+          <Popconfirm
+            title={`将第 ${currentPage + 1} 页设为封面？`}
+            onConfirm={() => handleSetCover(currentPage)}
+            okText="确认"
+            cancelText="取消"
+            disabled={isCover || savingCover}
+            placement="top"
+          >
+            <Button
+              type="text"
+              icon={isCover ? <StarFilled /> : <StarOutlined />}
+              disabled={isCover}
+              loading={savingCover}
+              style={{ color: isCover ? '#faad14' : '#888' }}
+            >
+              {isCover ? '当前封面' : '设为封面'}
+            </Button>
+          </Popconfirm>
+
           <Button
             type="text"
             disabled={!hasNext}
@@ -201,20 +241,48 @@ export default function ReaderPage() {
     <div style={{ height: '100vh', background: '#141414', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {topBar}
       <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-        {manga?.pages.map((_, i) => (
-          <div key={i} style={{ width: '100%', maxWidth: 800 }}>
-            <img
-              src={`/api/file/mangas/${uuid}/pages/${i}`}
-              alt={`第 ${i + 1} 页`}
-              loading="lazy"
-              style={{ width: '100%', display: 'block' }}
-              onError={onImgError}
-            />
-            <div style={{ textAlign: 'center', padding: '2px 0', fontSize: 11, color: '#3a3a3a', background: '#141414' }}>
-              {i + 1}
+        {manga?.pages.map((_, i) => {
+          const isThisCover = i === coverPage
+          return (
+            <div key={i} style={{ width: '100%', maxWidth: 800 }}>
+              <img
+                src={`/api/file/mangas/${uuid}/pages/${i}`}
+                alt={`第 ${i + 1} 页`}
+                loading="lazy"
+                style={{ width: '100%', display: 'block' }}
+                onError={onImgError}
+              />
+              {/* Page caption with cover toggle */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, padding: '3px 0', background: '#141414' }}>
+                <Popconfirm
+                  title={`将第 ${i + 1} 页设为封面？`}
+                  onConfirm={() => handleSetCover(i)}
+                  okText="确认"
+                  cancelText="取消"
+                  disabled={isThisCover || savingCover}
+                  placement="top"
+                >
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={isThisCover ? <StarFilled /> : <StarOutlined />}
+                    disabled={isThisCover}
+                    style={{
+                      color: isThisCover ? '#faad14' : '#444',
+                      padding: '0 2px',
+                      height: 'auto',
+                      minWidth: 'auto',
+                      lineHeight: 1,
+                    }}
+                  />
+                </Popconfirm>
+                <span style={{ fontSize: 11, color: isThisCover ? '#faad14' : '#3a3a3a' }}>
+                  {i + 1}
+                </span>
+              </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
         <div style={{ height: 32 }} />
       </div>
     </div>
