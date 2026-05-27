@@ -5,3 +5,4 @@
 /web/dist/
 /src/generated/prisma/
 .env
+TODO.md

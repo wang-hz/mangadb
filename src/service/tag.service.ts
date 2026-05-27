@@ -88,6 +88,21 @@ export class TagService {
     return prisma.tag.create({ data: { name, tagTypeUuid } });
   }
 
+  async updateTag(uuid: string, name?: string, tagTypeUuid?: string) {
+    return prisma.tag.update({
+      select: tagSelect,
+      where: { uuid },
+      data: {
+        ...(name !== undefined ? { name } : {}),
+        ...(tagTypeUuid !== undefined ? { tagTypeUuid } : {}),
+      },
+    });
+  }
+
+  async deleteTag(uuid: string) {
+    return prisma.tag.delete({ where: { uuid } });
+  }
+
   async getTagTypesByPage(page: number, limit: number) {
     return prisma.$transaction([
       prisma.tagType.findMany({

@@ -76,6 +76,18 @@ export const api = {
     })
   },
 
+  updateTag(uuid: string, data: { name?: string; type?: string }) {
+    return request<Tag>(`${BASE}/tags/${uuid}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+  },
+
+  deleteTag(uuid: string) {
+    return request<void>(`${BASE}/tags/${uuid}`, { method: 'DELETE' })
+  },
+
   batchSetPublishDateByTag(tagUuid: string, publishDate: string | null) {
     return request<{ updated: number }>(`${BASE}/tags/${tagUuid}/batch-set-publish-date`, {
       method: 'POST',

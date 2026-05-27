@@ -1,5 +1,5 @@
-import { PlusOutlined, SearchOutlined } from '@ant-design/icons'
-import { Button, Form, Input, message, Modal, Select as AntSelect, Space, Table, Tag } from 'antd'
+import { EditOutlined, DeleteOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons'
+import { Button, Form, Input, message, Modal, Popconfirm, Select as AntSelect, Space, Table, Tag } from 'antd'
 import type { TableColumnsType, TablePaginationConfig } from 'antd'
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -31,11 +31,19 @@ export default function TagListPage() {
 
   const [searchInput, setSearchInput] = useState(search)
   const [refreshKey, setRefreshKey] = useState(0)
-  const [modalOpen, setModalOpen] = useState(false)
-  const [creating, setCreating] = useState(false)
   const [tagTypes, setTagTypes] = useState<TagType[]>([])
-  const [form] = Form.useForm()
   const [sortBy, sortOrder] = sort.split('-') as ['updateAt' | 'createAt', 'asc' | 'desc']
+
+  // ── Create ─────────────────────────────────────────────────────────────────
+  const [createModalOpen, setCreateModalOpen] = useState(false)
+  const [creating, setCreating] = useState(false)
+  const [createForm] = Form.useForm()
+
+  // ── Edit ───────────────────────────────────────────────────────────────────
+  const [editModalOpen, setEditModalOpen] = useState(false)
+  const [editingTag, setEditingTag] = useState<TagData | null>(null)
+  const [editing, setEditing] = useState(false)
+  const [editForm] = Form.useForm()
 
   useEffect(() => { setSearchInput(search) }, [search])
 
@@ -51,13 +59,14 @@ export default function TagListPage() {
       .catch(() => message.error('加载标签类型失败'))
   }, [])
 
+  // ── Handlers ───────────────────────────────────────────────────────────────
   const handleCreate = async (values: { name: string; type: string }) => {
     setCreating(true)
     try {
       await api.createTag(values.name, values.type)
       message.success('标签创建成功')
-      setModalOpen(false)
-      form.resetFields()
+      setCreateModalOpen(false)
+      createForm.resetFields()
       setRefreshKey(k => k + 1)
     } catch {
       message.error('创建失败，标签名可能已存在')
@@ -66,6 +75,39 @@ export default function TagListPage() {
     }
   }
 
+  const openEditModal = (tag: TagData) => {
+    setEditingTag(tag)
+    editForm.setFieldsValue({ name: tag.name, type: tag.tagType.name })
+    setEditModalOpen(true)
+  }
+
+  const handleEdit = async (values: { name: string; type: string }) => {
+    if (!editingTag) return
+    setEditing(true)
+    try {
+      await api.updateTag(editingTag.uuid, values)
+      message.success('标签更新成功')
+      setEditModalOpen(false)
+      setRefreshKey(k => k + 1)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : ''
+      message.error(msg.startsWith('409') ? '标签名已存在' : '更新失败')
+    } finally {
+      setEditing(false)
+    }
+  }
+
+  const handleDelete = async (uuid: string) => {
+    try {
+      await api.deleteTag(uuid)
+      message.success('标签已删除')
+      setRefreshKey(k => k + 1)
+    } catch {
+      message.error('删除失败')
+    }
+  }
+
+  // ── Columns ────────────────────────────────────────────────────────────────
   const columns: TableColumnsType<TagData> = [
     { title: '标签名称', dataIndex: 'name' },
     {
@@ -85,6 +127,30 @@ export default function TagListPage() {
       width: 180,
       render: (v: string) => formatDateTime(v),
     },
+    {
+      title: '操作',
+      key: 'actions',
+      width: 120,
+      render: (_, record) => (
+        <Space size="small" onClick={e => e.stopPropagation()}>
+          <Button
+            size="small"
+            icon={<EditOutlined />}
+            onClick={() => openEditModal(record)}
+          />
+          <Popconfirm
+            title={`删除标签「${record.name}」？`}
+            description="此操作将同时移除该标签与所有漫画的关联，且不可撤销。"
+            onConfirm={() => handleDelete(record.uuid)}
+            okText="确认删除"
+            cancelText="取消"
+            okButtonProps={{ danger: true }}
+          >
+            <Button size="small" danger icon={<DeleteOutlined />} />
+          </Popconfirm>
+        </Space>
+      ),
+    },
   ]
 
   const pagination: TablePaginationConfig = {
@@ -98,49 +164,60 @@ export default function TagListPage() {
     position: ['topRight', 'bottomRight'],
   }
 
+  // ── Tag type form item (shared by create and edit modals) ──────────────────
+  const tagTypeFormItem = (
+    <Form.Item label="标签类型" name="type" rules={[{ required: true, message: '请选择标签类型' }]}>
+      <AntSelect
+        placeholder="选择标签类型"
+        options={tagTypes.map(t => ({ value: t.name, label: t.name }))}
+      />
+    </Form.Item>
+  )
+
   return (
     <Space direction="vertical" style={{ width: '100%' }} size="middle">
       <Space style={{ justifyContent: 'space-between', width: '100%' }}>
         <Space>
-        <Input
-          prefix={<SearchOutlined />}
-          placeholder="搜索标签名称，按回车搜索"
-          value={searchInput}
-          onChange={e => {
-            setSearchInput(e.target.value)
-            if (!e.target.value) setSearchParams(prev => { prev.delete('search'); prev.set('page', '1'); return prev }, { replace: true })
-          }}
-          onPressEnter={() => setSearchParams(prev => {
-            if (searchInput) prev.set('search', searchInput); else prev.delete('search')
-            prev.set('page', '1')
-            return prev
-          }, { replace: true })}
-          allowClear
-          style={{ width: 300 }}
-        />
-        <AntSelect
-          value={tagTypeFilter}
-          onChange={v => setSearchParams(prev => {
-            if (v) prev.set('tagType', v); else prev.delete('tagType')
-            prev.set('page', '1')
-            return prev
-          }, { replace: true })}
-          placeholder="全部类型"
-          allowClear
-          options={tagTypes.map(t => ({ value: t.name, label: t.name }))}
-          style={{ width: 160 }}
-        />
-        <AntSelect
-          value={sort}
-          onChange={v => setSearchParams(prev => { prev.set('sort', v); prev.set('page', '1'); return prev }, { replace: true })}
-          options={SORT_OPTIONS}
-          style={{ width: 180 }}
-        />
+          <Input
+            prefix={<SearchOutlined />}
+            placeholder="搜索标签名称，按回车搜索"
+            value={searchInput}
+            onChange={e => {
+              setSearchInput(e.target.value)
+              if (!e.target.value) setSearchParams(prev => { prev.delete('search'); prev.set('page', '1'); return prev }, { replace: true })
+            }}
+            onPressEnter={() => setSearchParams(prev => {
+              if (searchInput) prev.set('search', searchInput); else prev.delete('search')
+              prev.set('page', '1')
+              return prev
+            }, { replace: true })}
+            allowClear
+            style={{ width: 300 }}
+          />
+          <AntSelect
+            value={tagTypeFilter}
+            onChange={v => setSearchParams(prev => {
+              if (v) prev.set('tagType', v); else prev.delete('tagType')
+              prev.set('page', '1')
+              return prev
+            }, { replace: true })}
+            placeholder="全部类型"
+            allowClear
+            options={tagTypes.map(t => ({ value: t.name, label: t.name }))}
+            style={{ width: 160 }}
+          />
+          <AntSelect
+            value={sort}
+            onChange={v => setSearchParams(prev => { prev.set('sort', v); prev.set('page', '1'); return prev }, { replace: true })}
+            options={SORT_OPTIONS}
+            style={{ width: 180 }}
+          />
         </Space>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>
+        <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateModalOpen(true)}>
           新建标签
         </Button>
       </Space>
+
       <Table
         rowKey="uuid"
         dataSource={data}
@@ -154,24 +231,37 @@ export default function TagListPage() {
         })}
       />
 
+      {/* Create modal */}
       <Modal
         title="新建标签"
-        open={modalOpen}
-        onCancel={() => { setModalOpen(false); form.resetFields() }}
-        onOk={() => form.submit()}
+        open={createModalOpen}
+        onCancel={() => { setCreateModalOpen(false); createForm.resetFields() }}
+        onOk={() => createForm.submit()}
         confirmLoading={creating}
         destroyOnClose
       >
-        <Form form={form} layout="vertical" onFinish={handleCreate} style={{ marginTop: 16 }}>
+        <Form form={createForm} layout="vertical" onFinish={handleCreate} style={{ marginTop: 16 }}>
           <Form.Item label="标签名称" name="name" rules={[{ required: true, message: '请输入标签名称' }]}>
             <Input placeholder="输入标签名称" />
           </Form.Item>
-          <Form.Item label="标签类型" name="type" rules={[{ required: true, message: '请选择标签类型' }]}>
-            <AntSelect
-              placeholder="选择标签类型"
-              options={tagTypes.map(t => ({ value: t.name, label: t.name }))}
-            />
+          {tagTypeFormItem}
+        </Form>
+      </Modal>
+
+      {/* Edit modal */}
+      <Modal
+        title={`编辑标签「${editingTag?.name ?? ''}」`}
+        open={editModalOpen}
+        onCancel={() => { setEditModalOpen(false); editForm.resetFields() }}
+        onOk={() => editForm.submit()}
+        confirmLoading={editing}
+        destroyOnClose
+      >
+        <Form form={editForm} layout="vertical" onFinish={handleEdit} style={{ marginTop: 16 }}>
+          <Form.Item label="标签名称" name="name" rules={[{ required: true, message: '请输入标签名称' }]}>
+            <Input placeholder="输入标签名称" />
           </Form.Item>
+          {tagTypeFormItem}
         </Form>
       </Modal>
     </Space>

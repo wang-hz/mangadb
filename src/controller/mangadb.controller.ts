@@ -1,4 +1,4 @@
-import { Manga, Tag } from '@/generated/prisma/client';
+import { Prisma, Tag } from '@/generated/prisma/client';
 import { mangaService } from '@/service/manga.service';
 import { tagService } from '@/service/tag.service';
 import { Request, Response } from 'express';
@@ -16,6 +16,11 @@ const updateMangaSchema = z.object({
 const createTagSchema = z.object({
   name: z.string().min(1),
   type: z.string().min(1),
+});
+
+const updateTagSchema = z.object({
+  name: z.string().min(1).optional(),
+  type: z.string().min(1).optional(),
 });
 
 const batchAddTagSchema = z.object({
@@ -124,6 +129,42 @@ export class MangadbController {
     }
     const tag: Tag = await tagService.createTag(parsed.data.name, tagType.uuid);
     res.status(201).json(tag);
+  }
+
+  async updateTag(req: Request, res: Response) {
+    const parsed = updateTagSchema.safeParse(req.body);
+    if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+    const { name, type } = parsed.data;
+
+    let tagTypeUuid: string | undefined;
+    if (type !== undefined) {
+      const tagType = await tagService.getTagTypeByName(type);
+      if (!tagType) { res.status(400).json({ error: 'Tag type not found' }); return; }
+      tagTypeUuid = tagType.uuid;
+    }
+
+    try {
+      const tag = await tagService.updateTag(req.params.uuid, name, tagTypeUuid);
+      res.json(tag);
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError) {
+        if (e.code === 'P2002') { res.status(409).json({ error: 'Tag name already exists' }); return; }
+        if (e.code === 'P2025') { res.status(404).json({ error: 'Tag not found' }); return; }
+      }
+      throw e;
+    }
+  }
+
+  async deleteTag(req: Request, res: Response) {
+    try {
+      await tagService.deleteTag(req.params.uuid);
+      res.sendStatus(204);
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025') {
+        res.status(404).json({ error: 'Tag not found' }); return;
+      }
+      throw e;
+    }
   }
 
   async getTagTypesByPage(req: Request<any, any, any, PaginationQuery>, res: Response) {
