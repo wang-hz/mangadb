@@ -236,9 +236,7 @@ export default function ReaderPage() {
     <div style={{ height: '100vh', background: '#141414', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {topBar}
       <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-        {manga?.pages.map((_, i) => {
-          const isThisCover = i === coverPage
-          return (
+        {manga?.pages.map((_, i) => (
             <div key={i} style={{ width: '100%', maxWidth: 800 }}>
               <img
                 src={`/api/file/mangas/${uuid}/pages/${i}`}
@@ -247,37 +245,11 @@ export default function ReaderPage() {
                 style={{ width: '100%', display: 'block' }}
                 onError={onImgError}
               />
-              {/* Page caption with cover toggle */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, padding: '3px 0', background: '#141414' }}>
-                <Popconfirm
-                  title={`将第 ${i + 1} 页设为封面？`}
-                  onConfirm={() => handleSetCover(i)}
-                  okText="确认"
-                  cancelText="取消"
-                  disabled={isThisCover || savingCover}
-                  placement="top"
-                >
-                  <Button
-                    type="text"
-                    size="small"
-                    icon={isThisCover ? <StarFilled /> : <StarOutlined />}
-                    disabled={isThisCover}
-                    style={{
-                      color: isThisCover ? '#faad14' : '#444',
-                      padding: '0 2px',
-                      height: 'auto',
-                      minWidth: 'auto',
-                      lineHeight: 1,
-                    }}
-                  />
-                </Popconfirm>
-                <span style={{ fontSize: 11, color: isThisCover ? '#faad14' : '#3a3a3a' }}>
-                  {i + 1}
-                </span>
+              <div style={{ textAlign: 'center', padding: '2px 0', fontSize: 11, color: '#3a3a3a', background: '#141414' }}>
+                {i + 1}
               </div>
             </div>
-          )
-        })}
+        ))}
         <div style={{ height: 32 }} />
       </div>
     </div>
