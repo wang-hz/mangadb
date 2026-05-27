@@ -1,16 +1,20 @@
-import { ArrowLeftOutlined, CalendarOutlined, SearchOutlined, TagsOutlined } from '@ant-design/icons'
-import { Button, DatePicker, Descriptions, Input, message, Modal, Select, Space, Table, Tag } from 'antd'
+import { AppstoreOutlined, ArrowLeftOutlined, BarsOutlined, CalendarOutlined, SearchOutlined, TagsOutlined } from '@ant-design/icons'
+import { Button, DatePicker, Descriptions, Input, message, Modal, Pagination, Segmented, Select, Space, Table, Tag } from 'antd'
 import dayjs from 'dayjs'
 import type { TableColumnsType, TablePaginationConfig } from 'antd'
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
+import MangaGrid from '../components/MangaGrid'
 import { usePagedData } from '../hooks/usePagedData'
 import type { Manga, Tag as TagData } from '../types'
 import { formatDate, formatDateTime } from '../utils/date'
 
 type SortBy = 'updateAt' | 'createAt' | 'publishDate'
 type SortOrder = 'asc' | 'desc'
+type ViewMode = 'list' | 'grid'
+
+const VIEW_MODE_KEY = 'mangaViewMode'
 
 const SORT_OPTIONS: { label: string; value: `${SortBy}-${SortOrder}` }[] = [
   { label: '更新时间（最新）', value: 'updateAt-desc' },
@@ -22,29 +26,6 @@ const SORT_OPTIONS: { label: string; value: `${SortBy}-${SortOrder}` }[] = [
 ]
 
 const VALID_SORTS: Set<string> = new Set(SORT_OPTIONS.map(o => o.value))
-
-const columns: TableColumnsType<Manga> = [
-  { title: '显示标题', dataIndex: 'displayTitle', ellipsis: true },
-  { title: '原始标题', dataIndex: 'originalTitle', ellipsis: true },
-  {
-    title: '出版日期',
-    dataIndex: 'publishDate',
-    width: 110,
-    render: (v: string | null) => v ? formatDate(v) : '-',
-  },
-  {
-    title: '创建时间',
-    dataIndex: 'createAt',
-    width: 180,
-    render: (v: string) => formatDateTime(v),
-  },
-  {
-    title: '更新时间',
-    dataIndex: 'updateAt',
-    width: 180,
-    render: (v: string) => formatDateTime(v),
-  },
-]
 
 export default function TagMangaListPage() {
   const { uuid } = useParams<{ uuid: string }>()
@@ -68,6 +49,14 @@ export default function TagMangaListPage() {
   const [batchDateLoading, setBatchDateLoading] = useState(false)
 
   const [sortBy, sortOrder] = sort.split('-') as [SortBy, SortOrder]
+  const [viewMode, setViewMode] = useState<ViewMode>(
+    () => (localStorage.getItem(VIEW_MODE_KEY) as ViewMode | null) ?? 'list',
+  )
+
+  const handleViewModeChange = (mode: ViewMode) => {
+    setViewMode(mode)
+    localStorage.setItem(VIEW_MODE_KEY, mode)
+  }
 
   useEffect(() => { setSearchInput(search) }, [search])
 
@@ -122,12 +111,41 @@ export default function TagMangaListPage() {
     '加载漫画列表失败',
   )
 
-  const pagination: TablePaginationConfig = {
+  const handlePageChange = (p: number) =>
+    setSearchParams(prev => { prev.set('page', String(p)); return prev }, { replace: true })
+
+  const handlePageSizeChange = (_: number, size: number) =>
+    setSearchParams(prev => { prev.set('page', '1'); prev.set('limit', String(size)); return prev }, { replace: true })
+
+  const columns: TableColumnsType<Manga> = [
+    { title: '显示标题', dataIndex: 'displayTitle', ellipsis: true },
+    { title: '原始标题', dataIndex: 'originalTitle', ellipsis: true },
+    {
+      title: '出版日期',
+      dataIndex: 'publishDate',
+      width: 110,
+      render: (v: string | null) => v ? formatDate(v) : '-',
+    },
+    {
+      title: '创建时间',
+      dataIndex: 'createAt',
+      width: 180,
+      render: (v: string) => formatDateTime(v),
+    },
+    {
+      title: '更新时间',
+      dataIndex: 'updateAt',
+      width: 180,
+      render: (v: string) => formatDateTime(v),
+    },
+  ]
+
+  const tablePagination: TablePaginationConfig = {
     current: page,
     pageSize,
     total,
-    onChange: p => setSearchParams(prev => { prev.set('page', String(p)); return prev }, { replace: true }),
-    onShowSizeChange: (_, size) => setSearchParams(prev => { prev.set('page', '1'); prev.set('limit', String(size)); return prev }, { replace: true }),
+    onChange: handlePageChange,
+    onShowSizeChange: handlePageSizeChange,
     showSizeChanger: true,
     showTotal: t => `共 ${t} 条`,
     position: ['topRight', 'bottomRight'],
@@ -178,6 +196,14 @@ export default function TagMangaListPage() {
           <Button icon={<CalendarOutlined />} onClick={() => setBatchDateModalOpen(true)}>
             批量设置出版日期
           </Button>
+          <Segmented
+            value={viewMode}
+            onChange={v => handleViewModeChange(v as ViewMode)}
+            options={[
+              { value: 'list', icon: <BarsOutlined /> },
+              { value: 'grid', icon: <AppstoreOutlined /> },
+            ]}
+          />
         </Space>
       </Space>
       <Modal
@@ -223,18 +249,46 @@ export default function TagMangaListPage() {
           onChange={setBatchDate}
         />
       </Modal>
-      <Table
-        rowKey="uuid"
-        dataSource={data}
-        columns={columns}
-        pagination={pagination}
-        loading={loading}
-        size="middle"
-        onRow={record => ({
-          onClick: () => navigate(`/mangas/${record.uuid}`),
-          style: { cursor: 'pointer' },
-        })}
-      />
+      {viewMode === 'list' ? (
+        <Table
+          rowKey="uuid"
+          dataSource={data}
+          columns={columns}
+          pagination={tablePagination}
+          loading={loading}
+          size="middle"
+          onRow={record => ({
+            onClick: () => navigate(`/mangas/${record.uuid}`),
+            style: { cursor: 'pointer' },
+          })}
+        />
+      ) : (
+        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <Pagination
+              current={page}
+              pageSize={pageSize}
+              total={total}
+              onChange={handlePageChange}
+              onShowSizeChange={handlePageSizeChange}
+              showSizeChanger
+              showTotal={t => `共 ${t} 条`}
+            />
+          </div>
+          <MangaGrid data={data} loading={loading} />
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <Pagination
+              current={page}
+              pageSize={pageSize}
+              total={total}
+              onChange={handlePageChange}
+              onShowSizeChange={handlePageSizeChange}
+              showSizeChanger
+              showTotal={t => `共 ${t} 条`}
+            />
+          </div>
+        </Space>
+      )}
     </Space>
   )
 }

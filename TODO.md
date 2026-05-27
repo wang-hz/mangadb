@@ -71,8 +71,8 @@ Express 5 自动将 async 路由中的 rejected promise 传给 `next()`；在 `a
 ### ~~前端图片无降级处理~~ ✅
 `MangaDetailPage` 的主封面和封面选择器缩略图均添加 `onError` 回调，加载失败时替换为 2:3 灰色 SVG 占位图，并置空 `onerror` 防止循环触发。
 
-### 漫画列表缺少封面缩略图
-`MangaListPage` 只显示文字，浏览大量漫画时不直观。可增加可选的缩略图列/卡片视图模式。
+### ~~漫画列表缺少封面缩略图~~ ✅
+新增 `CoverImage` 和 `MangaGrid` 组件；`MangaListPage` 和 `TagMangaListPage` 工具栏新增 `Segmented` 视图切换（`BarsOutlined` 列表 ↔ `AppstoreOutlined` 卡片），偏好持久化到 `localStorage`。卡片视图使用 CSS Grid 自动分列，封面图 2:3 `object-fit: cover`，加载失败降级为灰色 SVG 占位图，顶部和底部各有独立分页控件。
 
 ---
 

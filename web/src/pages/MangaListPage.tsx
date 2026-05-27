@@ -1,15 +1,17 @@
-import { SearchOutlined } from '@ant-design/icons'
-import { Input, Select, Space, Table } from 'antd'
+import { AppstoreOutlined, BarsOutlined, SearchOutlined } from '@ant-design/icons'
+import { Input, Pagination, Segmented, Select, Space, Table } from 'antd'
 import type { TableColumnsType, TablePaginationConfig } from 'antd'
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
+import MangaGrid from '../components/MangaGrid'
 import { usePagedData } from '../hooks/usePagedData'
 import type { Manga } from '../types'
 import { formatDate, formatDateTime } from '../utils/date'
 
 type SortBy = 'updateAt' | 'createAt' | 'publishDate'
 type SortOrder = 'asc' | 'desc'
+type ViewMode = 'list' | 'grid'
 
 const SORT_OPTIONS: { label: string; value: `${SortBy}-${SortOrder}` }[] = [
   { label: '更新时间（最新）', value: 'updateAt-desc' },
@@ -22,6 +24,8 @@ const SORT_OPTIONS: { label: string; value: `${SortBy}-${SortOrder}` }[] = [
 
 const VALID_SORTS: Set<string> = new Set(SORT_OPTIONS.map(o => o.value))
 
+const VIEW_MODE_KEY = 'mangaViewMode'
+
 export default function MangaListPage() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -33,6 +37,9 @@ export default function MangaListPage() {
 
   const [searchInput, setSearchInput] = useState(search)
   const [sortBy, sortOrder] = sort.split('-') as [SortBy, SortOrder]
+  const [viewMode, setViewMode] = useState<ViewMode>(
+    () => (localStorage.getItem(VIEW_MODE_KEY) as ViewMode | null) ?? 'list',
+  )
 
   useEffect(() => { setSearchInput(search) }, [search])
 
@@ -41,6 +48,17 @@ export default function MangaListPage() {
     [page, pageSize, search, sort],
     '加载漫画列表失败',
   )
+
+  const handleViewModeChange = (mode: ViewMode) => {
+    setViewMode(mode)
+    localStorage.setItem(VIEW_MODE_KEY, mode)
+  }
+
+  const handlePageChange = (p: number) =>
+    setSearchParams(prev => { prev.set('page', String(p)); return prev }, { replace: true })
+
+  const handlePageSizeChange = (_: number, size: number) =>
+    setSearchParams(prev => { prev.set('page', '1'); prev.set('limit', String(size)); return prev }, { replace: true })
 
   const columns: TableColumnsType<Manga> = [
     { title: '显示标题', dataIndex: 'displayTitle', ellipsis: true },
@@ -65,12 +83,12 @@ export default function MangaListPage() {
     },
   ]
 
-  const pagination: TablePaginationConfig = {
+  const tablePagination: TablePaginationConfig = {
     current: page,
     pageSize,
     total,
-    onChange: p => setSearchParams(prev => { prev.set('page', String(p)); return prev }, { replace: true }),
-    onShowSizeChange: (_, size) => setSearchParams(prev => { prev.set('page', '1'); prev.set('limit', String(size)); return prev }, { replace: true }),
+    onChange: handlePageChange,
+    onShowSizeChange: handlePageSizeChange,
     showSizeChanger: true,
     showTotal: t => `共 ${t} 条`,
     position: ['topRight', 'bottomRight'],
@@ -101,19 +119,56 @@ export default function MangaListPage() {
           options={SORT_OPTIONS}
           style={{ width: 180 }}
         />
+        <Segmented
+          value={viewMode}
+          onChange={v => handleViewModeChange(v as ViewMode)}
+          options={[
+            { value: 'list', icon: <BarsOutlined /> },
+            { value: 'grid', icon: <AppstoreOutlined /> },
+          ]}
+        />
       </Space>
-      <Table
-        rowKey="uuid"
-        dataSource={data}
-        columns={columns}
-        pagination={pagination}
-        loading={loading}
-        size="middle"
-        onRow={record => ({
-          onClick: () => navigate(`/mangas/${record.uuid}`),
-          style: { cursor: 'pointer' },
-        })}
-      />
+
+      {viewMode === 'list' ? (
+        <Table
+          rowKey="uuid"
+          dataSource={data}
+          columns={columns}
+          pagination={tablePagination}
+          loading={loading}
+          size="middle"
+          onRow={record => ({
+            onClick: () => navigate(`/mangas/${record.uuid}`),
+            style: { cursor: 'pointer' },
+          })}
+        />
+      ) : (
+        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <Pagination
+              current={page}
+              pageSize={pageSize}
+              total={total}
+              onChange={handlePageChange}
+              onShowSizeChange={handlePageSizeChange}
+              showSizeChanger
+              showTotal={t => `共 ${t} 条`}
+            />
+          </div>
+          <MangaGrid data={data} loading={loading} />
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <Pagination
+              current={page}
+              pageSize={pageSize}
+              total={total}
+              onChange={handlePageChange}
+              onShowSizeChange={handlePageSizeChange}
+              showSizeChanger
+              showTotal={t => `共 ${t} 条`}
+            />
+          </div>
+        </Space>
+      )}
     </Space>
   )
 }
