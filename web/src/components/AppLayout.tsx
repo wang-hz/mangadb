@@ -62,10 +62,8 @@ export default function AppLayout() {
         </Dropdown>
       </Header>
       <Content style={{
-        margin: '24px',
         padding: '24px',
         background: '#fff',
-        borderRadius: '8px',
         minHeight: 280,
       }}>
         <Outlet />
