@@ -1,4 +1,4 @@
-import { ArrowLeftOutlined, CheckCircleFilled } from '@ant-design/icons'
+import { ArrowLeftOutlined, CheckCircleFilled, ReadOutlined } from '@ant-design/icons'
 import { Button, DatePicker, Descriptions, Form, Input, message, Pagination, Select, Space, Spin, Tag, Typography } from 'antd'
 import dayjs from 'dayjs'
 import { useEffect, useState } from 'react'
@@ -117,12 +117,22 @@ export default function MangaDetailPage() {
       <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)}>返回</Button>
 
       <Space align="start" size="large" style={{ width: '100%' }}>
-        <img
-          src={`/api/file/mangas/${manga.uuid}/pages/${coverIndex}`}
-          alt="cover"
-          style={{ width: 280, borderRadius: 4, flexShrink: 0 }}
-          onError={onImgError}
-        />
+        <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <img
+            src={`/api/file/mangas/${manga.uuid}/pages/${coverIndex}`}
+            alt="cover"
+            style={{ width: 280, borderRadius: 4, display: 'block' }}
+            onError={onImgError}
+          />
+          <Button
+            type="primary"
+            icon={<ReadOutlined />}
+            block
+            onClick={() => navigate(`/mangas/${manga.uuid}/read`)}
+          >
+            开始阅读
+          </Button>
+        </div>
         <Space direction="vertical" style={{ flex: 1 }} size="middle">
           <Descriptions bordered column={2} size="small">
             <Descriptions.Item label="创建时间">{formatDateTime(manga.createAt)}</Descriptions.Item>

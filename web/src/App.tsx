@@ -5,6 +5,7 @@ import AdminUsersPage from './pages/AdminUsersPage'
 import LoginPage from './pages/LoginPage'
 import MangaDetailPage from './pages/MangaDetailPage'
 import MangaListPage from './pages/MangaListPage'
+import ReaderPage from './pages/ReaderPage'
 import SetupPage from './pages/SetupPage'
 import TagListPage from './pages/TagListPage'
 import TagMangaListPage from './pages/TagMangaListPage'
@@ -21,6 +22,8 @@ export default function App() {
       <Routes>
         <Route path="/setup" element={<SetupPage />} />
         <Route path="/login" element={<LoginPage />} />
+        {/* Reader is full-screen — outside AppLayout but still auth-gated */}
+        <Route path="/mangas/:uuid/read" element={<RequireAuth><ReaderPage /></RequireAuth>} />
         <Route path="/" element={<RequireAuth><AppLayout /></RequireAuth>}>
           <Route index element={<Navigate to="/mangas" replace />} />
           <Route path="mangas" element={<MangaListPage />} />

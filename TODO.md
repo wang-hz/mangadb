@@ -7,8 +7,12 @@
 - 后端扫描接口：扫描 `DATA_DIR/<uuid>/` 目录，读取图片文件列表，写入 `Manga.pages`
 - 或批量导入接口：接受目录名，自动创建 Manga 记录并填充 `pages`
 
-### 在线阅读
-前端只有封面预览和 CBZ 下载，没有翻页阅读功能。可在漫画详情页增加阅读模式（左右翻页或滚动条），复用现有 `/api/file/mangas/:uuid/pages/:page` 接口。
+### ~~在线阅读~~ ✅
+新增 `ReaderPage`（路由 `/mangas/:uuid/read`，独立于 AppLayout 的全屏深色页面）。两种模式：
+- **翻页模式**：顶栏（返回 / 标题 / 模式切换 / 页码）+ 图片区（点击左/右半区翻页，键盘 ←→ 导航，Escape 返回）+ 底栏（上一页 / 跳页输入框 / 下一页）
+- **滚动模式**：图片纵向连续排列，`loading="lazy"` 懒加载，每页底部显示页码
+
+`MangaDetailPage` 封面图下方新增「开始阅读」按钮，模式偏好通过 URL 参数（`?mode=flip|scroll&page=N`）传递。
 
 ### ~~退出登录~~ ✅
 已实现 `POST /api/auth/logout`，清除 httpOnly `token` cookie；前端 `handleLogout` 同步调用该接口再清除 localStorage。
