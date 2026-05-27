@@ -1,5 +1,5 @@
-import { ArrowLeftOutlined, CheckCircleFilled, ReadOutlined } from '@ant-design/icons'
-import { Button, DatePicker, Descriptions, Form, Input, message, Pagination, Select, Space, Spin, Tag, Typography } from 'antd'
+import { ArrowLeftOutlined, ReadOutlined } from '@ant-design/icons'
+import { Button, DatePicker, Descriptions, Form, Input, message, Select, Space, Spin, Tag, Typography } from 'antd'
 import dayjs from 'dayjs'
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
@@ -26,10 +26,7 @@ export default function MangaDetailPage() {
   const [tagOptions, setTagOptions] = useState<TagData[]>([])
   const [tagSearch, setTagSearch] = useState('')
   const [selectedTagUuids, setSelectedTagUuids] = useState<string[]>([])
-  const [pendingCover, setPendingCover] = useState<number | null>(null)
   const [pendingAddTags, setPendingAddTags] = useState<TagData[]>([])
-  const [imgPage, setImgPage] = useState(1)
-  const [imgPageSize, setImgPageSize] = useState(10)
 
   const loadManga = (id: string) => {
     setLoading(true)
@@ -60,18 +57,15 @@ export default function MangaDetailPage() {
     }
     setSaving(true)
     try {
-      const savedCoverIndex = manga?.cover ?? 0
       const { publishDate, ...textValues } = values
       const updateData = {
         ...textValues,
         publishDate: publishDate ? publishDate.format('YYYY-MM-DD') : null,
-        ...(pendingCover !== null && pendingCover !== savedCoverIndex ? { cover: pendingCover } : {}),
       }
       await api.updateManga(uuid, updateData)
       if (pendingAddTags.length > 0) {
         await api.createMangaTags(uuid, pendingAddTags.map(t => t.uuid))
       }
-      setPendingCover(null)
       setPendingAddTags([])
       loadManga(uuid)
       message.success('保存成功')
@@ -109,8 +103,7 @@ export default function MangaDetailPage() {
   if (!manga) return <div>未找到漫画</div>
 
   const existingTagUuids = new Set(manga.mangaTags.map(mt => mt.tag.uuid))
-  const savedCoverIndex = manga.cover ?? 0
-  const coverIndex = pendingCover ?? savedCoverIndex
+  const coverIndex = manga.cover ?? 0
 
   return (
     <Space direction="vertical" style={{ width: '100%' }} size="large">
@@ -158,7 +151,7 @@ export default function MangaDetailPage() {
       </Space>
 
       <div>
-        <Title level={5}>编辑标签</Title>
+        <Title level={5}>标签</Title>
         <Space wrap size={[6, 8]}>
           {manga.mangaTags.length === 0 && pendingAddTags.length === 0
             ? <span style={{ color: '#999' }}>暂无标签</span>
@@ -212,53 +205,6 @@ export default function MangaDetailPage() {
             添加
           </Button>
         </Space>
-      </div>
-
-      <div>
-        <Title level={5}>选择封面</Title>
-        <Pagination
-          current={imgPage}
-          pageSize={imgPageSize}
-          total={manga.pages.length}
-          onChange={p => setImgPage(p)}
-          onShowSizeChange={(_, size) => { setImgPage(1); setImgPageSize(size) }}
-          showSizeChanger
-          showTotal={t => `共 ${t} 张`}
-          style={{ marginBottom: 12 }}
-        />
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 8 }}>
-          {manga.pages.slice((imgPage - 1) * imgPageSize, imgPage * imgPageSize).map((_, i) => {
-            const index = (imgPage - 1) * imgPageSize + i
-            const isCover = index === coverIndex
-            return (
-              <div
-                key={index}
-                onClick={() => { if (index !== coverIndex) setPendingCover(index) }}
-                style={{
-                  position: 'relative',
-                  cursor: isCover ? 'default' : 'pointer',
-                  borderRadius: 4,
-                  border: isCover ? '2px solid #1677ff' : '2px solid transparent',
-                  overflow: 'hidden',
-                }}
-              >
-                <img
-                  src={`/api/file/mangas/${manga.uuid}/pages/${index}`}
-                  alt={`page ${index}`}
-                  loading="lazy"
-                  style={{ width: '100%', display: 'block' }}
-                  onError={onImgError}
-                />
-                <div style={{ textAlign: 'center', fontSize: 11, color: isCover ? '#1677ff' : '#999', padding: '2px 0' }}>
-                  {index}
-                </div>
-                {isCover && (
-                  <CheckCircleFilled style={{ position: 'absolute', top: 4, right: 4, color: '#1677ff', fontSize: 16, background: '#fff', borderRadius: '50%' }} />
-                )}
-              </div>
-            )
-          })}
-        </div>
       </div>
 
       <Button type="primary" size="large" loading={saving} onClick={handleSave}>

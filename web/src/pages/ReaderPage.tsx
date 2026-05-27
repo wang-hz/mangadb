@@ -130,11 +130,6 @@ export default function ReaderPage() {
         size="small"
         style={{ flexShrink: 0 }}
       />
-      {mode === 'flip' && (
-        <span style={{ color: '#666', fontSize: 13, whiteSpace: 'nowrap', flexShrink: 0 }}>
-          {currentPage + 1} / {totalPages}
-        </span>
-      )}
     </div>
   )
 
