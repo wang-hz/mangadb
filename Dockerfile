@@ -27,11 +27,16 @@ COPY prisma ./prisma/
 
 RUN npm ci --omit=dev --ignore-scripts
 
+# Copy pre-built artifacts from builder
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/web/dist ./web/dist
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 
-RUN npx prisma generate
+# Copy Prisma CLI from builder so migrate/generate don't require npx download
+COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
+COPY --from=builder /app/node_modules/.bin/prisma ./node_modules/.bin/prisma
+
+# Generate Prisma engine binary for the target platform
+RUN DATABASE_URL=postgres://dummy:dummy@localhost:5432/dummy node_modules/.bin/prisma generate
 
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001
@@ -47,4 +52,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
 
 ENTRYPOINT ["dumb-init", "--"]
 
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/app.js"]
+CMD ["sh", "-c", "node_modules/.bin/prisma migrate deploy && node dist/app.js"]

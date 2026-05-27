@@ -78,10 +78,18 @@ Express 5 自动将 async 路由中的 rejected promise 传给 `next()`；在 `a
 
 ## 部署与运维
 
-### 缺少容器化配置
-没有 `Dockerfile` 和 `docker-compose.yml`，新环境部署依赖手动配置。建议提供：
-- 多阶段构建 Dockerfile（前端构建 → 后端编译 → 生产镜像）
-- docker-compose 含 PostgreSQL 和应用服务
+### ~~缺少容器化配置~~ ✅
+已提供完整容器化配置：
+- `Dockerfile`：多阶段构建（`$BUILDPLATFORM` 编译前后端 → `$TARGETPLATFORM` 生产镜像），Prisma CLI 从 builder 复制，避免 npx 网络下载；`dumb-init` 作 PID 1，`/health` 端点健康检查，非 root `nodejs` 用户运行
+- `docker-compose.yml`：`app` 服务 + `postgres:16-alpine`，data 和 db 均挂载具名卷，db 健康检查通过后 app 才启动
+- `.dockerignore`：排除 `node_modules`、`dist`、`.env`、`.git` 等不必要文件，加速构建上下文
+
+快速启动：
+```bash
+# 复制并编辑 .env（至少修改 POSTGRES_PASSWORD 和 JWT_SECRET）
+cp .env.example .env
+docker compose up -d
+```
 
 ### 数据库备份
 没有备份策略说明或脚本。DATA_DIR 的文件备份和数据库 pg_dump 均未涉及。

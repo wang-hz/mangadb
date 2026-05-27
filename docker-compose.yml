@@ -1,0 +1,39 @@
+services:
+  app:
+    build: .
+    image: mangadb:latest
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    environment:
+      DATABASE_URL: "postgres://mangadb:${POSTGRES_PASSWORD:-changeme}@db:5432/mangadb"
+      DATA_DIR: /data
+      JWT_SECRET: ${JWT_SECRET:-change-this-to-a-random-secret}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      # CORS_ORIGIN: https://your-domain.com   # only needed if app is behind a reverse proxy on a different origin
+    volumes:
+      - manga_data:/data
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: mangadb
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_DB: mangadb
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mangadb -d mangadb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  manga_data:
+    driver: local
+  postgres_data:
+    driver: local

@@ -1,0 +1,23 @@
+# Dependencies
+node_modules
+web/node_modules
+
+# Build outputs (built inside Docker)
+dist
+web/dist
+
+# Environment files with real secrets
+.env
+.env.local
+.env.*.local
+
+# Development tooling
+.git
+.gitignore
+*.log
+
+# Docs / dev files not needed in image
+README.md
+TODO.md
+CLAUDE.md
+http/
