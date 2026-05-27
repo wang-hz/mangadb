@@ -1,5 +1,5 @@
-import { AppstoreOutlined, ArrowLeftOutlined, BarsOutlined, CalendarOutlined, SearchOutlined, TagsOutlined } from '@ant-design/icons'
-import { Button, DatePicker, Descriptions, Input, message, Modal, Pagination, Segmented, Select, Space, Table, Tag } from 'antd'
+import { AppstoreOutlined, ArrowLeftOutlined, BarsOutlined, CalendarOutlined, DeleteOutlined, SearchOutlined, TagsOutlined } from '@ant-design/icons'
+import { Button, DatePicker, Descriptions, Form, Input, message, Modal, Pagination, Popconfirm, Segmented, Select, Space, Table } from 'antd'
 import dayjs from 'dayjs'
 import type { TableColumnsType, TablePaginationConfig } from 'antd'
 import { useEffect, useState } from 'react'
@@ -7,7 +7,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
 import MangaGrid from '../components/MangaGrid'
 import { usePagedData } from '../hooks/usePagedData'
-import type { Manga, Tag as TagData } from '../types'
+import type { Manga, Tag as TagData, TagType } from '../types'
 import { formatDate, formatDateTime } from '../utils/date'
 
 type SortBy = 'updateAt' | 'createAt' | 'publishDate'
@@ -39,6 +39,15 @@ export default function TagMangaListPage() {
 
   const [tag, setTag] = useState<TagData | null>(null)
   const [searchInput, setSearchInput] = useState(search)
+  const [tagTypes, setTagTypes] = useState<TagType[]>([])
+
+  // ── Inline edit ────────────────────────────────────────────────────────────
+  const [form] = Form.useForm()
+  const [isDirty, setIsDirty] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
+  // ── Batch operations ───────────────────────────────────────────────────────
   const [batchTagModalOpen, setBatchTagModalOpen] = useState(false)
   const [batchTagOptions, setBatchTagOptions] = useState<TagData[]>([])
   const [batchTagSearch, setBatchTagSearch] = useState('')
@@ -61,11 +70,64 @@ export default function TagMangaListPage() {
   useEffect(() => { setSearchInput(search) }, [search])
 
   useEffect(() => {
+    api.getTagTypes({ page: 1, limit: 100 })
+      .then(res => setTagTypes(res.items))
+      .catch(() => message.error('加载标签类型失败'))
+  }, [])
+
+  useEffect(() => {
+    if (!uuid) return
+    api.getTag(uuid)
+      .then(t => {
+        setTag(t)
+        form.setFieldsValue({ name: t.name, type: t.tagType.name })
+      })
+      .catch(() => message.error('加载标签信息失败'))
+  }, [uuid, form])
+
+  useEffect(() => {
     if (!batchTagModalOpen) return
     api.getTags({ page: 1, limit: 50, search: batchTagSearch || undefined })
       .then(res => setBatchTagOptions(res.items))
       .catch(() => message.error('加载标签失败'))
   }, [batchTagSearch, batchTagModalOpen])
+
+  // ── Handlers ───────────────────────────────────────────────────────────────
+  const handleSave = async () => {
+    if (!uuid) return
+    let values: { name: string; type: string }
+    try {
+      values = await form.validateFields()
+    } catch {
+      return
+    }
+    setSaving(true)
+    try {
+      const updated = await api.updateTag(uuid, values)
+      setTag(updated)
+      form.setFieldsValue({ name: updated.name, type: updated.tagType.name })
+      setIsDirty(false)
+      message.success('标签更新成功')
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : ''
+      message.error(msg.startsWith('409') ? '标签名已存在' : '更新失败')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!uuid) return
+    setDeleting(true)
+    try {
+      await api.deleteTag(uuid)
+      message.success('标签已删除')
+      navigate('/tags', { replace: true })
+    } catch {
+      message.error('删除失败')
+      setDeleting(false)
+    }
+  }
 
   const handleBatchAddTag = async () => {
     if (!uuid || !batchSelectedTagUuid) return
@@ -97,13 +159,6 @@ export default function TagMangaListPage() {
       setBatchDateLoading(false)
     }
   }
-
-  useEffect(() => {
-    if (!uuid) return
-    api.getTag(uuid)
-      .then(setTag)
-      .catch(() => message.error('加载标签信息失败'))
-  }, [uuid])
 
   const { items: data, total, loading } = usePagedData(
     () => api.getMangasByTag(uuid!, { page, limit: pageSize, search: search || undefined, sortBy, sortOrder }),
@@ -153,41 +208,78 @@ export default function TagMangaListPage() {
 
   return (
     <Space direction="vertical" style={{ width: '100%' }} size="middle">
-      <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)} />
-      {tag && (
-        <Descriptions bordered size="small" column={2}>
-          <Descriptions.Item label="标签名称">{tag.name}</Descriptions.Item>
-          <Descriptions.Item label="标签类型">
-            <Tag color="geekblue">{tag.tagType.name}</Tag>
-          </Descriptions.Item>
-          <Descriptions.Item label="创建时间">{formatDateTime(tag.createAt)}</Descriptions.Item>
-          <Descriptions.Item label="更新时间">{formatDateTime(tag.updateAt)}</Descriptions.Item>
-        </Descriptions>
-      )}
+
+      {/* Header row: back + delete on left, save on right */}
       <Space style={{ justifyContent: 'space-between', width: '100%' }}>
         <Space>
-        <Input
-          prefix={<SearchOutlined />}
-          placeholder="搜索显示标题或原始标题，按回车搜索"
-          value={searchInput}
-          onChange={e => {
-            setSearchInput(e.target.value)
-            if (!e.target.value) setSearchParams(prev => { prev.delete('search'); prev.set('page', '1'); return prev }, { replace: true })
-          }}
-          onPressEnter={() => setSearchParams(prev => {
-            if (searchInput) prev.set('search', searchInput); else prev.delete('search')
-            prev.set('page', '1')
-            return prev
-          }, { replace: true })}
-          allowClear
-          style={{ width: 360 }}
-        />
-        <Select
-          value={sort}
-          onChange={v => setSearchParams(prev => { prev.set('sort', v); prev.set('page', '1'); return prev }, { replace: true })}
-          options={SORT_OPTIONS}
-          style={{ width: 180 }}
-        />
+          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)} />
+          <Popconfirm
+            title={`删除标签「${tag?.name ?? ''}」？`}
+            description="此操作将同时移除该标签与所有漫画的关联，且不可撤销。"
+            onConfirm={handleDelete}
+            okText="确认删除"
+            cancelText="取消"
+            okButtonProps={{ danger: true }}
+            disabled={!tag}
+          >
+            <Button danger icon={<DeleteOutlined />} loading={deleting} disabled={!tag}>
+              删除标签
+            </Button>
+          </Popconfirm>
+        </Space>
+        <Button
+          type="primary"
+          loading={saving}
+          disabled={!isDirty}
+          onClick={handleSave}
+        >
+          保存
+        </Button>
+      </Space>
+
+      {/* Inline-editable tag info */}
+      <Form form={form} onValuesChange={() => setIsDirty(true)}>
+        <Descriptions bordered size="small" column={2}>
+          <Descriptions.Item label="标签名称">
+            <Form.Item name="name" noStyle rules={[{ required: true, message: '请输入标签名称' }]}>
+              <Input style={{ width: '100%' }} />
+            </Form.Item>
+          </Descriptions.Item>
+          <Descriptions.Item label="标签类型">
+            <Form.Item name="type" noStyle rules={[{ required: true, message: '请选择标签类型' }]}>
+              <Select style={{ width: '100%' }} options={tagTypes.map(t => ({ value: t.name, label: t.name }))} />
+            </Form.Item>
+          </Descriptions.Item>
+          <Descriptions.Item label="创建时间">{tag ? formatDateTime(tag.createAt) : '-'}</Descriptions.Item>
+          <Descriptions.Item label="更新时间">{tag ? formatDateTime(tag.updateAt) : '-'}</Descriptions.Item>
+        </Descriptions>
+      </Form>
+
+      {/* Manga list toolbar */}
+      <Space style={{ justifyContent: 'space-between', width: '100%' }}>
+        <Space>
+          <Input
+            prefix={<SearchOutlined />}
+            placeholder="搜索显示标题或原始标题，按回车搜索"
+            value={searchInput}
+            onChange={e => {
+              setSearchInput(e.target.value)
+              if (!e.target.value) setSearchParams(prev => { prev.delete('search'); prev.set('page', '1'); return prev }, { replace: true })
+            }}
+            onPressEnter={() => setSearchParams(prev => {
+              if (searchInput) prev.set('search', searchInput); else prev.delete('search')
+              prev.set('page', '1')
+              return prev
+            }, { replace: true })}
+            allowClear
+            style={{ width: 360 }}
+          />
+          <Select
+            value={sort}
+            onChange={v => setSearchParams(prev => { prev.set('sort', v); prev.set('page', '1'); return prev }, { replace: true })}
+            options={SORT_OPTIONS}
+            style={{ width: 180 }}
+          />
         </Space>
         <Space>
           <Button icon={<TagsOutlined />} onClick={() => setBatchTagModalOpen(true)}>
@@ -206,6 +298,8 @@ export default function TagMangaListPage() {
           />
         </Space>
       </Space>
+
+      {/* Batch modals */}
       <Modal
         title="批量添加标签"
         open={batchTagModalOpen}
@@ -249,6 +343,8 @@ export default function TagMangaListPage() {
           onChange={setBatchDate}
         />
       </Modal>
+
+      {/* Manga list */}
       {viewMode === 'list' ? (
         <Table
           rowKey="uuid"

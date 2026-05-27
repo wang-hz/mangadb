@@ -1,5 +1,5 @@
-import { EditOutlined, DeleteOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons'
-import { Button, Form, Input, message, Modal, Popconfirm, Select as AntSelect, Space, Table, Tag } from 'antd'
+import { PlusOutlined, SearchOutlined } from '@ant-design/icons'
+import { Button, Form, Input, message, Modal, Select as AntSelect, Space, Table, Tag } from 'antd'
 import type { TableColumnsType, TablePaginationConfig } from 'antd'
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -39,12 +39,6 @@ export default function TagListPage() {
   const [creating, setCreating] = useState(false)
   const [createForm] = Form.useForm()
 
-  // ── Edit ───────────────────────────────────────────────────────────────────
-  const [editModalOpen, setEditModalOpen] = useState(false)
-  const [editingTag, setEditingTag] = useState<TagData | null>(null)
-  const [editing, setEditing] = useState(false)
-  const [editForm] = Form.useForm()
-
   useEffect(() => { setSearchInput(search) }, [search])
 
   const { items: data, total, loading } = usePagedData(
@@ -75,38 +69,6 @@ export default function TagListPage() {
     }
   }
 
-  const openEditModal = (tag: TagData) => {
-    setEditingTag(tag)
-    editForm.setFieldsValue({ name: tag.name, type: tag.tagType.name })
-    setEditModalOpen(true)
-  }
-
-  const handleEdit = async (values: { name: string; type: string }) => {
-    if (!editingTag) return
-    setEditing(true)
-    try {
-      await api.updateTag(editingTag.uuid, values)
-      message.success('标签更新成功')
-      setEditModalOpen(false)
-      setRefreshKey(k => k + 1)
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : ''
-      message.error(msg.startsWith('409') ? '标签名已存在' : '更新失败')
-    } finally {
-      setEditing(false)
-    }
-  }
-
-  const handleDelete = async (uuid: string) => {
-    try {
-      await api.deleteTag(uuid)
-      message.success('标签已删除')
-      setRefreshKey(k => k + 1)
-    } catch {
-      message.error('删除失败')
-    }
-  }
-
   // ── Columns ────────────────────────────────────────────────────────────────
   const columns: TableColumnsType<TagData> = [
     { title: '标签名称', dataIndex: 'name' },
@@ -127,30 +89,6 @@ export default function TagListPage() {
       width: 180,
       render: (v: string) => formatDateTime(v),
     },
-    {
-      title: '操作',
-      key: 'actions',
-      width: 120,
-      render: (_, record) => (
-        <Space size="small" onClick={e => e.stopPropagation()}>
-          <Button
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => openEditModal(record)}
-          />
-          <Popconfirm
-            title={`删除标签「${record.name}」？`}
-            description="此操作将同时移除该标签与所有漫画的关联，且不可撤销。"
-            onConfirm={() => handleDelete(record.uuid)}
-            okText="确认删除"
-            cancelText="取消"
-            okButtonProps={{ danger: true }}
-          >
-            <Button size="small" danger icon={<DeleteOutlined />} />
-          </Popconfirm>
-        </Space>
-      ),
-    },
   ]
 
   const pagination: TablePaginationConfig = {
@@ -163,16 +101,6 @@ export default function TagListPage() {
     showTotal: t => `共 ${t} 条`,
     position: ['topRight', 'bottomRight'],
   }
-
-  // ── Tag type form item (shared by create and edit modals) ──────────────────
-  const tagTypeFormItem = (
-    <Form.Item label="标签类型" name="type" rules={[{ required: true, message: '请选择标签类型' }]}>
-      <AntSelect
-        placeholder="选择标签类型"
-        options={tagTypes.map(t => ({ value: t.name, label: t.name }))}
-      />
-    </Form.Item>
-  )
 
   return (
     <Space direction="vertical" style={{ width: '100%' }} size="middle">
@@ -244,24 +172,12 @@ export default function TagListPage() {
           <Form.Item label="标签名称" name="name" rules={[{ required: true, message: '请输入标签名称' }]}>
             <Input placeholder="输入标签名称" />
           </Form.Item>
-          {tagTypeFormItem}
-        </Form>
-      </Modal>
-
-      {/* Edit modal */}
-      <Modal
-        title={`编辑标签「${editingTag?.name ?? ''}」`}
-        open={editModalOpen}
-        onCancel={() => { setEditModalOpen(false); editForm.resetFields() }}
-        onOk={() => editForm.submit()}
-        confirmLoading={editing}
-        destroyOnClose
-      >
-        <Form form={editForm} layout="vertical" onFinish={handleEdit} style={{ marginTop: 16 }}>
-          <Form.Item label="标签名称" name="name" rules={[{ required: true, message: '请输入标签名称' }]}>
-            <Input placeholder="输入标签名称" />
+          <Form.Item label="标签类型" name="type" rules={[{ required: true, message: '请选择标签类型' }]}>
+            <AntSelect
+              placeholder="选择标签类型"
+              options={tagTypes.map(t => ({ value: t.name, label: t.name }))}
+            />
           </Form.Item>
-          {tagTypeFormItem}
         </Form>
       </Modal>
     </Space>

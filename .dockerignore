@@ -18,6 +18,5 @@ web/dist
 
 # Docs / dev files not needed in image
 README.md
-TODO.md
-CLAUDE.md
+.claude/
 http/
