@@ -5,10 +5,13 @@ A self-hosted manga library server with a web UI and OPDS feed support.
 ## Features
 
 - Browse and manage your manga collection through a web interface
-- Tag-based organization with customizable tag types
+- Online reader with flip and scroll modes; set the cover from within the reader
+- Tag-based organization with customizable tag types; inline tag editing on the detail page
+- Batch operations: set publish date or add a tag across all mangas in a tag
 - OPDS v1.2 catalog feed for compatibility with e-reader apps (e.g. Kyobook, Moon+ Reader)
 - Download manga as ZIP archives
-- REST API for programmatic access
+- User authentication with admin/user roles and a first-time setup wizard
+- Docker support with images published to GitHub Container Registry
 
 ## Tech Stack
 
@@ -43,7 +46,7 @@ npm run dev
 npm run web:dev
 ```
 
-The server runs at `http://localhost:3000` by default.
+The server runs at `http://localhost:3000` by default. On first launch you will be redirected to a setup page to create the initial admin account.
 
 ## Environment Variables
 
@@ -52,6 +55,7 @@ The server runs at `http://localhost:3000` by default.
 | `DATABASE_URL` | `postgres://user:pass@localhost:5432/mangadb`    | PostgreSQL connection string           |
 | `PORT`         | `3000`                                           | HTTP port the server listens on        |
 | `DATA_DIR`     | `/data`                                          | Root directory where manga files live  |
+| `JWT_SECRET`   | `change-this-secret`                             | Secret used to sign JWTs. Override in production. |
 | `CORS_ORIGIN`  | _(unset)_                                        | Allowed CORS origin(s), comma-separated. Leave unset in production; set to `http://localhost:5173` for local development. |
 
 ## Data Directory
@@ -66,6 +70,7 @@ Images are published to GitHub Container Registry on every `v*` tag push.
 docker run -d \
   -e DATABASE_URL=postgres://user:pass@db:5432/mangadb \
   -e DATA_DIR=/data \
+  -e JWT_SECRET=your-secret \
   -v /your/manga:/data \
   -p 3000:3000 \
   ghcr.io/wang-hz/mangadb:latest
@@ -102,6 +107,7 @@ services:
     environment:
       DATABASE_URL: postgres://manga:manga@db:5432/mangadb
       DATA_DIR: /data
+      JWT_SECRET: your-secret
     volumes:
       - /your/manga:/data
     ports:
@@ -110,53 +116,6 @@ services:
 volumes:
   pgdata:
 ```
-
-## API Reference
-
-### Health
-
-| Method | Path      | Description              |
-| ------ | --------- | ------------------------ |
-| GET    | `/health` | Database connection check |
-
-### Manga
-
-| Method | Path                          | Description                  |
-| ------ | ----------------------------- | ---------------------------- |
-| GET    | `/api/mangadb/mangas`         | List mangas (paginated)       |
-| GET    | `/api/mangadb/mangas/:uuid`   | Get manga by UUID             |
-| PATCH  | `/api/mangadb/mangas/:uuid`   | Update manga metadata         |
-| POST   | `/api/mangadb/mangas/:uuid/tags` | Add tags to a manga        |
-| DELETE | `/api/mangadb/mangas/:uuid/tags/:tagUuid` | Remove a tag from a manga |
-
-### Tags
-
-| Method | Path                      | Description              |
-| ------ | ------------------------- | ------------------------ |
-| GET    | `/api/mangadb/tags`       | List tags (paginated)     |
-| POST   | `/api/mangadb/tags`       | Create a new tag          |
-| GET    | `/api/mangadb/tag_types`  | List tag types (paginated)|
-
-### Files
-
-| Method | Path                                       | Description               |
-| ------ | ------------------------------------------ | ------------------------- |
-| GET    | `/api/file/mangas/:uuid`                   | Download manga as ZIP     |
-| GET    | `/api/file/mangas/:uuid/pages/:pageNumber` | Serve a single page image |
-
-### OPDS v1.2
-
-Base path: `/api/opds/v1.2`
-
-| Method | Path                        | Description                      |
-| ------ | --------------------------- | -------------------------------- |
-| GET    | `/catalog`                  | Root catalog (all tag types)     |
-| GET    | `/tag_types/:tagType`       | Tags under a tag type            |
-| GET    | `/tags/:tagUuid`            | Mangas for a specific tag        |
-| GET    | `/tags`                     | Search tags by keyword           |
-| GET    | `/mangas`                   | Search mangas by keyword         |
-| GET    | `/mangas/latest`            | Latest mangas feed               |
-| GET    | `/search`                   | OpenSearch description           |
 
 ## Building
 
