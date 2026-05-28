@@ -137,81 +137,72 @@ export default function MangaDetailPage() {
             <Descriptions.Item label="创建时间">{formatDateTime(manga.createAt)}</Descriptions.Item>
             <Descriptions.Item label="更新时间">{formatDateTime(manga.updateAt)}</Descriptions.Item>
           </Descriptions>
+          <Form form={form} layout="vertical">
+            <Form.Item label="完整文件名" name="fullname" rules={[{ required: true, message: '请输入完整文件名' }]}>
+              <Input />
+            </Form.Item>
+            <Form.Item label="显示标题" name="displayTitle" rules={[{ required: true, message: '请输入显示标题' }]}>
+              <Input />
+            </Form.Item>
+            <Form.Item label="原始标题" name="originalTitle" rules={[{ required: true, message: '请输入原始标题' }]}>
+              <Input />
+            </Form.Item>
+            <Form.Item label="出版日期" name="publishDate">
+              <DatePicker style={{ width: '100%' }} />
+            </Form.Item>
+          </Form>
           <div>
-            <Form form={form} layout="vertical">
-              <Form.Item label="完整文件名" name="fullname" rules={[{ required: true, message: '请输入完整文件名' }]}>
-                <Input />
-              </Form.Item>
-              <Form.Item label="显示标题" name="displayTitle" rules={[{ required: true, message: '请输入显示标题' }]}>
-                <Input />
-              </Form.Item>
-              <Form.Item label="原始标题" name="originalTitle" rules={[{ required: true, message: '请输入原始标题' }]}>
-                <Input />
-              </Form.Item>
-              <Form.Item label="出版日期" name="publishDate">
-                <DatePicker style={{ width: '100%' }} />
-              </Form.Item>
-            </Form>
+            <Title level={5}>标签</Title>
+            <Space wrap size={[6, 8]} style={{ marginBottom: 8 }}>
+              {manga.mangaTags.length === 0 && pendingAddTags.length === 0
+                ? <span style={{ color: '#999' }}>暂无标签</span>
+                : <>
+                    {manga.mangaTags.map(mt => (
+                      <Tag
+                        key={mt.tag.uuid}
+                        color="blue"
+                        closable
+                        onClose={() => handleDeleteTag(mt.tag.uuid)}
+                        onClick={() => navigate(`/tags/${mt.tag.uuid}/mangas`)}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        {mt.tag.tagType.name}: {mt.tag.name}
+                      </Tag>
+                    ))}
+                    {pendingAddTags.map(t => (
+                      <Tag
+                        key={t.uuid}
+                        color="orange"
+                        closable
+                        onClose={() => setPendingAddTags(prev => prev.filter(pt => pt.uuid !== t.uuid))}
+                      >
+                        {t.tagType.name}: {t.name}（待保存）
+                      </Tag>
+                    ))}
+                  </>
+              }
+            </Space>
+            <Space>
+              <Select
+                mode="multiple"
+                style={{ minWidth: 360 }}
+                placeholder="搜索并选择标签"
+                value={selectedTagUuids}
+                onChange={setSelectedTagUuids}
+                onSearch={setTagSearch}
+                filterOption={false}
+                showSearch
+                options={tagOptions
+                  .filter(t => !existingTagUuids.has(t.uuid) && !pendingAddTags.some(pt => pt.uuid === t.uuid))
+                  .map(t => ({ value: t.uuid, label: `${t.tagType.name}: ${t.name}` }))}
+              />
+              <Button onClick={handleStageTags} disabled={selectedTagUuids.length === 0}>
+                添加
+              </Button>
+            </Space>
           </div>
         </Space>
       </Space>
-
-      <div>
-        <Title level={5}>标签</Title>
-        <Space wrap size={[6, 8]}>
-          {manga.mangaTags.length === 0 && pendingAddTags.length === 0
-            ? <span style={{ color: '#999' }}>暂无标签</span>
-            : <>
-                {manga.mangaTags.map(mt => (
-                  <Tag
-                    key={mt.tag.uuid}
-                    color="blue"
-                    closable
-                    onClose={() => handleDeleteTag(mt.tag.uuid)}
-                    onClick={() => navigate(`/tags/${mt.tag.uuid}/mangas`)}
-                    style={{ cursor: 'pointer' }}
-                  >
-                    {mt.tag.tagType.name}: {mt.tag.name}
-                  </Tag>
-                ))}
-                {pendingAddTags.map(t => (
-                  <Tag
-                    key={t.uuid}
-                    color="orange"
-                    closable
-                    onClose={() => setPendingAddTags(prev => prev.filter(pt => pt.uuid !== t.uuid))}
-                  >
-                    {t.tagType.name}: {t.name}（待保存）
-                  </Tag>
-                ))}
-              </>
-          }
-        </Space>
-      </div>
-
-      <div>
-        <Space>
-          <Select
-            mode="multiple"
-            style={{ minWidth: 360 }}
-            placeholder="搜索并选择标签"
-            value={selectedTagUuids}
-            onChange={setSelectedTagUuids}
-            onSearch={setTagSearch}
-            filterOption={false}
-            showSearch
-            options={tagOptions
-              .filter(t => !existingTagUuids.has(t.uuid) && !pendingAddTags.some(pt => pt.uuid === t.uuid))
-              .map(t => ({ value: t.uuid, label: `${t.tagType.name}: ${t.name}` }))}
-          />
-          <Button
-            onClick={handleStageTags}
-            disabled={selectedTagUuids.length === 0}
-          >
-            添加
-          </Button>
-        </Space>
-      </div>
 
       <Button type="primary" size="large" loading={saving} onClick={handleSave}>
         保存
