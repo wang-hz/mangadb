@@ -6,7 +6,12 @@ import fs from 'fs';
 import mime from 'mime-types';
 import path from 'path';
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+function safeJoin(base: string, filename: string): string | null {
+  const resolved = path.resolve(base, filename);
+  return resolved.startsWith(base + path.sep) ? resolved : null;
+};
 
 export class FileController {
   async getZip(req: Request, res: Response) {
@@ -35,7 +40,9 @@ export class FileController {
       return res.sendStatus(404);
     }
     for (const imgFilename of pages) {
-      archive.file(path.join(mangaPath, imgFilename), { name: imgFilename });
+      const imgPath = safeJoin(mangaPath, imgFilename);
+      if (!imgPath) continue;
+      archive.file(imgPath, { name: imgFilename });
     }
     await archive.finalize();
   }
@@ -62,7 +69,9 @@ export class FileController {
     if (!imgFilename) {
       return res.sendStatus(404);
     }
-    const imgPath = path.join(DATA_DIR, mangaUuid, imgFilename);
+    const mangaPath = path.join(DATA_DIR, mangaUuid);
+    const imgPath = safeJoin(mangaPath, imgFilename);
+    if (!imgPath) return res.sendStatus(400);
     const mimeType = mime.lookup(imgPath) || 'image/jpeg';
     res.setHeader('Content-Type', mimeType);
     const stream = fs.createReadStream(imgPath);
