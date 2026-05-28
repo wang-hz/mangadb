@@ -9,12 +9,12 @@ import { z } from 'zod';
 
 const credentialsSchema = z.object({
   username: z.string().min(1),
-  password: z.string().min(1),
+  password: z.string().min(8),
 });
 
 const createUserSchema = z.object({
   username: z.string().min(1),
-  password: z.string().min(1),
+  password: z.string().min(8),
   role: z.enum(['admin', 'user']).optional(),
 });
 
