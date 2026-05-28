@@ -147,7 +147,7 @@ export default function MangaDetailPage() {
             <Form.Item label="原始标题" name="originalTitle" rules={[{ required: true, message: '请输入原始标题' }]}>
               <Input />
             </Form.Item>
-            <Form.Item label="出版日期" name="publishDate">
+            <Form.Item label="出版日期" name="publishDate" style={{ marginBottom: 0 }}>
               <DatePicker style={{ width: '100%' }} />
             </Form.Item>
           </Form>
