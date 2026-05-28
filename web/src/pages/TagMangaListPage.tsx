@@ -354,7 +354,7 @@ export default function TagMangaListPage() {
           loading={loading}
           size="middle"
           onRow={record => ({
-            onClick: () => navigate(`/mangas/${record.uuid}`),
+            onClick: () => navigate(`/mangas/${record.uuid}`, { state: { from: `/tags/${uuid}/mangas` } }),
             style: { cursor: 'pointer' },
           })}
         />

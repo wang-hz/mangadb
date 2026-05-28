@@ -2,7 +2,7 @@ import { ArrowLeftOutlined, OrderedListOutlined, ReadOutlined } from '@ant-desig
 import { Button, DatePicker, Descriptions, Form, Input, message, Select, Space, Spin, Tag } from 'antd'
 import dayjs from 'dayjs'
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api'
 import type { Manga, Tag as TagData } from '../types'
 import { formatDateTime } from '../utils/date'
@@ -16,6 +16,8 @@ const onImgError = (e: React.SyntheticEvent<HTMLImageElement>) => {
 export default function MangaDetailPage() {
   const { uuid } = useParams<{ uuid: string }>()
   const navigate = useNavigate()
+  const location = useLocation()
+  const backTo: string = (location.state as { from?: string } | null)?.from ?? '/mangas'
   const [manga, setManga] = useState<Manga | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -104,7 +106,7 @@ export default function MangaDetailPage() {
 
   return (
     <Space direction="vertical" style={{ width: '100%' }} size="large">
-      <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)}>返回</Button>
+      <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(backTo)}>返回</Button>
 
       <Space align="start" size="large" style={{ width: '100%' }}>
         <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
