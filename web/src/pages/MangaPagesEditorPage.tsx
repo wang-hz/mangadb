@@ -67,8 +67,11 @@ function SortablePageCell({ filename, index, isCover, uuid, onSetCover, onRemove
           }} />
         )}
       </div>
+      <div style={{ fontSize: 11, color: '#555', padding: '4px 6px 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={filename}>
+        {filename}
+      </div>
       <div
-        style={{ display: 'flex', justifyContent: 'center', gap: 6, padding: '5px 4px' }}
+        style={{ display: 'flex', justifyContent: 'center', gap: 6, padding: '4px 4px 5px' }}
         onPointerDown={e => e.stopPropagation()}
       >
         <Button size="small" icon={<StarOutlined />} disabled={isCover} onClick={onSetCover} />
@@ -197,7 +200,10 @@ export default function MangaPagesEditorPage() {
                   style={{ width: '100%', height: CELL_H, objectFit: 'cover', display: 'block' }}
                   onError={onImgError}
                 />
-                <div style={{ display: 'flex', justifyContent: 'center', padding: '5px 4px' }}>
+                <div style={{ fontSize: 11, color: '#555', padding: '4px 6px 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={filename}>
+                  {filename}
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'center', padding: '4px 4px 5px' }}>
                   <Button size="small" onClick={() => addPage(filename)}>添加</Button>
                 </div>
               </div>
