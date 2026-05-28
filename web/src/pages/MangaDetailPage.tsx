@@ -108,7 +108,7 @@ export default function MangaDetailPage() {
     <Space direction="vertical" style={{ width: '100%' }} size="large">
       <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(backTo)}>返回</Button>
 
-      <Space align="start" size="large" style={{ width: '100%' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 24 }}>
         <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
           <img
             src={`/api/file/mangas/${manga.uuid}/pages/${coverIndex}`}
@@ -132,7 +132,7 @@ export default function MangaDetailPage() {
             页面管理
           </Button>
         </div>
-        <Space direction="vertical" style={{ flex: 1 }} size="middle">
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 16 }}>
           <Descriptions bordered column={2} size="small">
             <Descriptions.Item label="创建时间">{formatDateTime(manga.createAt)}</Descriptions.Item>
             <Descriptions.Item label="更新时间">{formatDateTime(manga.updateAt)}</Descriptions.Item>
@@ -182,10 +182,10 @@ export default function MangaDetailPage() {
                   </>
               }
             </Space>
-            <Space>
+            <div style={{ display: 'flex', gap: 8 }}>
               <Select
                 mode="multiple"
-                style={{ minWidth: 360 }}
+                style={{ flex: 1 }}
                 placeholder="搜索并选择标签"
                 value={selectedTagUuids}
                 onChange={setSelectedTagUuids}
@@ -199,13 +199,13 @@ export default function MangaDetailPage() {
               <Button onClick={handleStageTags} disabled={selectedTagUuids.length === 0}>
                 添加
               </Button>
-            </Space>
+            </div>
           </div>
-          <Button type="primary" loading={saving} onClick={handleSave}>
+          <Button type="primary" loading={saving} onClick={handleSave} style={{ alignSelf: 'flex-start' }}>
             保存
           </Button>
-        </Space>
-      </Space>
+        </div>
+      </div>
     </Space>
   )
 }
