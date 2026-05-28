@@ -2,7 +2,7 @@ import { Button, Card, Form, Input, message } from 'antd'
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { checkSetupStatus, login } from '../api/auth'
-import { setToken } from '../utils/token'
+import { sessionFromToken, setSession } from '../utils/token'
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -20,7 +20,8 @@ export default function LoginPage() {
     setLoading(true)
     try {
       const { token } = await login(values.username, values.password)
-      setToken(token)
+      const session = sessionFromToken(token)
+      if (session) setSession(session)
       navigate(from, { replace: true })
     } catch {
       message.error('用户名或密码错误')

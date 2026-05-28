@@ -5,7 +5,7 @@ import { useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import ChangePasswordModal from './ChangePasswordModal'
 import { logout } from '../api/auth'
-import { getRole, getUsername, getUuid, removeToken } from '../utils/token'
+import { clearSession, getRole, getUsername, getUuid } from '../utils/token'
 
 const { Header, Content } = Layout
 
@@ -24,7 +24,7 @@ export default function AppLayout() {
 
   async function handleLogout() {
     await logout()
-    removeToken()
+    clearSession()
     navigate('/login', { replace: true })
   }
 

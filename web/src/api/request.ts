@@ -1,12 +1,9 @@
-import { getToken, removeToken } from '../utils/token'
+import { clearSession } from '../utils/token'
 
 export async function request<T>(url: string, options?: RequestInit): Promise<T> {
-  const token = getToken()
-  const headers: Record<string, string> = { ...(options?.headers as Record<string, string>) }
-  if (token) headers['Authorization'] = `Bearer ${token}`
-  const res = await fetch(url, { ...options, headers })
+  const res = await fetch(url, { ...options, credentials: 'include' })
   if (res.status === 401) {
-    removeToken()
+    clearSession()
     window.location.href = '/login'
     throw new Error('Unauthorized')
   }

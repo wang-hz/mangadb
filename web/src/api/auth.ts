@@ -24,6 +24,7 @@ export async function login(username: string, password: string): Promise<{ token
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, password }),
+    credentials: 'include',
   })
   if (!res.ok) throw new Error('Invalid credentials')
   return res.json()
@@ -46,7 +47,7 @@ export function deleteUser(uuid: string): Promise<void> {
 }
 
 export async function logout(): Promise<void> {
-  await fetch('/api/auth/logout', { method: 'POST' })
+  await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
 }
 
 export function changePassword(uuid: string, newPassword: string, currentPassword?: string): Promise<void> {
