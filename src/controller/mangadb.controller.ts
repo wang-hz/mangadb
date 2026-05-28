@@ -31,6 +31,11 @@ const batchSetDateSchema = z.object({
   publishDate: z.string().nullable().optional(),
 });
 
+const updatePagesSchema = z.object({
+  pages: z.array(z.string().min(1)),
+  cover: z.number().int().nonnegative(),
+});
+
 function parsePositiveInt(value: string | undefined, defaultValue: number) {
   if (!value) {
     return defaultValue;
@@ -65,6 +70,23 @@ export class MangadbController {
     const { fullname, displayTitle, originalTitle, cover, publishDate } = parsed.data;
     const manga = await mangaService.updateManga(req.params.uuid, fullname, displayTitle, originalTitle, cover, publishDate);
     res.status(201).json(manga);
+  }
+
+  async getMangaFolderFiles(req: Request, res: Response) {
+    const files = await mangaService.getMangaFolderFiles(req.params.uuid);
+    res.json(files);
+  }
+
+  async updateMangaPages(req: Request, res: Response) {
+    const parsed = updatePagesSchema.safeParse(req.body);
+    if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+    try {
+      const manga = await mangaService.updateMangaPages(req.params.uuid, parsed.data.pages, parsed.data.cover);
+      res.json(manga);
+    } catch (e: any) {
+      if (e?.message === 'Invalid filename') { res.status(400).json({ error: 'Invalid filename' }); return; }
+      throw e;
+    }
   }
 
   async createMangaTags(req: Request, res: Response) {

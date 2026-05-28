@@ -1,5 +1,8 @@
 import prisma from '@/config/database';
 import type { PaginationQuery } from '@/type';
+import { DATA_DIR } from '@/config/env';
+import fs from 'fs';
+import path from 'path';
 
 const mangaSelect = {
   uuid: true,
@@ -130,6 +133,32 @@ export class MangaService {
       data: toAdd.map(mangaUuid => ({ mangaUuid, tagUuid: targetTagUuid })),
     });
     return { added: toAdd.length };
+  }
+
+  async getMangaFolderFiles(uuid: string): Promise<string[]> {
+    const mangaDir = path.join(DATA_DIR, uuid);
+    try {
+      const entries = await fs.promises.readdir(mangaDir);
+      return entries
+        .filter(f => /\.(jpe?g|png|webp|gif|avif)$/i.test(f))
+        .sort();
+    } catch {
+      return [];
+    }
+  }
+
+  async updateMangaPages(uuid: string, pages: string[], cover: number) {
+    const mangaDir = path.join(DATA_DIR, uuid);
+    for (const filename of pages) {
+      const resolved = path.resolve(mangaDir, filename);
+      if (!resolved.startsWith(mangaDir + path.sep)) {
+        throw new Error('Invalid filename');
+      }
+    }
+    return prisma.manga.update({
+      where: { uuid },
+      data: { pages, cover },
+    });
   }
 
   async deleteMangaTag(mangaUuid: string, tagUuid: string) {

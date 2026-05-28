@@ -27,6 +27,18 @@ export const api = {
     })
   },
 
+  getMangaFolderFiles(uuid: string) {
+    return request<string[]>(`${BASE}/mangas/${uuid}/folder-files`)
+  },
+
+  updateMangaPages(uuid: string, pages: string[], cover: number) {
+    return request<Manga>(`${BASE}/mangas/${uuid}/pages`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pages, cover }),
+    })
+  },
+
   createMangaTags(mangaUuid: string, tagUuids: string[]) {
     return request<unknown>(`${BASE}/mangas/${mangaUuid}/tags`, {
       method: 'POST',

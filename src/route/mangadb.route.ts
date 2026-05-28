@@ -7,6 +7,8 @@ const mangadbController = new MangadbController();
 router.get('/mangas', mangadbController.getMangasByPage);
 router.get('/mangas/:uuid', mangadbController.getMangaByUuid);
 router.patch('/mangas/:uuid', mangadbController.updateManga);
+router.get('/mangas/:uuid/folder-files', mangadbController.getMangaFolderFiles);
+router.put('/mangas/:uuid/pages', mangadbController.updateMangaPages);
 router.post('/mangas/:uuid/tags', mangadbController.createMangaTags);
 router.delete('/mangas/:uuid/tags/:tagUuid', mangadbController.deleteMangaTag);
 router.get('/tags/:uuid/mangas', mangadbController.getMangasByTagUuid);

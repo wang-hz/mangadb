@@ -47,6 +47,25 @@ export class FileController {
     await archive.finalize();
   }
 
+  async getImgByFilename(req: Request, res: Response) {
+    const { mangaUuid, filename } = req.params;
+    if (!mangaUuid || !UUID_RE.test(mangaUuid) || !filename) {
+      return res.sendStatus(400);
+    }
+    const manga = await mangaService.getMangaByUuid(mangaUuid);
+    if (!manga) return res.sendStatus(404);
+    const mangaPath = path.join(DATA_DIR, mangaUuid);
+    const imgPath = safeJoin(mangaPath, filename);
+    if (!imgPath) return res.sendStatus(400);
+    const mimeType = mime.lookup(imgPath) || 'image/jpeg';
+    res.setHeader('Content-Type', mimeType);
+    const stream = fs.createReadStream(imgPath);
+    stream.on('error', (err: NodeJS.ErrnoException) => {
+      if (!res.headersSent) res.sendStatus(err.code === 'ENOENT' ? 404 : 500);
+    });
+    stream.pipe(res);
+  }
+
   async getImg(req: Request, res: Response) {
     const mangaUuid = req.params.mangaUuid;
     const pageNumber = req.params.pageNumber;
