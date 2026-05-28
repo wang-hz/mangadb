@@ -150,7 +150,7 @@ export default function MangaPagesEditorPage() {
     <Space direction="vertical" style={{ width: '100%' }} size="large">
       <Space>
         <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(`/mangas/${uuid}`)}>返回</Button>
-        <Button type="primary" loading={saving} onClick={handleSave}>保存页面</Button>
+        <Button type="primary" loading={saving} onClick={handleSave}>保存</Button>
       </Space>
 
       <div>
