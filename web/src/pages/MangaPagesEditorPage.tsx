@@ -1,10 +1,8 @@
-import { ArrowLeftOutlined, DeleteOutlined, DownOutlined, StarFilled, UpOutlined } from '@ant-design/icons'
-import { Button, message, Space, Spin, Tag, Typography } from 'antd'
+import { ArrowLeftOutlined, DeleteOutlined, DownOutlined, StarFilled, StarOutlined, UpOutlined } from '@ant-design/icons'
+import { Button, message, Space, Spin } from 'antd'
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api'
-
-const { Title } = Typography
 
 const IMG_FALLBACK = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 2 3'%3E%3Crect fill='%23f0f0f0' width='2' height='3'/%3E%3C/svg%3E"
 const onImgError = (e: React.SyntheticEvent<HTMLImageElement>) => {
@@ -12,10 +10,12 @@ const onImgError = (e: React.SyntheticEvent<HTMLImageElement>) => {
   e.currentTarget.src = IMG_FALLBACK
 }
 
+const CELL_W = 120
+const CELL_H = 168
+
 export default function MangaPagesEditorPage() {
   const { uuid } = useParams<{ uuid: string }>()
   const navigate = useNavigate()
-  const [displayTitle, setDisplayTitle] = useState('')
   const [loading, setLoading] = useState(true)
   const [allFolderFiles, setAllFolderFiles] = useState<string[]>([])
   const [editedPages, setEditedPages] = useState<string[]>([])
@@ -25,12 +25,8 @@ export default function MangaPagesEditorPage() {
   useEffect(() => {
     if (!uuid) return
     setLoading(true)
-    Promise.all([
-      api.getManga(uuid),
-      api.getMangaFolderFiles(uuid),
-    ])
+    Promise.all([api.getManga(uuid), api.getMangaFolderFiles(uuid)])
       .then(([manga, files]) => {
-        setDisplayTitle(manga.displayTitle)
         setEditedPages(manga.pages ?? [])
         setEditedCover(manga.cover ?? 0)
         setAllFolderFiles(files)
@@ -88,75 +84,90 @@ export default function MangaPagesEditorPage() {
     <Space direction="vertical" style={{ width: '100%' }} size="large">
       <Space>
         <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(`/mangas/${uuid}`)}>返回</Button>
-        <Title level={4} style={{ margin: 0 }}>页面管理 — {displayTitle}</Title>
+        <Button type="primary" loading={saving} onClick={handleSave}>保存页面</Button>
       </Space>
 
       <div>
         <div style={{ marginBottom: 8, color: '#666' }}>当前页面（{editedPages.length} 页）</div>
-        <div style={{ maxHeight: 600, overflowY: 'auto', border: '1px solid #d9d9d9', borderRadius: 6, padding: 4 }}>
-          {editedPages.length === 0 && (
-            <div style={{ padding: 16, color: '#999', textAlign: 'center' }}>暂无页面</div>
-          )}
-          {editedPages.map((filename, index) => (
-            <div
-              key={filename}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '4px 8px',
-                borderRadius: 4,
-                marginBottom: 2,
-                border: index === editedCover ? '1px solid #1677ff' : '1px solid transparent',
-                background: index === editedCover ? '#e6f4ff' : undefined,
-              }}
-            >
-              <img
-                src={`/api/file/mangas/${uuid}/file/${encodeURIComponent(filename)}`}
-                alt={filename}
-                style={{ width: 36, height: 50, objectFit: 'cover', borderRadius: 2, flexShrink: 0 }}
-                onError={onImgError}
-              />
-              <span style={{ flex: 1, fontSize: 12, color: '#555', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {filename}
-              </span>
-              {index === editedCover && (
-                <Tag color="blue" icon={<StarFilled />} style={{ flexShrink: 0 }}>封面</Tag>
-              )}
-              <Button size="small" icon={<UpOutlined />} disabled={index === 0} onClick={() => movePageUp(index)} />
-              <Button size="small" icon={<DownOutlined />} disabled={index === editedPages.length - 1} onClick={() => movePageDown(index)} />
-              <Button size="small" disabled={index === editedCover} onClick={() => setEditedCover(index)}>封面</Button>
-              <Button size="small" danger icon={<DeleteOutlined />} onClick={() => removePage(index)} />
+        {editedPages.length === 0
+          ? <div style={{ color: '#999' }}>暂无页面</div>
+          : (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+              {editedPages.map((filename, index) => (
+                <div
+                  key={filename}
+                  style={{
+                    width: CELL_W,
+                    border: index === editedCover ? '2px solid #1677ff' : '1px solid #d9d9d9',
+                    borderRadius: 4,
+                    overflow: 'hidden',
+                    background: '#fafafa',
+                  }}
+                >
+                  <div style={{ position: 'relative' }}>
+                    <img
+                      src={`/api/file/mangas/${uuid}/file/${encodeURIComponent(filename)}`}
+                      alt={filename}
+                      style={{ width: '100%', height: CELL_H, objectFit: 'cover', display: 'block' }}
+                      onError={onImgError}
+                    />
+                    <span style={{
+                      position: 'absolute', top: 4, left: 4,
+                      background: 'rgba(0,0,0,0.45)', color: '#fff',
+                      fontSize: 11, padding: '1px 5px', borderRadius: 3, lineHeight: '18px',
+                    }}>
+                      {index + 1}
+                    </span>
+                    {index === editedCover && (
+                      <StarFilled style={{
+                        position: 'absolute', top: 5, right: 5,
+                        color: '#1677ff', fontSize: 15,
+                        filter: 'drop-shadow(0 0 3px #fff)',
+                      }} />
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'center', gap: 4, padding: '5px 4px' }}>
+                    <Button size="small" icon={<UpOutlined />} disabled={index === 0} onClick={() => movePageUp(index)} />
+                    <Button size="small" icon={<DownOutlined />} disabled={index === editedPages.length - 1} onClick={() => movePageDown(index)} />
+                    <Button size="small" icon={<StarOutlined />} disabled={index === editedCover} onClick={() => setEditedCover(index)} />
+                    <Button size="small" danger icon={<DeleteOutlined />} onClick={() => removePage(index)} />
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          )
+        }
       </div>
 
       {notInPages.length > 0 && (
         <div>
           <div style={{ marginBottom: 8, color: '#666' }}>文件夹中未包含的文件（{notInPages.length} 个）</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
             {notInPages.map(filename => (
-              <div key={filename} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, width: 80 }}>
+              <div
+                key={filename}
+                style={{
+                  width: CELL_W,
+                  border: '1px dashed #d9d9d9',
+                  borderRadius: 4,
+                  overflow: 'hidden',
+                  background: '#fafafa',
+                }}
+              >
                 <img
                   src={`/api/file/mangas/${uuid}/file/${encodeURIComponent(filename)}`}
                   alt={filename}
-                  style={{ width: 80, height: 112, objectFit: 'cover', border: '1px solid #d9d9d9', borderRadius: 4 }}
+                  style={{ width: '100%', height: CELL_H, objectFit: 'cover', display: 'block' }}
                   onError={onImgError}
                 />
-                <div style={{ fontSize: 11, color: '#666', textAlign: 'center', wordBreak: 'break-all', width: '100%' }}>
-                  {filename}
+                <div style={{ display: 'flex', justifyContent: 'center', padding: '5px 4px' }}>
+                  <Button size="small" onClick={() => addPage(filename)}>添加</Button>
                 </div>
-                <Button size="small" onClick={() => addPage(filename)}>添加</Button>
               </div>
             ))}
           </div>
         </div>
       )}
-
-      <Button type="primary" size="large" loading={saving} onClick={handleSave}>
-        保存页面
-      </Button>
     </Space>
   )
 }
