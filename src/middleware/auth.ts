@@ -61,7 +61,9 @@ export async function requireBasicOrBearer(req: Request, res: Response, next: Ne
 }
 
 export async function requireAdmin(req: Request, res: Response, next: NextFunction) {
-  const payload = await verifyBearer(req.headers.authorization ?? '');
+  const payload =
+    await verifyBearer(req.headers.authorization ?? '') ??
+    await verifyBearer(`Bearer ${req.cookies?.token ?? ''}`);
   if (!payload) { res.status(401).json({ error: 'Unauthorized' }); return; }
   if (payload.role !== 'admin') { res.status(403).json({ error: 'Forbidden' }); return; }
   next();
