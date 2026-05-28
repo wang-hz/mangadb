@@ -119,10 +119,7 @@ export class AuthController {
     if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
     const { currentPassword, newPassword } = parsed.data;
 
-    const payload = jwt.verify(
-      (req.headers.authorization ?? '').slice(7),
-      JWT_SECRET,
-    ) as { sub: string; uuid: string; role: string };
+    const payload = req.user!;
 
     const target = await userService.findFullByUuid(uuid);
     if (!target) { res.status(404).json({ error: 'User not found' }); return; }

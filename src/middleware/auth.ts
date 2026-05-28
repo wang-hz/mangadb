@@ -5,7 +5,15 @@ import bcrypt from 'bcryptjs';
 import type { NextFunction, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 
-type JwtPayload = { sub: string; role: string; jti: string };
+type JwtPayload = { sub: string; uuid: string; role: string; jti: string };
+
+declare global {
+  namespace Express {
+    interface Request {
+      user?: JwtPayload;
+    }
+  }
+}
 
 function parseBearerToken(authHeader: string): JwtPayload | null {
   if (!authHeader.startsWith('Bearer ')) return null;
@@ -36,8 +44,10 @@ async function verifyBasic(authHeader: string): Promise<boolean> {
 }
 
 export async function requireAuth(req: Request, res: Response, next: NextFunction) {
-  if (await verifyBearer(req.headers.authorization ?? '')) { next(); return; }
-  if (await verifyBearer(`Bearer ${req.cookies?.token ?? ''}`)) { next(); return; }
+  const payload =
+    await verifyBearer(req.headers.authorization ?? '') ??
+    await verifyBearer(`Bearer ${req.cookies?.token ?? ''}`);
+  if (payload) { req.user = payload; next(); return; }
   res.status(401).json({ error: 'Unauthorized' });
 }
 
