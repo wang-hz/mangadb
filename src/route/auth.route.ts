@@ -14,8 +14,8 @@ const loginLimiter = rateLimit({
 const router = Router();
 const authController = new AuthController();
 
-router.get('/setup-status', authController.setupStatus);
-router.post('/setup', authController.setup);
+router.get('/setup-status', loginLimiter, authController.setupStatus);
+router.post('/setup', loginLimiter, authController.setup);
 router.post('/login', loginLimiter, authController.login);
 router.get('/users', requireAdmin, authController.getUsers);
 router.post('/users', requireAdmin, authController.createUser);
