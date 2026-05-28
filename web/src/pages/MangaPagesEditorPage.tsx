@@ -1,4 +1,7 @@
-import { ArrowLeftOutlined, DeleteOutlined, DownOutlined, StarFilled, StarOutlined, UpOutlined } from '@ant-design/icons'
+import { closestCenter, DndContext, DragEndEvent, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
+import { arrayMove, rectSortingStrategy, SortableContext, useSortable } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import { ArrowLeftOutlined, DeleteOutlined, StarFilled, StarOutlined } from '@ant-design/icons'
 import { Button, message, Space, Spin } from 'antd'
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
@@ -13,6 +16,68 @@ const onImgError = (e: React.SyntheticEvent<HTMLImageElement>) => {
 const CELL_W = 120
 const CELL_H = 168
 
+function SortablePageCell({ filename, index, isCover, uuid, onSetCover, onRemove }: {
+  filename: string
+  index: number
+  isCover: boolean
+  uuid: string
+  onSetCover: () => void
+  onRemove: () => void
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: filename })
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        width: CELL_W,
+        border: isCover ? '2px solid #1677ff' : '1px solid #d9d9d9',
+        borderRadius: 4,
+        overflow: 'hidden',
+        background: '#fafafa',
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.4 : 1,
+        cursor: isDragging ? 'grabbing' : 'grab',
+        zIndex: isDragging ? 1 : undefined,
+        touchAction: 'none',
+      }}
+      {...attributes}
+      {...listeners}
+    >
+      <div style={{ position: 'relative' }}>
+        <img
+          src={`/api/file/mangas/${uuid}/file/${encodeURIComponent(filename)}`}
+          alt={filename}
+          style={{ width: '100%', height: CELL_H, objectFit: 'cover', display: 'block' }}
+          onError={onImgError}
+        />
+        <span style={{
+          position: 'absolute', top: 4, left: 4,
+          background: 'rgba(0,0,0,0.45)', color: '#fff',
+          fontSize: 11, padding: '1px 5px', borderRadius: 3, lineHeight: '18px',
+        }}>
+          {index + 1}
+        </span>
+        {isCover && (
+          <StarFilled style={{
+            position: 'absolute', top: 5, right: 5,
+            color: '#1677ff', fontSize: 15,
+            filter: 'drop-shadow(0 0 3px #fff)',
+          }} />
+        )}
+      </div>
+      <div
+        style={{ display: 'flex', justifyContent: 'center', gap: 6, padding: '5px 4px' }}
+        onPointerDown={e => e.stopPropagation()}
+      >
+        <Button size="small" icon={<StarOutlined />} disabled={isCover} onClick={onSetCover} />
+        <Button size="small" danger icon={<DeleteOutlined />} onClick={onRemove} />
+      </div>
+    </div>
+  )
+}
+
 export default function MangaPagesEditorPage() {
   const { uuid } = useParams<{ uuid: string }>()
   const navigate = useNavigate()
@@ -21,6 +86,8 @@ export default function MangaPagesEditorPage() {
   const [editedPages, setEditedPages] = useState<string[]>([])
   const [editedCover, setEditedCover] = useState(0)
   const [saving, setSaving] = useState(false)
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
 
   useEffect(() => {
     if (!uuid) return
@@ -35,22 +102,18 @@ export default function MangaPagesEditorPage() {
       .finally(() => setLoading(false))
   }, [uuid])
 
-  const movePageUp = (index: number) => {
-    setEditedPages(prev => {
-      const next = [...prev]
-      ;[next[index - 1], next[index]] = [next[index], next[index - 1]]
-      return next
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIndex = editedPages.indexOf(active.id as string)
+    const newIndex = editedPages.indexOf(over.id as string)
+    setEditedPages(prev => arrayMove(prev, oldIndex, newIndex))
+    setEditedCover(prev => {
+      if (prev === oldIndex) return newIndex
+      if (oldIndex < newIndex && prev > oldIndex && prev <= newIndex) return prev - 1
+      if (oldIndex > newIndex && prev >= newIndex && prev < oldIndex) return prev + 1
+      return prev
     })
-    setEditedCover(prev => prev === index ? index - 1 : prev === index - 1 ? index : prev)
-  }
-
-  const movePageDown = (index: number) => {
-    setEditedPages(prev => {
-      const next = [...prev]
-      ;[next[index], next[index + 1]] = [next[index + 1], next[index]]
-      return next
-    })
-    setEditedCover(prev => prev === index ? index + 1 : prev === index + 1 ? index : prev)
   }
 
   const removePage = (index: number) => {
@@ -92,49 +155,23 @@ export default function MangaPagesEditorPage() {
         {editedPages.length === 0
           ? <div style={{ color: '#999' }}>暂无页面</div>
           : (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-              {editedPages.map((filename, index) => (
-                <div
-                  key={filename}
-                  style={{
-                    width: CELL_W,
-                    border: index === editedCover ? '2px solid #1677ff' : '1px solid #d9d9d9',
-                    borderRadius: 4,
-                    overflow: 'hidden',
-                    background: '#fafafa',
-                  }}
-                >
-                  <div style={{ position: 'relative' }}>
-                    <img
-                      src={`/api/file/mangas/${uuid}/file/${encodeURIComponent(filename)}`}
-                      alt={filename}
-                      style={{ width: '100%', height: CELL_H, objectFit: 'cover', display: 'block' }}
-                      onError={onImgError}
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext items={editedPages} strategy={rectSortingStrategy}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                  {editedPages.map((filename, index) => (
+                    <SortablePageCell
+                      key={filename}
+                      filename={filename}
+                      index={index}
+                      isCover={index === editedCover}
+                      uuid={uuid!}
+                      onSetCover={() => setEditedCover(index)}
+                      onRemove={() => removePage(index)}
                     />
-                    <span style={{
-                      position: 'absolute', top: 4, left: 4,
-                      background: 'rgba(0,0,0,0.45)', color: '#fff',
-                      fontSize: 11, padding: '1px 5px', borderRadius: 3, lineHeight: '18px',
-                    }}>
-                      {index + 1}
-                    </span>
-                    {index === editedCover && (
-                      <StarFilled style={{
-                        position: 'absolute', top: 5, right: 5,
-                        color: '#1677ff', fontSize: 15,
-                        filter: 'drop-shadow(0 0 3px #fff)',
-                      }} />
-                    )}
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'center', gap: 4, padding: '5px 4px' }}>
-                    <Button size="small" icon={<UpOutlined />} disabled={index === 0} onClick={() => movePageUp(index)} />
-                    <Button size="small" icon={<DownOutlined />} disabled={index === editedPages.length - 1} onClick={() => movePageDown(index)} />
-                    <Button size="small" icon={<StarOutlined />} disabled={index === editedCover} onClick={() => setEditedCover(index)} />
-                    <Button size="small" danger icon={<DeleteOutlined />} onClick={() => removePage(index)} />
-                  </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </SortableContext>
+            </DndContext>
           )
         }
       </div>
