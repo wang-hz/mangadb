@@ -4,6 +4,7 @@ import RequireAuth from './components/RequireAuth'
 import AdminUsersPage from './pages/AdminUsersPage'
 import LoginPage from './pages/LoginPage'
 import MangaDetailPage from './pages/MangaDetailPage'
+import MangaPagesEditorPage from './pages/MangaPagesEditorPage'
 import MangaListPage from './pages/MangaListPage'
 import ReaderPage from './pages/ReaderPage'
 import SetupPage from './pages/SetupPage'
@@ -28,6 +29,7 @@ export default function App() {
           <Route index element={<Navigate to="/mangas" replace />} />
           <Route path="mangas" element={<MangaListPage />} />
           <Route path="mangas/:uuid" element={<MangaDetailPage />} />
+          <Route path="mangas/:uuid/pages" element={<MangaPagesEditorPage />} />
           <Route path="tags" element={<TagListPage />} />
           <Route path="tags/:uuid/mangas" element={<TagMangaListPage />} />
           <Route path="admin/users" element={<RequireAdmin><AdminUsersPage /></RequireAdmin>} />
