@@ -1,13 +1,11 @@
 import { ArrowLeftOutlined, OrderedListOutlined, ReadOutlined } from '@ant-design/icons'
-import { Button, DatePicker, Descriptions, Form, Input, message, Select, Space, Spin, Tag, Typography } from 'antd'
+import { Button, DatePicker, Descriptions, Form, Input, message, Select, Space, Spin, Tag } from 'antd'
 import dayjs from 'dayjs'
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api'
 import type { Manga, Tag as TagData } from '../types'
 import { formatDateTime } from '../utils/date'
-
-const { Title } = Typography
 
 const IMG_FALLBACK = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 2 3'%3E%3Crect fill='%23f0f0f0' width='2' height='3'/%3E%3C/svg%3E"
 const onImgError = (e: React.SyntheticEvent<HTMLImageElement>) => {
@@ -152,7 +150,7 @@ export default function MangaDetailPage() {
             </Form.Item>
           </Form>
           <div>
-            <Title level={5}>标签</Title>
+            <div style={{ marginBottom: 8, fontSize: 14, color: 'rgba(0,0,0,0.88)' }}>标签</div>
             <Space wrap size={[6, 8]} style={{ marginBottom: 8 }}>
               {manga.mangaTags.length === 0 && pendingAddTags.length === 0
                 ? <span style={{ color: '#999' }}>暂无标签</span>
@@ -201,12 +199,11 @@ export default function MangaDetailPage() {
               </Button>
             </Space>
           </div>
+          <Button type="primary" loading={saving} onClick={handleSave}>
+            保存
+          </Button>
         </Space>
       </Space>
-
-      <Button type="primary" size="large" loading={saving} onClick={handleSave}>
-        保存
-      </Button>
     </Space>
   )
 }
