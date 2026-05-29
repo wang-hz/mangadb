@@ -61,6 +61,7 @@ export class MangadbController {
   async getMangaByUuid(req: Request, res: Response) {
     const uuid = req.params.uuid;
     const manga = await mangaService.getMangaByUuid(uuid);
+    if (!manga) { res.status(404).json({ error: 'Manga not found' }); return; }
     res.json(manga);
   }
 
