@@ -7,15 +7,12 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
 import MangaGrid from '../components/MangaGrid'
 import { usePagedData } from '../hooks/usePagedData'
+import { useViewMode } from '../hooks/useViewMode'
 import type { Manga, Tag as TagData, TagType } from '../types'
 import { formatDate, formatDateTime } from '../utils/date'
 
 type SortBy = 'updateAt' | 'createAt' | 'publishDate'
 type SortOrder = 'asc' | 'desc'
-type ViewMode = 'list' | 'grid'
-
-const VIEW_MODE_KEY = 'mangaViewMode'
-
 const SORT_OPTIONS: { label: string; value: `${SortBy}-${SortOrder}` }[] = [
   { label: '更新时间（最新）', value: 'updateAt-desc' },
   { label: '更新时间（最早）', value: 'updateAt-asc' },
@@ -61,14 +58,7 @@ export default function TagMangaListPage() {
   const [batchDateLoading, setBatchDateLoading] = useState(false)
 
   const [sortBy, sortOrder] = sort.split('-') as [SortBy, SortOrder]
-  const [viewMode, setViewMode] = useState<ViewMode>(
-    () => (localStorage.getItem(VIEW_MODE_KEY) as ViewMode | null) ?? 'list',
-  )
-
-  const handleViewModeChange = (mode: ViewMode) => {
-    setViewMode(mode)
-    localStorage.setItem(VIEW_MODE_KEY, mode)
-  }
+  const [viewMode, handleViewModeChange] = useViewMode()
 
   useEffect(() => { setSearchInput(search) }, [search])
 
@@ -293,7 +283,7 @@ export default function TagMangaListPage() {
         {!isMobile && (
           <Segmented
             value={viewMode}
-            onChange={v => handleViewModeChange(v as ViewMode)}
+            onChange={v => handleViewModeChange(v as 'list' | 'grid')}
             options={[
               { value: 'list', icon: <BarsOutlined /> },
               { value: 'grid', icon: <AppstoreOutlined /> },

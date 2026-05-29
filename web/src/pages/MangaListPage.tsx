@@ -6,13 +6,12 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
 import MangaGrid from '../components/MangaGrid'
 import { usePagedData } from '../hooks/usePagedData'
+import { useViewMode } from '../hooks/useViewMode'
 import type { Manga } from '../types'
 import { formatDate, formatDateTime } from '../utils/date'
 
 type SortBy = 'updateAt' | 'createAt' | 'publishDate'
 type SortOrder = 'asc' | 'desc'
-type ViewMode = 'list' | 'grid'
-
 const SORT_OPTIONS: { label: string; value: `${SortBy}-${SortOrder}` }[] = [
   { label: '更新时间（最新）', value: 'updateAt-desc' },
   { label: '更新时间（最早）', value: 'updateAt-asc' },
@@ -24,7 +23,6 @@ const SORT_OPTIONS: { label: string; value: `${SortBy}-${SortOrder}` }[] = [
 
 const VALID_SORTS: Set<string> = new Set(SORT_OPTIONS.map(o => o.value))
 
-const VIEW_MODE_KEY = 'mangaViewMode'
 const { useBreakpoint } = Grid
 
 export default function MangaListPage() {
@@ -40,9 +38,7 @@ export default function MangaListPage() {
 
   const [searchInput, setSearchInput] = useState(search)
   const [sortBy, sortOrder] = sort.split('-') as [SortBy, SortOrder]
-  const [viewMode, setViewMode] = useState<ViewMode>(
-    () => (localStorage.getItem(VIEW_MODE_KEY) as ViewMode | null) ?? 'list',
-  )
+  const [viewMode, handleViewModeChange] = useViewMode()
 
   useEffect(() => { setSearchInput(search) }, [search])
 
@@ -51,11 +47,6 @@ export default function MangaListPage() {
     [page, pageSize, search, sort],
     '加载漫画列表失败',
   )
-
-  const handleViewModeChange = (mode: ViewMode) => {
-    setViewMode(mode)
-    localStorage.setItem(VIEW_MODE_KEY, mode)
-  }
 
   const handlePageChange = (p: number) =>
     setSearchParams(prev => { prev.set('page', String(p)); return prev }, { replace: true })
@@ -127,7 +118,7 @@ export default function MangaListPage() {
         {!isMobile && (
           <Segmented
             value={viewMode}
-            onChange={v => handleViewModeChange(v as ViewMode)}
+            onChange={v => handleViewModeChange(v as 'list' | 'grid')}
             options={[
               { value: 'list', icon: <BarsOutlined /> },
               { value: 'grid', icon: <AppstoreOutlined /> },
