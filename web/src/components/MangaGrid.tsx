@@ -7,6 +7,7 @@ import CoverImage from './CoverImage'
 interface Props {
   data: Manga[]
   loading: boolean
+  from?: string
 }
 
 // Style for 2-line title clamp; cast required because WebkitBoxOrient is
@@ -20,7 +21,7 @@ const titleStyle = {
   WebkitBoxOrient: 'vertical',
 } as React.CSSProperties
 
-export default function MangaGrid({ data, loading }: Props) {
+export default function MangaGrid({ data, loading, from }: Props) {
   const navigate = useNavigate()
 
   return (
@@ -50,7 +51,7 @@ export default function MangaGrid({ data, loading }: Props) {
                 </div>
               }
               styles={{ body: { padding: '8px 10px' } }}
-              onClick={() => navigate(`/mangas/${manga.uuid}`)}
+              onClick={() => navigate(`/mangas/${manga.uuid}`, from ? { state: { from } } : undefined)}
             >
               <div style={titleStyle}>{manga.displayTitle}</div>
               {manga.publishDate && (

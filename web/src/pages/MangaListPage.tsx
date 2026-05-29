@@ -2,7 +2,7 @@ import { AppstoreOutlined, BarsOutlined, SearchOutlined } from '@ant-design/icon
 import { Grid, Input, Pagination, Segmented, Select, Space, Table } from 'antd'
 import type { TableColumnsType, TablePaginationConfig } from 'antd'
 import { useEffect, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
 import MangaGrid from '../components/MangaGrid'
 import { usePagedData } from '../hooks/usePagedData'
@@ -27,6 +27,7 @@ const { useBreakpoint } = Grid
 
 export default function MangaListPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
   const screens = useBreakpoint()
   const isMobile = screens.md === false
@@ -136,7 +137,7 @@ export default function MangaListPage() {
           loading={loading}
           size="middle"
           onRow={record => ({
-            onClick: () => navigate(`/mangas/${record.uuid}`),
+            onClick: () => navigate(`/mangas/${record.uuid}`, { state: { from: location.pathname + location.search } }),
             style: { cursor: 'pointer' },
           })}
         />
@@ -153,7 +154,7 @@ export default function MangaListPage() {
               showTotal={t => `共 ${t} 条`}
             />
           </div>
-          <MangaGrid data={data} loading={loading} />
+          <MangaGrid data={data} loading={loading} from={location.pathname + location.search} />
           <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
             <Pagination
               current={page}

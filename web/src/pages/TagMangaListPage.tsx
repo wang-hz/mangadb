@@ -347,7 +347,7 @@ export default function TagMangaListPage() {
           loading={loading}
           size="middle"
           onRow={record => ({
-            onClick: () => navigate(`/mangas/${record.uuid}`, { state: { from: `/tags/${uuid}/mangas` } }),
+            onClick: () => navigate(`/mangas/${record.uuid}`, { state: { from: location.pathname + location.search } }),
             style: { cursor: 'pointer' },
           })}
         />
@@ -364,7 +364,7 @@ export default function TagMangaListPage() {
               showTotal={t => `共 ${t} 条`}
             />
           </div>
-          <MangaGrid data={data} loading={loading} />
+          <MangaGrid data={data} loading={loading} from={location.pathname + location.search} />
           <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
             <Pagination
               current={page}
