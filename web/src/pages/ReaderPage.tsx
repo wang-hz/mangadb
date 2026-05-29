@@ -1,4 +1,5 @@
 import { ArrowLeftOutlined, LeftOutlined, RightOutlined, StarFilled, StarOutlined } from '@ant-design/icons'
+import { useDrag } from '@use-gesture/react'
 import { Button, InputNumber, message, Popconfirm, Segmented, Spin } from 'antd'
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
@@ -77,6 +78,14 @@ export default function ReaderPage() {
     return () => window.removeEventListener('keydown', handler)
   }, [manga, mode, currentPage, totalPages])
 
+  // ── Flip mode swipe gesture ───────────────────────────────────────────────
+  const hasPrev = currentPage > 0
+  const hasNext = currentPage < totalPages - 1
+  const bindSwipe = useDrag(({ swipe: [swipeX] }) => {
+    if (swipeX === -1 && hasNext) goToPage(currentPage + 1)
+    if (swipeX === 1 && hasPrev) goToPage(currentPage - 1)
+  }, { axis: 'x', swipe: { distance: 50, velocity: [0.3, 0.3] } })
+
   // ── Loading screen ────────────────────────────────────────────────────────
   if (loading) {
     return (
@@ -86,8 +95,6 @@ export default function ReaderPage() {
     )
   }
 
-  const hasPrev = currentPage > 0
-  const hasNext = currentPage < totalPages - 1
   const isCover = currentPage === coverPage
 
   // ── Shared top bar ────────────────────────────────────────────────────────
@@ -139,9 +146,10 @@ export default function ReaderPage() {
       <div style={{ height: '100vh', background: '#141414', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {topBar}
 
-        {/* Image area — click left half = prev, right half = next */}
+        {/* Image area — click left/right half = prev/next; swipe left/right on touch */}
         <div
-          style={{ flex: 1, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', cursor: 'pointer', userSelect: 'none' }}
+          {...bindSwipe()}
+          style={{ flex: 1, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', cursor: 'pointer', userSelect: 'none', touchAction: 'pan-y' }}
           onClick={e => {
             const { left, width } = e.currentTarget.getBoundingClientRect()
             if (e.clientX - left < width / 2) { if (hasPrev) goToPage(currentPage - 1) }
