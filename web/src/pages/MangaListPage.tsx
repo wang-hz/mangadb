@@ -1,5 +1,5 @@
 import { AppstoreOutlined, BarsOutlined, SearchOutlined } from '@ant-design/icons'
-import { Input, Pagination, Segmented, Select, Space, Table } from 'antd'
+import { Grid, Input, Pagination, Segmented, Select, Space, Table } from 'antd'
 import type { TableColumnsType, TablePaginationConfig } from 'antd'
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -25,10 +25,13 @@ const SORT_OPTIONS: { label: string; value: `${SortBy}-${SortOrder}` }[] = [
 const VALID_SORTS: Set<string> = new Set(SORT_OPTIONS.map(o => o.value))
 
 const VIEW_MODE_KEY = 'mangaViewMode'
+const { useBreakpoint } = Grid
 
 export default function MangaListPage() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
+  const screens = useBreakpoint()
+  const isMobile = screens.md === false
 
   const page = Math.max(1, parseInt(searchParams.get('page') ?? '1') || 1)
   const pageSize = parseInt(searchParams.get('limit') ?? '10') || 10
@@ -62,25 +65,27 @@ export default function MangaListPage() {
 
   const columns: TableColumnsType<Manga> = [
     { title: '显示标题', dataIndex: 'displayTitle', ellipsis: true },
-    { title: '原始标题', dataIndex: 'originalTitle', ellipsis: true },
-    {
-      title: '出版日期',
-      dataIndex: 'publishDate',
-      width: 120,
-      render: (v: string | null) => v ? formatDate(v) : '-',
-    },
-    {
-      title: '创建时间',
-      dataIndex: 'createAt',
-      width: 180,
-      render: (v: string) => formatDateTime(v),
-    },
-    {
-      title: '更新时间',
-      dataIndex: 'updateAt',
-      width: 180,
-      render: (v: string) => formatDateTime(v),
-    },
+    ...(!isMobile ? [
+      { title: '原始标题', dataIndex: 'originalTitle', ellipsis: true } as TableColumnsType<Manga>[number],
+      {
+        title: '出版日期',
+        dataIndex: 'publishDate',
+        width: 120,
+        render: (v: string | null) => v ? formatDate(v) : '-',
+      } as TableColumnsType<Manga>[number],
+      {
+        title: '创建时间',
+        dataIndex: 'createAt',
+        width: 180,
+        render: (v: string) => formatDateTime(v),
+      } as TableColumnsType<Manga>[number],
+      {
+        title: '更新时间',
+        dataIndex: 'updateAt',
+        width: 180,
+        render: (v: string) => formatDateTime(v),
+      } as TableColumnsType<Manga>[number],
+    ] : []),
   ]
 
   const tablePagination: TablePaginationConfig = {
@@ -96,7 +101,7 @@ export default function MangaListPage() {
 
   return (
     <Space direction="vertical" style={{ width: '100%' }} size="middle">
-      <Space>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
         <Input
           prefix={<SearchOutlined />}
           placeholder="搜索显示标题或原始标题，按回车搜索"
@@ -111,25 +116,27 @@ export default function MangaListPage() {
             return prev
           }, { replace: true })}
           allowClear
-          style={{ width: 360 }}
+          style={{ width: isMobile ? '100%' : 360 }}
         />
         <Select
           value={sort}
           onChange={v => setSearchParams(prev => { prev.set('sort', v); prev.set('page', '1'); return prev }, { replace: true })}
           options={SORT_OPTIONS}
-          style={{ width: 180 }}
+          style={{ width: isMobile ? '100%' : 180 }}
         />
-        <Segmented
-          value={viewMode}
-          onChange={v => handleViewModeChange(v as ViewMode)}
-          options={[
-            { value: 'list', icon: <BarsOutlined /> },
-            { value: 'grid', icon: <AppstoreOutlined /> },
-          ]}
-        />
-      </Space>
+        {!isMobile && (
+          <Segmented
+            value={viewMode}
+            onChange={v => handleViewModeChange(v as ViewMode)}
+            options={[
+              { value: 'list', icon: <BarsOutlined /> },
+              { value: 'grid', icon: <AppstoreOutlined /> },
+            ]}
+          />
+        )}
+      </div>
 
-      {viewMode === 'list' ? (
+      {!isMobile && viewMode === 'list' ? (
         <Table
           rowKey="uuid"
           dataSource={data}

@@ -1,5 +1,5 @@
 import { ArrowLeftOutlined, OrderedListOutlined, ReadOutlined } from '@ant-design/icons'
-import { Button, DatePicker, Descriptions, Form, Input, message, Select, Space, Spin, Tag } from 'antd'
+import { Button, DatePicker, Descriptions, Form, Grid, Input, message, Select, Space, Spin, Tag } from 'antd'
 import dayjs from 'dayjs'
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
@@ -13,11 +13,15 @@ const onImgError = (e: React.SyntheticEvent<HTMLImageElement>) => {
   e.currentTarget.src = IMG_FALLBACK
 }
 
+const { useBreakpoint } = Grid
+
 export default function MangaDetailPage() {
   const { uuid } = useParams<{ uuid: string }>()
   const navigate = useNavigate()
   const location = useLocation()
   const backTo: string = (location.state as { from?: string } | null)?.from ?? '/mangas'
+  const screens = useBreakpoint()
+  const isMobile = screens.md === false
   const [manga, setManga] = useState<Manga | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -108,12 +112,12 @@ export default function MangaDetailPage() {
     <Space direction="vertical" style={{ width: '100%' }} size="large">
       <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(backTo)}>返回</Button>
 
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 24 }}>
-        <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: 'flex-start', gap: 24 }}>
+        <div style={{ flexShrink: 0, width: isMobile ? '100%' : undefined, maxWidth: 280, margin: isMobile ? '0 auto' : undefined, display: 'flex', flexDirection: 'column', gap: 8 }}>
           <img
             src={`/api/file/mangas/${manga.uuid}/pages/${coverIndex}`}
             alt="cover"
-            style={{ width: 280, borderRadius: 4, display: 'block' }}
+            style={{ width: '100%', borderRadius: 4, display: 'block' }}
             onError={onImgError}
           />
           <Button
@@ -133,7 +137,7 @@ export default function MangaDetailPage() {
           </Button>
         </div>
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <Descriptions bordered column={2} size="small">
+          <Descriptions bordered column={isMobile ? 1 : 2} size="small">
             <Descriptions.Item label="创建时间">{formatDateTime(manga.createAt)}</Descriptions.Item>
             <Descriptions.Item label="更新时间">{formatDateTime(manga.updateAt)}</Descriptions.Item>
           </Descriptions>
