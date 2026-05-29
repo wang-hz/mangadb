@@ -13,6 +13,34 @@ function safeJoin(base: string, filename: string): string | null {
   return resolved.startsWith(base + path.sep) ? resolved : null;
 };
 
+async function serveImageFile(req: Request, res: Response, imgPath: string): Promise<void> {
+  let stat: fs.Stats;
+  try {
+    stat = await fs.promises.stat(imgPath);
+  } catch (err: any) {
+    res.sendStatus(err.code === 'ENOENT' ? 404 : 500);
+    return;
+  }
+
+  const etag = `"${stat.mtimeMs.toString(16)}-${stat.size.toString(16)}"`;
+  res.setHeader('ETag', etag);
+  res.setHeader('Last-Modified', stat.mtime.toUTCString());
+  res.setHeader('Cache-Control', 'private, max-age=86400');
+
+  if (req.headers['if-none-match'] === etag) {
+    res.sendStatus(304);
+    return;
+  }
+
+  const mimeType = mime.lookup(imgPath) || 'image/jpeg';
+  res.setHeader('Content-Type', mimeType);
+  const stream = fs.createReadStream(imgPath);
+  stream.on('error', (err: NodeJS.ErrnoException) => {
+    if (!res.headersSent) res.sendStatus(err.code === 'ENOENT' ? 404 : 500);
+  });
+  stream.pipe(res);
+}
+
 export class FileController {
   async getZip(req: Request, res: Response) {
     const mangaUuid = req.params.mangaUuid;
@@ -57,13 +85,7 @@ export class FileController {
     const mangaPath = path.join(DATA_DIR, mangaUuid);
     const imgPath = safeJoin(mangaPath, filename);
     if (!imgPath) return res.sendStatus(400);
-    const mimeType = mime.lookup(imgPath) || 'image/jpeg';
-    res.setHeader('Content-Type', mimeType);
-    const stream = fs.createReadStream(imgPath);
-    stream.on('error', (err: NodeJS.ErrnoException) => {
-      if (!res.headersSent) res.sendStatus(err.code === 'ENOENT' ? 404 : 500);
-    });
-    stream.pipe(res);
+    await serveImageFile(req, res, imgPath);
   }
 
   async getImg(req: Request, res: Response) {
@@ -91,12 +113,6 @@ export class FileController {
     const mangaPath = path.join(DATA_DIR, mangaUuid);
     const imgPath = safeJoin(mangaPath, imgFilename);
     if (!imgPath) return res.sendStatus(400);
-    const mimeType = mime.lookup(imgPath) || 'image/jpeg';
-    res.setHeader('Content-Type', mimeType);
-    const stream = fs.createReadStream(imgPath);
-    stream.on('error', (err: NodeJS.ErrnoException) => {
-      if (!res.headersSent) res.sendStatus(err.code === 'ENOENT' ? 404 : 500);
-    });
-    stream.pipe(res);
+    await serveImageFile(req, res, imgPath);
   }
 }

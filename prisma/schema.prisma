@@ -73,6 +73,7 @@ model TokenBlacklist {
   jti       String   @id
   expiresAt DateTime
 
+  @@index([expiresAt])
   @@map("token_blacklist")
 }
 
