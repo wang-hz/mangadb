@@ -1,5 +1,5 @@
 import { AppstoreOutlined, ArrowLeftOutlined, BarsOutlined, CalendarOutlined, DeleteOutlined, SearchOutlined, TagsOutlined } from '@ant-design/icons'
-import { Button, DatePicker, Descriptions, Form, Input, message, Modal, Pagination, Popconfirm, Segmented, Select, Space, Table } from 'antd'
+import { Button, DatePicker, Descriptions, Form, Grid, Input, message, Modal, Pagination, Popconfirm, Segmented, Select, Space, Table } from 'antd'
 import dayjs from 'dayjs'
 import type { TableColumnsType, TablePaginationConfig } from 'antd'
 import { useEffect, useState } from 'react'
@@ -26,11 +26,14 @@ const SORT_OPTIONS: { label: string; value: `${SortBy}-${SortOrder}` }[] = [
 ]
 
 const VALID_SORTS: Set<string> = new Set(SORT_OPTIONS.map(o => o.value))
+const { useBreakpoint } = Grid
 
 export default function TagMangaListPage() {
   const { uuid } = useParams<{ uuid: string }>()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
+  const screens = useBreakpoint()
+  const isMobile = screens.md === false
 
   const page = Math.max(1, parseInt(searchParams.get('page') ?? '1') || 1)
   const pageSize = parseInt(searchParams.get('limit') ?? '10') || 10
@@ -174,25 +177,27 @@ export default function TagMangaListPage() {
 
   const columns: TableColumnsType<Manga> = [
     { title: '显示标题', dataIndex: 'displayTitle', ellipsis: true },
-    { title: '原始标题', dataIndex: 'originalTitle', ellipsis: true },
-    {
-      title: '出版日期',
-      dataIndex: 'publishDate',
-      width: 110,
-      render: (v: string | null) => v ? formatDate(v) : '-',
-    },
-    {
-      title: '创建时间',
-      dataIndex: 'createAt',
-      width: 180,
-      render: (v: string) => formatDateTime(v),
-    },
-    {
-      title: '更新时间',
-      dataIndex: 'updateAt',
-      width: 180,
-      render: (v: string) => formatDateTime(v),
-    },
+    ...(!isMobile ? [
+      { title: '原始标题', dataIndex: 'originalTitle', ellipsis: true } as TableColumnsType<Manga>[number],
+      {
+        title: '出版日期',
+        dataIndex: 'publishDate',
+        width: 110,
+        render: (v: string | null) => v ? formatDate(v) : '-',
+      } as TableColumnsType<Manga>[number],
+      {
+        title: '创建时间',
+        dataIndex: 'createAt',
+        width: 180,
+        render: (v: string) => formatDateTime(v),
+      } as TableColumnsType<Manga>[number],
+      {
+        title: '更新时间',
+        dataIndex: 'updateAt',
+        width: 180,
+        render: (v: string) => formatDateTime(v),
+      } as TableColumnsType<Manga>[number],
+    ] : []),
   ]
 
   const tablePagination: TablePaginationConfig = {
@@ -239,7 +244,7 @@ export default function TagMangaListPage() {
 
       {/* Inline-editable tag info */}
       <Form form={form} onValuesChange={() => setIsDirty(true)}>
-        <Descriptions bordered size="small" column={2}>
+        <Descriptions bordered size="small" column={isMobile ? 1 : 2}>
           <Descriptions.Item label="标签名称">
             <Form.Item name="name" noStyle rules={[{ required: true, message: '请输入标签名称' }]}>
               <Input style={{ width: '100%' }} />
@@ -256,38 +261,36 @@ export default function TagMangaListPage() {
       </Form>
 
       {/* Manga list toolbar */}
-      <Space style={{ justifyContent: 'space-between', width: '100%' }}>
-        <Space>
-          <Input
-            prefix={<SearchOutlined />}
-            placeholder="搜索显示标题或原始标题，按回车搜索"
-            value={searchInput}
-            onChange={e => {
-              setSearchInput(e.target.value)
-              if (!e.target.value) setSearchParams(prev => { prev.delete('search'); prev.set('page', '1'); return prev }, { replace: true })
-            }}
-            onPressEnter={() => setSearchParams(prev => {
-              if (searchInput) prev.set('search', searchInput); else prev.delete('search')
-              prev.set('page', '1')
-              return prev
-            }, { replace: true })}
-            allowClear
-            style={{ width: 360 }}
-          />
-          <Select
-            value={sort}
-            onChange={v => setSearchParams(prev => { prev.set('sort', v); prev.set('page', '1'); return prev }, { replace: true })}
-            options={SORT_OPTIONS}
-            style={{ width: 180 }}
-          />
-        </Space>
-        <Space>
-          <Button icon={<TagsOutlined />} onClick={() => setBatchTagModalOpen(true)}>
-            批量添加标签
-          </Button>
-          <Button icon={<CalendarOutlined />} onClick={() => setBatchDateModalOpen(true)}>
-            批量设置出版日期
-          </Button>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+        <Input
+          prefix={<SearchOutlined />}
+          placeholder="搜索显示标题或原始标题，按回车搜索"
+          value={searchInput}
+          onChange={e => {
+            setSearchInput(e.target.value)
+            if (!e.target.value) setSearchParams(prev => { prev.delete('search'); prev.set('page', '1'); return prev }, { replace: true })
+          }}
+          onPressEnter={() => setSearchParams(prev => {
+            if (searchInput) prev.set('search', searchInput); else prev.delete('search')
+            prev.set('page', '1')
+            return prev
+          }, { replace: true })}
+          allowClear
+          style={{ width: isMobile ? '100%' : 360 }}
+        />
+        <Select
+          value={sort}
+          onChange={v => setSearchParams(prev => { prev.set('sort', v); prev.set('page', '1'); return prev }, { replace: true })}
+          options={SORT_OPTIONS}
+          style={{ width: isMobile ? '100%' : 180 }}
+        />
+        <Button icon={<TagsOutlined />} onClick={() => setBatchTagModalOpen(true)}>
+          批量添加标签
+        </Button>
+        <Button icon={<CalendarOutlined />} onClick={() => setBatchDateModalOpen(true)}>
+          批量设置出版日期
+        </Button>
+        {!isMobile && (
           <Segmented
             value={viewMode}
             onChange={v => handleViewModeChange(v as ViewMode)}
@@ -296,8 +299,8 @@ export default function TagMangaListPage() {
               { value: 'grid', icon: <AppstoreOutlined /> },
             ]}
           />
-        </Space>
-      </Space>
+        )}
+      </div>
 
       {/* Batch modals */}
       <Modal
@@ -345,7 +348,7 @@ export default function TagMangaListPage() {
       </Modal>
 
       {/* Manga list */}
-      {viewMode === 'list' ? (
+      {!isMobile && viewMode === 'list' ? (
         <Table
           rowKey="uuid"
           dataSource={data}
