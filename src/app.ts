@@ -35,7 +35,7 @@ app.use(helmet({
     preload: true,
   },
 }));
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
 
 app.get('/health', async (req, res) => {
