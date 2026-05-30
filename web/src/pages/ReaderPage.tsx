@@ -35,7 +35,7 @@ export default function ReaderPage() {
     if (!uuid) return
     api.getManga(uuid)
       .then(m => { setManga(m); setLoading(false) })
-      .catch(() => { message.error('加载漫画失败'); navigate(-1) })
+      .catch(() => { message.error('加载漫画失败'); navigate(`/mangas/${uuid}`, { replace: true }) })
   }, [uuid])
 
   // ── Navigation helpers ────────────────────────────────────────────────────
@@ -63,7 +63,7 @@ export default function ReaderPage() {
   useEffect(() => {
     if (!manga) return
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { navigate(-1); return }
+      if (e.key === 'Escape') { navigate(`/mangas/${uuid}`, { replace: true }); return }
       if (mode !== 'flip') return
       if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
         e.preventDefault()
@@ -112,7 +112,7 @@ export default function ReaderPage() {
       <Button
         type="text"
         icon={<ArrowLeftOutlined />}
-        onClick={() => navigate(-1)}
+        onClick={() => navigate(`/mangas/${uuid}`, { replace: true })}
         style={{ color: '#ccc', flexShrink: 0 }}
       />
       <span style={{

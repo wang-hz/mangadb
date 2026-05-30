@@ -110,7 +110,7 @@ export default function MangaDetailPage() {
 
   return (
     <Space direction="vertical" style={{ width: '100%' }} size="large">
-      <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(backTo)}>返回</Button>
+      <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(backTo, { replace: true })}>返回</Button>
 
       <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: 'flex-start', gap: 24 }}>
         <div style={{ flexShrink: 0, width: isMobile ? '100%' : undefined, maxWidth: 280, margin: isMobile ? '0 auto' : undefined, display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -167,7 +167,7 @@ export default function MangaDetailPage() {
                         color="blue"
                         closable
                         onClose={() => handleDeleteTag(mt.tag.uuid)}
-                        onClick={() => navigate(`/tags/${mt.tag.uuid}/mangas`)}
+                        onClick={() => navigate(`/tags/${mt.tag.uuid}/mangas`, { state: { from: location.pathname } })}
                         style={{ cursor: 'pointer' }}
                       >
                         {mt.tag.tagType.name}: {mt.tag.name}

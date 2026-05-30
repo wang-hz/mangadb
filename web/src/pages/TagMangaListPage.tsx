@@ -3,7 +3,7 @@ import { Button, DatePicker, Descriptions, Form, Grid, Input, message, Modal, Pa
 import dayjs from 'dayjs'
 import type { TableColumnsType, TablePaginationConfig } from 'antd'
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
 import MangaGrid from '../components/MangaGrid'
 import { usePagedData } from '../hooks/usePagedData'
@@ -28,6 +28,8 @@ const { useBreakpoint } = Grid
 export default function TagMangaListPage() {
   const { uuid } = useParams<{ uuid: string }>()
   const navigate = useNavigate()
+  const location = useLocation()
+  const backTo: string = (location.state as { from?: string } | null)?.from ?? '/tags'
   const [searchParams, setSearchParams] = useSearchParams()
   const screens = useBreakpoint()
   const isMobile = screens.md === false
@@ -207,7 +209,7 @@ export default function TagMangaListPage() {
       {/* Header row: back + delete on left, save on right */}
       <Space style={{ justifyContent: 'space-between', width: '100%' }}>
         <Space>
-          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)} />
+          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(backTo, { replace: true })} />
           <Popconfirm
             title={`删除标签「${tag?.name ?? ''}」？`}
             description="此操作将同时移除该标签与所有漫画的关联，且不可撤销。"

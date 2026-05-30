@@ -2,7 +2,7 @@ import { PlusOutlined, SearchOutlined } from '@ant-design/icons'
 import { Button, Form, Grid, Input, message, Modal, Select as AntSelect, Space, Table, Tag } from 'antd'
 import type { TableColumnsType, TablePaginationConfig } from 'antd'
 import { useEffect, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
 import { usePagedData } from '../hooks/usePagedData'
 import type { Tag as TagData, TagType } from '../types'
@@ -22,6 +22,7 @@ const { useBreakpoint } = Grid
 
 export default function TagListPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
   const screens = useBreakpoint()
   const isMobile = screens.md === false
@@ -157,7 +158,7 @@ export default function TagListPage() {
         loading={loading}
         size="middle"
         onRow={record => ({
-          onClick: () => navigate(`/tags/${record.uuid}/mangas?name=${encodeURIComponent(record.name)}`),
+          onClick: () => navigate(`/tags/${record.uuid}/mangas?name=${encodeURIComponent(record.name)}`, { state: { from: location.pathname + location.search } }),
           style: { cursor: 'pointer' },
         })}
       />
