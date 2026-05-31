@@ -78,13 +78,29 @@ model TokenBlacklist {
 }
 
 model User {
-  pid          Int      @id @default(autoincrement())
-  uuid         String   @unique @default(uuid())
-  username     String   @unique
-  passwordHash String   @map("password_hash")
-  role         String   @default("user")
-  createAt     DateTime @default(now()) @map("create_at")
-  updateAt     DateTime @updatedAt @map("update_at")
+  pid          Int        @id @default(autoincrement())
+  uuid         String     @unique @default(uuid())
+  username     String     @unique
+  passwordHash String     @map("password_hash")
+  role         String     @default("user")
+  createAt     DateTime   @default(now()) @map("create_at")
+  updateAt     DateTime   @updatedAt @map("update_at")
+  loginLogs    LoginLog[]
 
   @@map("user")
+}
+
+model LoginLog {
+  id        Int      @id @default(autoincrement())
+  userUuid  String?  @map("user_uuid")
+  username  String
+  ip        String
+  userAgent String   @map("user_agent")
+  success   Boolean
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User?    @relation(fields: [userUuid], references: [uuid], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([userUuid])
+  @@map("login_log")
 }

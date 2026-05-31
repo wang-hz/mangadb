@@ -1,4 +1,4 @@
-import type { User } from '../types'
+import type { LoginLog, PageResult, User } from '../types'
 import { request } from './request'
 
 export async function checkSetupStatus(): Promise<{ needsSetup: boolean }> {
@@ -56,4 +56,11 @@ export function changePassword(uuid: string, newPassword: string, currentPasswor
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ newPassword, ...(currentPassword !== undefined ? { currentPassword } : {}) }),
   })
+}
+
+export function getLoginLogs(params: { page: number; limit: number; username?: string; success?: boolean }): Promise<PageResult<LoginLog>> {
+  const q = new URLSearchParams({ page: String(params.page), limit: String(params.limit) })
+  if (params.username) q.set('username', params.username)
+  if (params.success !== undefined) q.set('success', String(params.success))
+  return request<PageResult<LoginLog>>(`/api/auth/login-logs?${q}`)
 }

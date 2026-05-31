@@ -1,4 +1,4 @@
-import { BookOutlined, DownOutlined, KeyOutlined, LogoutOutlined, TagOutlined, UserOutlined } from '@ant-design/icons'
+import { AuditOutlined, BookOutlined, DownOutlined, KeyOutlined, LogoutOutlined, TagOutlined, UserOutlined } from '@ant-design/icons'
 import type { MenuProps } from 'antd'
 import { Dropdown, Grid, Layout, Menu } from 'antd'
 import { useState } from 'react'
@@ -20,7 +20,8 @@ export default function AppLayout() {
 
   const selectedKey = location.pathname.startsWith('/mangas') ? 'mangas'
     : location.pathname.startsWith('/tags') ? 'tags'
-    : location.pathname.startsWith('/admin') ? 'admin'
+    : location.pathname.startsWith('/admin/login-logs') ? 'admin-login-logs'
+    : location.pathname.startsWith('/admin') ? 'admin-users'
     : 'mangas'
 
   async function handleLogout() {
@@ -32,10 +33,21 @@ export default function AppLayout() {
   const screens = useBreakpoint()
   const isMobile = screens.md === false
 
-  const navItems = [
+  const adminSubItems = [
+    { key: 'admin-users', icon: <UserOutlined />, label: '用户管理', onClick: () => navigate('/admin/users') },
+    { key: 'admin-login-logs', icon: <AuditOutlined />, label: '登录日志', onClick: () => navigate('/admin/login-logs') },
+  ]
+
+  const desktopNavItems = [
     { key: 'mangas', icon: <BookOutlined />, label: '漫画', onClick: () => navigate('/mangas') },
     { key: 'tags', icon: <TagOutlined />, label: '标签', onClick: () => navigate('/tags') },
-    ...(isAdmin ? [{ key: 'admin', icon: <UserOutlined />, label: '用户管理', onClick: () => navigate('/admin/users') }] : []),
+    ...(isAdmin ? [{ key: 'admin', icon: <UserOutlined />, label: '管理', children: adminSubItems }] : []),
+  ]
+
+  const mobileNavItems = [
+    { key: 'mangas', icon: <BookOutlined />, label: '漫画', onClick: () => navigate('/mangas') },
+    { key: 'tags', icon: <TagOutlined />, label: '标签', onClick: () => navigate('/tags') },
+    ...(isAdmin ? adminSubItems : []),
   ]
 
   const userMenuItems: MenuProps['items'] = [
@@ -56,7 +68,7 @@ export default function AppLayout() {
             mode="horizontal"
             selectedKeys={[selectedKey]}
             style={{ flex: 1, minWidth: 0, borderBottom: 'none' }}
-            items={navItems}
+            items={desktopNavItems}
           />
         )}
         <div style={{ flex: isMobile ? 1 : 0 }} />
@@ -89,7 +101,7 @@ export default function AppLayout() {
           display: 'flex',
           zIndex: 1000,
         }}>
-          {navItems.map(item => (
+          {mobileNavItems.map(item => (
             <div
               key={item.key}
               onClick={item.onClick}

@@ -1,6 +1,7 @@
 import { Navigate, Route, BrowserRouter as Router, Routes } from 'react-router-dom'
 import AppLayout from './components/AppLayout'
 import RequireAuth from './components/RequireAuth'
+import AdminLoginLogsPage from './pages/AdminLoginLogsPage'
 import AdminUsersPage from './pages/AdminUsersPage'
 import LoginPage from './pages/LoginPage'
 import MangaDetailPage from './pages/MangaDetailPage'
@@ -33,6 +34,7 @@ export default function App() {
           <Route path="tags" element={<TagListPage />} />
           <Route path="tags/:uuid/mangas" element={<TagMangaListPage />} />
           <Route path="admin/users" element={<RequireAdmin><AdminUsersPage /></RequireAdmin>} />
+          <Route path="admin/login-logs" element={<RequireAdmin><AdminLoginLogsPage /></RequireAdmin>} />
         </Route>
       </Routes>
     </Router>

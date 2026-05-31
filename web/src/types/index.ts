@@ -53,3 +53,13 @@ export interface User {
   role: string
   createAt: string
 }
+
+export interface LoginLog {
+  id: number
+  userUuid: string | null
+  username: string
+  ip: string
+  userAgent: string
+  success: boolean
+  createdAt: string
+}

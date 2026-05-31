@@ -1,5 +1,6 @@
 import prisma from '@/config/database';
 import { JWT_EXPIRES_IN, JWT_SECRET } from '@/config/env';
+import { loginLogService } from '@/service/loginLog.service';
 import { userService } from '@/service/user.service';
 import bcrypt from 'bcryptjs';
 import { randomUUID } from 'crypto';
@@ -47,11 +48,15 @@ export class AuthController {
     const parsed = credentialsSchema.safeParse(req.body);
     if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
     const { username, password } = parsed.data;
+    const ip = req.ip ?? 'unknown';
+    const userAgent = (req.headers['user-agent'] ?? '').slice(0, 512);
     const user = await userService.findByUsername(username);
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+      loginLogService.create({ username, ip, userAgent, success: false }).catch(() => {});
       res.status(401).json({ error: 'Invalid credentials' });
       return;
     }
+    loginLogService.create({ userUuid: user.uuid, username, ip, userAgent, success: true }).catch(() => {});
     const token = jwt.sign(
       { sub: user.username, uuid: user.uuid, role: user.role, jti: randomUUID() },
       JWT_SECRET,
@@ -59,6 +64,15 @@ export class AuthController {
     );
     res.cookie('token', token, { httpOnly: true, sameSite: 'strict' });
     res.json({ token });
+  }
+
+  async getLoginLogs(req: Request, res: Response) {
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20));
+    const username = typeof req.query.username === 'string' && req.query.username ? req.query.username : undefined;
+    const success = req.query.success === 'true' ? true : req.query.success === 'false' ? false : undefined;
+    const result = await loginLogService.list({ page, limit, username, success });
+    res.json(result);
   }
 
   async getUsers(_req: Request, res: Response) {

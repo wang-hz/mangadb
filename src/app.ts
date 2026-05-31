@@ -1,5 +1,6 @@
 import prisma from '@/config/database';
 import { CORS_ORIGIN, PORT } from '@/config/env';
+import { logger } from '@/logger';
 import { requireAuth, requireBasicOrBearer } from '@/middleware/auth';
 import authRouter from '@/route/auth.route';
 import fileRouter from '@/route/file.route';
@@ -9,6 +10,7 @@ import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import express, { NextFunction, Request, Response } from 'express';
 import helmet from 'helmet';
+import morgan from 'morgan';
 import path from 'path';
 
 const app = express();
@@ -35,6 +37,7 @@ app.use(helmet({
     preload: true,
   },
 }));
+app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
 
@@ -43,7 +46,7 @@ app.get('/health', async (req, res) => {
     await prisma.$queryRaw`SELECT 1`;
     res.json({ status: 'ok' });
   } catch (error) {
-    console.error(error);
+    logger.error('Health check failed', error);
     res.status(503).json({ status: 'error' });
   }
 });
@@ -57,7 +60,7 @@ app.use('/api', (_req, res) => res.status(404).json({ error: 'Not Found' }));
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
-  console.error(err.stack ?? err.message);
+  logger.error('Unhandled error', err);
   if (!res.headersSent) {
     res.status(500).json({ error: 'Internal server error' });
   }
@@ -68,18 +71,18 @@ app.use(express.static(webDistPath));
 app.get('/{*path}', (_req, res) => res.sendFile(path.join(webDistPath, 'index.html')));
 
 const server = app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server is running on port ${PORT}`);
+  logger.info(`Server is running on port ${PORT}`);
 });
 
 const shutdown = async () => {
-  console.log('Server is shutting down...');
+  logger.info('Server is shutting down...');
   server.close(async () => {
     await prisma.$disconnect();
-    console.log('Database disconnected');
+    logger.info('Database disconnected');
     process.exit(0);
   });
   setTimeout(() => {
-    console.error('Forcing shutdown...');
+    logger.error('Forcing shutdown...');
     process.exit(1);
   }, 10000);
 };
