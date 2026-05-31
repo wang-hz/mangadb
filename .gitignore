@@ -1,8 +1,9 @@
 /.idea/
-/.claude/
 /http/
 /node_modules/
 /web/node_modules/
 /web/dist/
 /src/generated/prisma/
 .env
+CLAUDE.md
+TODO.md
