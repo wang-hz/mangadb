@@ -44,7 +44,7 @@ export default function AdminLoginLogsPage() {
     {
       title: '时间',
       dataIndex: 'createdAt',
-      width: 160,
+      width: 200,
       render: formatDateTime,
     },
     {
