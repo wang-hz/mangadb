@@ -1,9 +1,10 @@
 import prisma from '@/config/database';
 import { CORS_ORIGIN, PORT } from '@/config/env';
 import { logger } from '@/logger';
-import { requireAuth, requireBasicOrBearer } from '@/middleware/auth';
+import { requireAdmin, requireAuth, requireBasicOrBearer } from '@/middleware/auth';
 import authRouter from '@/route/auth.route';
 import fileRouter from '@/route/file.route';
+import importRouter from '@/route/import.route';
 import mangadbRouter from '@/route/mangadb.route';
 import opdsRouter from '@/route/opds.route';
 import cookieParser from 'cookie-parser';
@@ -55,6 +56,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/opds/v1.2', requireBasicOrBearer, opdsRouter);
 app.use('/api/file', requireBasicOrBearer, fileRouter);
 app.use('/api/mangadb', requireAuth, mangadbRouter);
+app.use('/api/admin/import', requireAdmin, importRouter);
 
 app.use('/api', (_req, res) => res.status(404).json({ error: 'Not Found' }));
 

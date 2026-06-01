@@ -1,4 +1,4 @@
-import { AuditOutlined, BookOutlined, DownOutlined, KeyOutlined, LogoutOutlined, TagOutlined, UserOutlined } from '@ant-design/icons'
+import { AuditOutlined, BookOutlined, DownOutlined, ImportOutlined, KeyOutlined, LogoutOutlined, TagOutlined, UserOutlined } from '@ant-design/icons'
 import type { MenuProps } from 'antd'
 import { Dropdown, Grid, Layout, Menu } from 'antd'
 import { useState } from 'react'
@@ -42,6 +42,7 @@ export default function AppLayout() {
       { type: 'divider' as const },
       { key: 'admin-users', icon: <UserOutlined />, label: '用户管理', onClick: () => navigate('/admin/users') },
       { key: 'admin-login-logs', icon: <AuditOutlined />, label: '登录日志', onClick: () => navigate('/admin/login-logs') },
+      { key: 'admin-import', icon: <ImportOutlined />, label: '漫画导入', onClick: () => navigate('/admin/import') },
     ] : []),
     { type: 'divider' as const },
     { key: 'logout', icon: <LogoutOutlined />, label: '退出登录', danger: true, onClick: handleLogout },
