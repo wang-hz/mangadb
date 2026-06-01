@@ -101,8 +101,8 @@ function extractUploadTags(items: TagListItem[]): { tagUuids: string[]; pendingT
     pendingTags: items
       .filter((i): i is Extract<TagListItem, { kind: 'pending' }> => i.kind === 'pending')
       .map(i => i.data)
-      .filter(d => d.name.trim() && d.tagTypeName.trim())
-      .map(d => ({ name: d.name.trim(), tagTypeName: d.tagTypeName.trim() })),
+      .filter(d => d.name.trim())
+      .map(d => ({ name: d.name.trim(), tagTypeName: d.tagTypeName.trim() || 'other' })),
   }
 }
 

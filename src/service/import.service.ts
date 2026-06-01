@@ -205,9 +205,22 @@ export class ImportService {
 
       let tag = await prisma.tag.findUnique({ where: { name: trimName } });
       if (!tag) {
-        const tagType = await prisma.tagType.findFirst({
+        let tagType = await prisma.tagType.findFirst({
           where: { name: { equals: trimType, mode: 'insensitive' } },
         });
+        if (!tagType) {
+          try {
+            tagType = await prisma.tagType.create({ data: { name: trimType } });
+          } catch (e) {
+            if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+              tagType = await prisma.tagType.findFirst({
+                where: { name: { equals: trimType, mode: 'insensitive' } },
+              });
+            } else {
+              throw e;
+            }
+          }
+        }
         if (!tagType) continue;
         try {
           tag = await prisma.tag.create({ data: { name: trimName, tagTypeUuid: tagType.uuid } });
