@@ -253,11 +253,12 @@ function ItemHeader({ item, onRemove }: { item: ImportItem; onRemove: () => void
 
 // ─── ItemBody ─────────────────────────────────────────────────────────────────
 
-function ItemBody({ item, tagTypes, onFormChange, onTagsChange }: {
+function ItemBody({ item, tagTypes, onFormChange, onTagsChange, onFullnameChange }: {
   item: ImportItem
   tagTypes: TagType[]
   onFormChange: (form: FormState) => void
   onTagsChange: (tags: TagListItem[]) => void
+  onFullnameChange: (fullname: string) => void
 }) {
   const disabled = item.status === 'uploading' || item.status === 'done'
   const { form } = item
@@ -277,7 +278,11 @@ function ItemBody({ item, tagTypes, onFormChange, onTagsChange }: {
 
   return (
     <Form layout="vertical" size="small">
-      <Form.Item label="展示标题" required style={{ marginBottom: 8 }}>
+      <Form.Item label="完整文件名" style={{ marginBottom: 8 }}>
+        <Input value={item.fullname} disabled={disabled}
+          onChange={e => onFullnameChange(e.target.value)} />
+      </Form.Item>
+      <Form.Item label="显示标题" required style={{ marginBottom: 8 }}>
         <Input value={form.displayTitle} disabled={disabled}
           onChange={e => onFormChange({ ...form, displayTitle: e.target.value })} />
       </Form.Item>
@@ -285,7 +290,7 @@ function ItemBody({ item, tagTypes, onFormChange, onTagsChange }: {
         <Input value={form.originalTitle} disabled={disabled}
           onChange={e => onFormChange({ ...form, originalTitle: e.target.value })} />
       </Form.Item>
-      <Form.Item label="发布日期" style={{ marginBottom: 12 }}>
+      <Form.Item label="出版日期" style={{ marginBottom: 12 }}>
         <DatePicker value={form.publishDate} disabled={disabled} style={{ width: '100%' }}
           onChange={v => onFormChange({ ...form, publishDate: v })} />
       </Form.Item>
@@ -405,6 +410,7 @@ export default function AdminImportPage() {
         tagTypes={tagTypes}
         onFormChange={form => updateItem(item.id, { form })}
         onTagsChange={tagItems => updateItem(item.id, { tagItems })}
+        onFullnameChange={fullname => updateItem(item.id, { fullname })}
       />
     ),
   }))
