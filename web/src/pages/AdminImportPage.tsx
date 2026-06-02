@@ -4,7 +4,6 @@ import {
   CloseOutlined,
   FileZipOutlined,
   FolderOpenOutlined,
-  InboxOutlined,
   LoadingOutlined,
   PlusOutlined,
 } from '@ant-design/icons'
@@ -13,6 +12,7 @@ import {
   Button,
   Collapse,
   DatePicker,
+  Empty,
   Form,
   Input,
   Progress,
@@ -308,7 +308,6 @@ export default function AdminImportPage() {
   const navigate = useNavigate()
   const zipInputRef = useRef<HTMLInputElement>(null)
   const folderInputRef = useRef<HTMLInputElement>(null)
-  const [dragOver, setDragOver] = useState(false)
   const [tagTypes, setTagTypes] = useState<TagType[]>([])
   const [items, setItems] = useState<ImportItem[]>([])
   const [importing, setImporting] = useState(false)
@@ -342,25 +341,6 @@ export default function AdminImportPage() {
     const folderName = images[0].webkitRelativePath.split('/')[0] || images[0].name
     addItems([makeFolderItem(folderName, images)])
     e.target.value = ''
-  }
-
-  async function handleDrop(e: React.DragEvent) {
-    e.preventDefault()
-    setDragOver(false)
-    const newItems: ImportItem[] = []
-    for (const transferItem of Array.from(e.dataTransfer.items)) {
-      if (transferItem.kind !== 'file') continue
-      const entry = transferItem.webkitGetAsEntry()
-      if (!entry) continue
-      if (entry.isDirectory) {
-        const images = await getImagesFromDirEntry(entry as FileSystemDirectoryEntry)
-        if (images.length) newItems.push(makeFolderItem(entry.name, images))
-      } else if (entry.isFile && /\.(zip|cbz)$/i.test(entry.name)) {
-        const file = await getFileFromEntry(entry as FileSystemFileEntry)
-        newItems.push(makeZipItem(file))
-      }
-    }
-    if (newItems.length) addItems(newItems)
   }
 
   async function importAll() {
@@ -417,13 +397,19 @@ export default function AdminImportPage() {
 
   return (
     <>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
         <h2 style={{ margin: 0, flex: 1 }}>漫画导入</h2>
+        <Button icon={<FileZipOutlined />} onClick={() => zipInputRef.current?.click()}>
+          添加压缩包
+        </Button>
+        <Button icon={<FolderOpenOutlined />} onClick={() => folderInputRef.current?.click()}>
+          添加文件夹
+        </Button>
         {doneCount > 0 && (
-          <Button size="small" onClick={clearDone}>清除已完成 ({doneCount})</Button>
+          <Button onClick={clearDone}>清除已完成 ({doneCount})</Button>
         )}
         {items.some(i => i.result) && (
-          <Button size="small" onClick={() => navigate('/mangas')}>前往漫画列表</Button>
+          <Button onClick={() => navigate('/mangas')}>前往漫画列表</Button>
         )}
         <Button
           type="primary"
@@ -435,34 +421,6 @@ export default function AdminImportPage() {
         </Button>
       </div>
 
-      {/* Drop zone */}
-      <div
-        onDrop={handleDrop}
-        onDragOver={e => { e.preventDefault(); setDragOver(true) }}
-        onDragLeave={() => setDragOver(false)}
-        style={{
-          border: `2px dashed ${dragOver ? '#1677ff' : '#d9d9d9'}`,
-          borderRadius: 8,
-          padding: '24px 0',
-          textAlign: 'center',
-          background: dragOver ? '#e6f4ff' : '#fafafa',
-          transition: 'all 0.2s',
-          marginBottom: 16,
-          cursor: 'default',
-        }}
-      >
-        <InboxOutlined style={{ fontSize: 40, color: '#999', marginBottom: 8 }} />
-        <p style={{ margin: '0 0 12px', color: '#666' }}>拖拽 ZIP / CBZ 文件或文件夹到此处</p>
-        <Space>
-          <Button icon={<FileZipOutlined />} onClick={() => zipInputRef.current?.click()}>
-            添加压缩包
-          </Button>
-          <Button icon={<FolderOpenOutlined />} onClick={() => folderInputRef.current?.click()}>
-            添加文件夹
-          </Button>
-        </Space>
-      </div>
-
       {/* Hidden inputs */}
       <input ref={zipInputRef} type="file" multiple accept=".zip,.cbz"
         style={{ display: 'none' }} onChange={handleZipInputChange} />
@@ -472,10 +430,15 @@ export default function AdminImportPage() {
         style={{ display: 'none' }} onChange={handleFolderInputChange} />
 
       {/* Import queue */}
-      {items.length > 0 && (
+      {items.length > 0 ? (
         <Collapse
           items={collapseItems}
           defaultActiveKey={items.map(i => i.id)}
+        />
+      ) : (
+        <Empty
+          description="暂无待导入漫画，请添加压缩包或文件夹"
+          style={{ marginTop: 80 }}
         />
       )}
     </>
