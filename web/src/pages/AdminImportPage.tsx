@@ -106,30 +106,6 @@ function extractUploadTags(items: TagListItem[]): { tagUuids: string[]; pendingT
   }
 }
 
-async function readAllEntries(reader: FileSystemDirectoryReader): Promise<FileSystemEntry[]> {
-  const all: FileSystemEntry[] = []
-  while (true) {
-    const batch = await new Promise<FileSystemEntry[]>((res, rej) => reader.readEntries(res, rej))
-    if (!batch.length) break
-    all.push(...batch)
-  }
-  return all
-}
-
-async function getFileFromEntry(entry: FileSystemFileEntry): Promise<File> {
-  return new Promise((res, rej) => entry.file(res, rej))
-}
-
-async function getImagesFromDirEntry(entry: FileSystemDirectoryEntry): Promise<File[]> {
-  const entries = await readAllEntries(entry.createReader())
-  const files: File[] = []
-  for (const e of entries) {
-    if (e.isFile && IMAGE_EXT.test(e.name)) {
-      files.push(await getFileFromEntry(e as FileSystemFileEntry))
-    }
-  }
-  return files
-}
 
 function makeZipItem(file: File): ImportItem {
   const name = stripArchiveExtension(file.name)
