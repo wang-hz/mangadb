@@ -4,8 +4,9 @@ import { CSS } from '@dnd-kit/utilities'
 import { ArrowLeftOutlined, DeleteOutlined, StarFilled, StarOutlined } from '@ant-design/icons'
 import { Button, message, Space, Spin } from 'antd'
 import { memo, useCallback, useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api'
+import { getRole } from '../utils/token'
 
 const IMG_FALLBACK = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 2 3'%3E%3Crect fill='%23f0f0f0' width='2' height='3'/%3E%3C/svg%3E"
 const onImgError = (e: React.SyntheticEvent<HTMLImageElement>) => {
@@ -106,6 +107,7 @@ const SortablePageCell = memo(function SortablePageCell({ filename, index, isCov
 export default function MangaPagesEditorPage() {
   const { uuid } = useParams<{ uuid: string }>()
   const navigate = useNavigate()
+  if (getRole() !== 'admin') return <Navigate to={`/mangas/${uuid}`} replace />
   const [loading, setLoading] = useState(true)
   const [allFolderFiles, setAllFolderFiles] = useState<string[]>([])
   const [editedPages, setEditedPages] = useState<string[]>([])

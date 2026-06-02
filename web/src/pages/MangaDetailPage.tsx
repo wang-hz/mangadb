@@ -6,6 +6,7 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api'
 import type { Manga, Tag as TagData } from '../types'
 import { formatDateTime } from '../utils/date'
+import { getRole } from '../utils/token'
 
 const IMG_FALLBACK = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 2 3'%3E%3Crect fill='%23f0f0f0' width='2' height='3'/%3E%3C/svg%3E"
 const onImgError = (e: React.SyntheticEvent<HTMLImageElement>) => {
@@ -22,6 +23,7 @@ export default function MangaDetailPage() {
   const backTo: string = (location.state as { from?: string } | null)?.from ?? '/mangas'
   const screens = useBreakpoint()
   const isMobile = screens.md === false
+  const isAdmin = getRole() === 'admin'
   const [manga, setManga] = useState<Manga | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -128,13 +130,15 @@ export default function MangaDetailPage() {
           >
             开始阅读
           </Button>
-          <Button
-            icon={<OrderedListOutlined />}
-            block
-            onClick={() => navigate(`/mangas/${manga.uuid}/pages`)}
-          >
-            页面管理
-          </Button>
+          {isAdmin && (
+            <Button
+              icon={<OrderedListOutlined />}
+              block
+              onClick={() => navigate(`/mangas/${manga.uuid}/pages`)}
+            >
+              页面管理
+            </Button>
+          )}
         </div>
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 16 }}>
           <Descriptions bordered column={isMobile ? 1 : 2} size="small">
@@ -143,16 +147,16 @@ export default function MangaDetailPage() {
           </Descriptions>
           <Form form={form} layout="vertical">
             <Form.Item label="完整文件名" name="fullname" rules={[{ required: true, message: '请输入完整文件名' }]}>
-              <Input />
+              <Input disabled={!isAdmin} />
             </Form.Item>
             <Form.Item label="显示标题" name="displayTitle" rules={[{ required: true, message: '请输入显示标题' }]}>
-              <Input />
+              <Input disabled={!isAdmin} />
             </Form.Item>
             <Form.Item label="原始标题" name="originalTitle" rules={[{ required: true, message: '请输入原始标题' }]}>
-              <Input />
+              <Input disabled={!isAdmin} />
             </Form.Item>
             <Form.Item label="出版日期" name="publishDate" style={{ marginBottom: 0 }}>
-              <DatePicker style={{ width: '100%' }} />
+              <DatePicker style={{ width: '100%' }} disabled={!isAdmin} />
             </Form.Item>
           </Form>
           <div>
@@ -165,15 +169,15 @@ export default function MangaDetailPage() {
                       <Tag
                         key={mt.tag.uuid}
                         color="blue"
-                        closable
-                        onClose={() => handleDeleteTag(mt.tag.uuid)}
+                        closable={isAdmin}
+                        onClose={isAdmin ? () => handleDeleteTag(mt.tag.uuid) : undefined}
                         onClick={() => navigate(`/tags/${mt.tag.uuid}/mangas`, { state: { from: location.pathname } })}
                         style={{ cursor: 'pointer' }}
                       >
                         {mt.tag.tagType.name}: {mt.tag.name}
                       </Tag>
                     ))}
-                    {pendingAddTags.map(t => (
+                    {isAdmin && pendingAddTags.map(t => (
                       <Tag
                         key={t.uuid}
                         color="orange"
@@ -186,28 +190,32 @@ export default function MangaDetailPage() {
                   </>
               }
             </Space>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <Select
-                mode="multiple"
-                style={{ flex: 1 }}
-                placeholder="搜索并选择标签"
-                value={selectedTagUuids}
-                onChange={setSelectedTagUuids}
-                onSearch={setTagSearch}
-                filterOption={false}
-                showSearch
-                options={tagOptions
-                  .filter(t => !existingTagUuids.has(t.uuid) && !pendingAddTags.some(pt => pt.uuid === t.uuid))
-                  .map(t => ({ value: t.uuid, label: `${t.tagType.name}: ${t.name}` }))}
-              />
-              <Button onClick={handleStageTags} disabled={selectedTagUuids.length === 0}>
-                添加
-              </Button>
-            </div>
+            {isAdmin && (
+              <div style={{ display: 'flex', gap: 8 }}>
+                <Select
+                  mode="multiple"
+                  style={{ flex: 1 }}
+                  placeholder="搜索并选择标签"
+                  value={selectedTagUuids}
+                  onChange={setSelectedTagUuids}
+                  onSearch={setTagSearch}
+                  filterOption={false}
+                  showSearch
+                  options={tagOptions
+                    .filter(t => !existingTagUuids.has(t.uuid) && !pendingAddTags.some(pt => pt.uuid === t.uuid))
+                    .map(t => ({ value: t.uuid, label: `${t.tagType.name}: ${t.name}` }))}
+                />
+                <Button onClick={handleStageTags} disabled={selectedTagUuids.length === 0}>
+                  添加
+                </Button>
+              </div>
+            )}
           </div>
-          <Button type="primary" loading={saving} onClick={handleSave} style={{ alignSelf: 'flex-start' }}>
-            保存
-          </Button>
+          {isAdmin && (
+            <Button type="primary" loading={saving} onClick={handleSave} style={{ alignSelf: 'flex-start' }}>
+              保存
+            </Button>
+          )}
         </div>
       </div>
     </Space>

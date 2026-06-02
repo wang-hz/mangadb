@@ -10,6 +10,7 @@ import { usePagedData } from '../hooks/usePagedData'
 import { useViewMode } from '../hooks/useViewMode'
 import type { Manga, Tag as TagData, TagType } from '../types'
 import { formatDate, formatDateTime } from '../utils/date'
+import { getRole } from '../utils/token'
 
 type SortBy = 'updateAt' | 'createAt' | 'publishDate'
 type SortOrder = 'asc' | 'desc'
@@ -39,6 +40,7 @@ export default function TagMangaListPage() {
   const search = searchParams.get('search') ?? ''
   const sort = (VALID_SORTS.has(searchParams.get('sort') ?? '') ? searchParams.get('sort')! : 'updateAt-desc') as `${SortBy}-${SortOrder}`
 
+  const isAdmin = getRole() === 'admin'
   const [tag, setTag] = useState<TagData | null>(null)
   const [searchInput, setSearchInput] = useState(search)
   const [tagTypes, setTagTypes] = useState<TagType[]>([])
@@ -210,41 +212,45 @@ export default function TagMangaListPage() {
       <Space style={{ justifyContent: 'space-between', width: '100%' }}>
         <Space>
           <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(backTo, { replace: true })} />
-          <Popconfirm
-            title={`删除标签「${tag?.name ?? ''}」？`}
-            description="此操作将同时移除该标签与所有漫画的关联，且不可撤销。"
-            onConfirm={handleDelete}
-            okText="确认删除"
-            cancelText="取消"
-            okButtonProps={{ danger: true }}
-            disabled={!tag}
-          >
-            <Button danger icon={<DeleteOutlined />} loading={deleting} disabled={!tag}>
-              删除标签
-            </Button>
-          </Popconfirm>
+          {isAdmin && (
+            <Popconfirm
+              title={`删除标签「${tag?.name ?? ''}」？`}
+              description="此操作将同时移除该标签与所有漫画的关联，且不可撤销。"
+              onConfirm={handleDelete}
+              okText="确认删除"
+              cancelText="取消"
+              okButtonProps={{ danger: true }}
+              disabled={!tag}
+            >
+              <Button danger icon={<DeleteOutlined />} loading={deleting} disabled={!tag}>
+                删除标签
+              </Button>
+            </Popconfirm>
+          )}
         </Space>
-        <Button
-          type="primary"
-          loading={saving}
-          disabled={!isDirty}
-          onClick={handleSave}
-        >
-          保存
-        </Button>
+        {isAdmin && (
+          <Button
+            type="primary"
+            loading={saving}
+            disabled={!isDirty}
+            onClick={handleSave}
+          >
+            保存
+          </Button>
+        )}
       </Space>
 
-      {/* Inline-editable tag info */}
+      {/* Tag info */}
       <Form form={form} onValuesChange={() => setIsDirty(true)}>
         <Descriptions bordered size="small" column={isMobile ? 1 : 2}>
           <Descriptions.Item label="标签名称">
             <Form.Item name="name" noStyle rules={[{ required: true, message: '请输入标签名称' }]}>
-              <Input style={{ width: '100%' }} />
+              <Input style={{ width: '100%' }} disabled={!isAdmin} />
             </Form.Item>
           </Descriptions.Item>
           <Descriptions.Item label="标签类型">
             <Form.Item name="type" noStyle rules={[{ required: true, message: '请选择标签类型' }]}>
-              <Select style={{ width: '100%' }} options={tagTypes.map(t => ({ value: t.name, label: t.name }))} />
+              <Select style={{ width: '100%' }} options={tagTypes.map(t => ({ value: t.name, label: t.name }))} disabled={!isAdmin} />
             </Form.Item>
           </Descriptions.Item>
           <Descriptions.Item label="创建时间">{tag ? formatDateTime(tag.createAt) : '-'}</Descriptions.Item>
@@ -276,12 +282,16 @@ export default function TagMangaListPage() {
           options={SORT_OPTIONS}
           style={{ width: isMobile ? '100%' : 180 }}
         />
-        <Button icon={<TagsOutlined />} onClick={() => setBatchTagModalOpen(true)}>
-          批量添加标签
-        </Button>
-        <Button icon={<CalendarOutlined />} onClick={() => setBatchDateModalOpen(true)}>
-          批量设置出版日期
-        </Button>
+        {isAdmin && (
+          <Button icon={<TagsOutlined />} onClick={() => setBatchTagModalOpen(true)}>
+            批量添加标签
+          </Button>
+        )}
+        {isAdmin && (
+          <Button icon={<CalendarOutlined />} onClick={() => setBatchDateModalOpen(true)}>
+            批量设置出版日期
+          </Button>
+        )}
         {!isMobile && (
           <Segmented
             value={viewMode}

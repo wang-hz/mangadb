@@ -7,6 +7,7 @@ import { api } from '../api'
 import { usePagedData } from '../hooks/usePagedData'
 import type { Tag as TagData, TagType } from '../types'
 import { formatDateTime } from '../utils/date'
+import { getRole } from '../utils/token'
 
 type SortKey = 'updateAt-desc' | 'updateAt-asc' | 'createAt-desc' | 'createAt-asc'
 
@@ -23,6 +24,7 @@ const { useBreakpoint } = Grid
 export default function TagListPage() {
   const navigate = useNavigate()
   const location = useLocation()
+  const isAdmin = getRole() === 'admin'
   const [searchParams, setSearchParams] = useSearchParams()
   const screens = useBreakpoint()
   const isMobile = screens.md === false
@@ -145,9 +147,11 @@ export default function TagListPage() {
             style={{ width: isMobile ? 'calc(50% - 4px)' : 180 }}
           />
         </div>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateModalOpen(true)}>
-          新建标签
-        </Button>
+        {isAdmin && (
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateModalOpen(true)}>
+            新建标签
+          </Button>
+        )}
       </div>
 
       <Table
