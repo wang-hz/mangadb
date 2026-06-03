@@ -67,9 +67,9 @@ export function parseFilename(name: string): ParsedFilename {
 
   const { time, event, artist, title, tags } = match.groups
 
-  // "[Circle (Author)]" → circle + artist
+  // "[Group (Author)]" → group + artist
   const artistRaw = artist?.trim() ?? ''
-  const { main: circle, sub: parsedArtist } = artistRaw
+  const { main: group, sub: parsedArtist } = artistRaw
     ? splitTrailingParen(artistRaw)
     : { main: null, sub: null }
 
@@ -87,7 +87,7 @@ export function parseFilename(name: string): ParsedFilename {
     displayTitle,
     originalTitle,
     publishDate: time ? parseDate(time) : null,
-    group: circle ?? null,
+    group: parsedArtist !== null ? group : null,
     artist: parsedArtist ?? (artistRaw || null),
     event: event?.trim() ?? null,
     parody,
