@@ -14,7 +14,8 @@ COPY . .
 
 RUN DATABASE_URL=postgres://dummy:dummy@localhost:5432/dummy npx prisma generate
 RUN npm run build
-RUN npm run web:build
+ARG VITE_APP_VERSION=dev
+RUN VITE_APP_VERSION=${VITE_APP_VERSION} npm run web:build
 
 FROM --platform=$TARGETPLATFORM node:20-alpine
 

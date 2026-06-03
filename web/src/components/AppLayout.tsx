@@ -1,4 +1,4 @@
-import { AuditOutlined, BookOutlined, DownOutlined, ImportOutlined, KeyOutlined, LogoutOutlined, TagOutlined, UserOutlined } from '@ant-design/icons'
+import { AuditOutlined, BookOutlined, DownOutlined, GithubOutlined, ImportOutlined, KeyOutlined, LogoutOutlined, TagOutlined, UserOutlined } from '@ant-design/icons'
 import type { MenuProps } from 'antd'
 import { Dropdown, Grid, Layout, Menu } from 'antd'
 import { useState } from 'react'
@@ -6,6 +6,8 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import ChangePasswordModal from './ChangePasswordModal'
 import { logout } from '../api/auth'
 import { clearSession, getRole, getUsername, getUuid } from '../utils/token'
+
+declare const __APP_VERSION__: string
 
 const { Header, Content } = Layout
 const { useBreakpoint } = Grid
@@ -51,9 +53,27 @@ export default function AppLayout() {
   return (
     <Layout style={{ minHeight: '100vh' }}>
       <Header style={{ display: 'flex', alignItems: 'center', padding: isMobile ? '0 16px' : '0 24px', gap: 16 }}>
-        <span style={{ color: 'white', fontWeight: 'bold', fontSize: '18px', whiteSpace: 'nowrap' }}>
-          MangaDB
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, whiteSpace: 'nowrap' }}>
+          <img src="/favicon.svg" style={{ width: 30, height: 30, flexShrink: 0 }} />
+          <div>
+            <div style={{ color: 'white', fontWeight: 700, fontSize: 17, lineHeight: 1.2 }}>MangaDB</div>
+            {!isMobile && (
+              <div style={{ fontSize: 11, lineHeight: 1.3, color: 'rgba(255,255,255,0.38)', marginTop: 1 }}>
+                <a
+                  href="https://github.com/wang-hz/mangadb"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: 'inherit', textDecoration: 'none' }}
+                >
+                  <GithubOutlined style={{ marginRight: 3 }} />
+                  GitHub
+                </a>
+                <span style={{ margin: '0 5px', opacity: 0.6 }}>·</span>
+                v{__APP_VERSION__}
+              </div>
+            )}
+          </div>
+        </div>
         {!isMobile && (
           <Menu
             theme="dark"
