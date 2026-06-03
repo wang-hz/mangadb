@@ -5,12 +5,16 @@ A self-hosted manga library server with a web UI and OPDS feed support.
 ## Features
 
 - Browse and manage your manga collection through a web interface
-- Online reader with flip and scroll modes; set the cover from within the reader
+- Online reader with flip and scroll modes; set the cover from within the reader; touch swipe gestures on mobile
 - Tag-based organization with customizable tag types; inline tag editing on the detail page
 - Batch operations: set publish date or add a tag across all mangas in a tag
+- **Bulk import**: drag-and-drop ZIP/CBZ archives or image folders; filenames are auto-parsed for title, group, artist, event, parody, publish date, and tags
 - OPDS v1.2 catalog feed for compatibility with e-reader apps (e.g. Kyobook, Moon+ Reader)
 - Download manga as ZIP archives
 - User authentication with admin/user roles and a first-time setup wizard
+- Admin login log: view login history with username, IP, user agent, and result
+- PWA support — installable on mobile devices
+- Mobile-responsive UI with bottom tab navigation
 - Docker support with images published to GitHub Container Registry
 
 ## Tech Stack
@@ -116,6 +120,31 @@ services:
 volumes:
   pgdata:
 ```
+
+## Import Filename Convention
+
+The import page auto-parses filenames using this pattern:
+
+```
+[YYYYMMDD] (Event) [Group (Artist)] Title｜Display Title (Parody) [tag1][tag2].zip
+```
+
+- `[YYYYMMDD]` or `[YYYY-MM]` → publish date
+- `(Event)` → event tag
+- `[Group (Artist)]` → group and artist tags; `[Author]` (no parens) → artist only
+- `Title｜Display Title` → original and display title split on `｜`; single title used for both if no separator
+- `(Parody)` trailing the title → parody tag
+- `[tag]` → extra tags (tag type left blank, defaults to `other`)
+
+All tag types are created automatically if they don't already exist.
+
+## Deployment
+
+For production or public-facing deployments:
+
+- **Always place behind a reverse proxy** (e.g. Nginx, Caddy) that terminates TLS. Do not expose port 3000 directly to the internet.
+- **Set a strong `JWT_SECRET`** — the default value `change-this-secret` is insecure.
+- **Change the default database password** — do not use `manga`/`manga` from the example compose file.
 
 ## Building
 
