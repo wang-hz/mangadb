@@ -1,4 +1,4 @@
-import { Card, Empty, Spin } from 'antd'
+import { Empty } from 'antd'
 import { memo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { Manga } from '../types'
@@ -22,43 +22,9 @@ const titleStyle = {
   WebkitBoxOrient: 'vertical',
 } as React.CSSProperties
 
-const coverContainerStyle = { aspectRatio: '2/3', overflow: 'hidden', background: '#f5f5f5' } as const
+const coverContainerStyle = { aspectRatio: '2/3', overflow: 'hidden', background: '#f5f5f5', borderRadius: '8px 8px 0 0' } as const
 const coverImgStyle = { width: '100%', height: '100%', objectFit: 'cover' as const, borderRadius: 0 }
-const cardBodyStyle = { body: { padding: '8px 10px' } }
-
-interface CardProps {
-  manga: Manga
-  from?: string
-}
-
-const MangaCard = memo(function MangaCard({ manga, from }: CardProps) {
-  const navigate = useNavigate()
-  const handleClick = useCallback(
-    () => navigate(`/mangas/${manga.uuid}`, from ? { state: { from } } : undefined),
-    [navigate, manga.uuid, from],
-  )
-
-  return (
-    <Card
-      hoverable
-      cover={
-        <div style={coverContainerStyle}>
-          <CoverImage uuid={manga.uuid} cover={manga.cover} style={coverImgStyle} />
-        </div>
-      }
-      styles={cardBodyStyle}
-      onClick={handleClick}
-    >
-      <div style={titleStyle}>{manga.displayTitle}</div>
-      {manga.publishDate && (
-        <div style={{ fontSize: 11, color: '#999', marginTop: 2 }}>
-          {formatDate(manga.publishDate)}
-        </div>
-      )}
-    </Card>
-  )
-})
-
+const dateStyle = { fontSize: 11, color: '#999', marginTop: 2 } as const
 const gridStyle = {
   display: 'grid',
   gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
@@ -66,18 +32,46 @@ const gridStyle = {
   minHeight: 200,
 } as const
 
-export default function MangaGrid({ data, loading, from }: Props) {
+interface CardProps {
+  manga: Manga
+  onNavigate: (uuid: string) => void
+}
+
+const MangaCard = memo(function MangaCard({ manga, onNavigate }: CardProps) {
+  const handleClick = useCallback(() => onNavigate(manga.uuid), [onNavigate, manga.uuid])
+
   return (
-    <Spin spinning={loading}>
-      {!loading && data.length === 0 ? (
-        <Empty description="暂无漫画" style={{ padding: '48px 0' }} />
-      ) : (
-        <div style={gridStyle}>
-          {data.map(manga => (
-            <MangaCard key={manga.uuid} manga={manga} from={from} />
-          ))}
-        </div>
-      )}
-    </Spin>
+    <div className="manga-card" onClick={handleClick}>
+      <div style={coverContainerStyle}>
+        <CoverImage uuid={manga.uuid} cover={manga.cover} thumb style={coverImgStyle} />
+      </div>
+      <div style={{ padding: '8px 10px' }}>
+        <div style={titleStyle}>{manga.displayTitle}</div>
+        {manga.publishDate && (
+          <div style={dateStyle}>{formatDate(manga.publishDate)}</div>
+        )}
+      </div>
+    </div>
+  )
+})
+
+export default function MangaGrid({ data, loading, from }: Props) {
+  const navigate = useNavigate()
+
+  const handleNavigate = useCallback(
+    (uuid: string) => navigate(`/mangas/${uuid}`, from ? { state: { from } } : undefined),
+    [navigate, from],
+  )
+
+  if (loading) return <div style={{ minHeight: 200 }} />
+
+  if (data.length === 0) return <Empty description="暂无漫画" style={{ padding: '48px 0' }} />
+
+  return (
+    <div style={gridStyle}>
+      {data.map(manga => (
+        <MangaCard key={manga.uuid} manga={manga} onNavigate={handleNavigate} />
+      ))}
+    </div>
   )
 }

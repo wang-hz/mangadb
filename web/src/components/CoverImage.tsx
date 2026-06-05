@@ -7,12 +7,14 @@ interface Props {
   /** Index into manga.pages used as the cover; defaults to 0 */
   cover?: number | null
   style?: React.CSSProperties
+  /** Request a small thumbnail instead of the full image */
+  thumb?: boolean
 }
 
-export default function CoverImage({ uuid, cover, style }: Props) {
+export default function CoverImage({ uuid, cover, style, thumb }: Props) {
   return (
     <img
-      src={`/api/file/mangas/${uuid}/pages/${cover ?? 0}`}
+      src={`/api/file/mangas/${uuid}/pages/${cover ?? 0}${thumb ? '?thumb=1' : ''}`}
       alt=""
       loading="lazy"
       decoding="async"

@@ -1,3 +1,31 @@
+/* Manga grid card — hover uses only compositor properties (transform + opacity)
+   to avoid repaint on every mouseover event. The shadow is pre-rendered on
+   ::after and revealed by opacity transition; transform handles the lift. */
+.manga-card {
+  border: 1px solid #d9d9d9;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  position: relative;
+  transition: transform 0.15s ease;
+}
+.manga-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.14);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  pointer-events: none;
+}
+.manga-card:hover {
+  transform: translateY(-2px);
+}
+.manga-card:hover::after {
+  opacity: 1;
+}
+
 /* Override antd disabled field styles to look similar to editable state */
 
 .ant-input[disabled],

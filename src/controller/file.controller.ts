@@ -5,6 +5,10 @@ import { Request, Response } from 'express';
 import fs from 'fs';
 import mime from 'mime-types';
 import path from 'path';
+import sharp from 'sharp';
+
+const THUMB_WIDTH = 300;
+const THUMB_DIR = path.join(DATA_DIR, '.thumbs');
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -39,6 +43,41 @@ async function serveImageFile(req: Request, res: Response, imgPath: string): Pro
     if (!res.headersSent) res.sendStatus(err.code === 'ENOENT' ? 404 : 500);
   });
   stream.pipe(res);
+}
+
+async function serveThumbnail(req: Request, res: Response, imgPath: string, cacheKey: string): Promise<void> {
+  const thumbPath = path.join(THUMB_DIR, `${cacheKey}.webp`);
+
+  // Serve from cache if it exists and is newer than the source
+  try {
+    const [srcStat, thumbStat] = await Promise.all([
+      fs.promises.stat(imgPath),
+      fs.promises.stat(thumbPath),
+    ]);
+    if (thumbStat.mtimeMs >= srcStat.mtimeMs) {
+      res.setHeader('Cache-Control', 'private, max-age=86400');
+      res.setHeader('Content-Type', 'image/webp');
+      const stream = fs.createReadStream(thumbPath);
+      stream.on('error', () => { if (!res.headersSent) res.sendStatus(500) });
+      stream.pipe(res);
+      return;
+    }
+  } catch {
+    // Cache miss — generate below
+  }
+
+  await fs.promises.mkdir(path.join(THUMB_DIR, path.dirname(cacheKey)), { recursive: true });
+
+  const data = await sharp(imgPath)
+    .resize(THUMB_WIDTH, undefined, { withoutEnlargement: true })
+    .webp({ quality: 80 })
+    .toBuffer();
+
+  await fs.promises.writeFile(thumbPath, data);
+
+  res.setHeader('Cache-Control', 'private, max-age=86400');
+  res.setHeader('Content-Type', 'image/webp');
+  res.send(data);
 }
 
 export class FileController {
@@ -113,6 +152,11 @@ export class FileController {
     const mangaPath = path.join(DATA_DIR, mangaUuid);
     const imgPath = safeJoin(mangaPath, imgFilename);
     if (!imgPath) return res.sendStatus(400);
+
+    if (req.query.thumb === '1') {
+      await serveThumbnail(req, res, imgPath, `${mangaUuid}/${pageIndex}`);
+      return;
+    }
     await serveImageFile(req, res, imgPath);
   }
 }
