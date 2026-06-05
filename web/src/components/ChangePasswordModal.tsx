@@ -1,5 +1,6 @@
 import { Form, Input, Modal, message } from 'antd'
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { changePassword } from '../api/auth'
 
 interface Props {
@@ -10,6 +11,7 @@ interface Props {
 }
 
 export default function ChangePasswordModal({ open, onClose, targetUuid, isSelf }: Props) {
+  const { t } = useTranslation()
   const [form] = Form.useForm()
   const [submitting, setSubmitting] = useState(false)
 
@@ -18,15 +20,15 @@ export default function ChangePasswordModal({ open, onClose, targetUuid, isSelf 
     setSubmitting(true)
     try {
       await changePassword(targetUuid, values.newPassword, isSelf ? values.currentPassword : undefined)
-      message.success('密码已修改')
+      message.success(t('changePw.success'))
       form.resetFields()
       onClose()
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : ''
       if (msg.includes('401') || msg.toLowerCase().includes('incorrect')) {
-        message.error('当前密码错误')
+        message.error(t('changePw.wrongCurrent'))
       } else {
-        message.error('修改失败，请重试')
+        message.error(t('changePw.error'))
       }
     } finally {
       setSubmitting(false)
@@ -40,38 +42,38 @@ export default function ChangePasswordModal({ open, onClose, targetUuid, isSelf 
 
   return (
     <Modal
-      title="修改密码"
+      title={t('changePw.title')}
       open={open}
       onOk={handleOk}
       onCancel={handleCancel}
       confirmLoading={submitting}
-      okText="确认修改"
-      cancelText="取消"
+      okText={t('changePw.ok')}
+      cancelText={t('common.cancel')}
       destroyOnHidden
     >
       <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
         {isSelf && (
-          <Form.Item name="currentPassword" label="当前密码" rules={[{ required: true, message: '请输入当前密码' }]}>
+          <Form.Item name="currentPassword" label={t('changePw.current')} rules={[{ required: true, message: t('changePw.currentRequired') }]}>
             <Input.Password autoFocus />
           </Form.Item>
         )}
         <Form.Item
           name="newPassword"
-          label="新密码"
-          rules={[{ required: true, message: '请输入新密码' }, { min: 8, message: '密码至少 8 位' }]}
+          label={t('changePw.new')}
+          rules={[{ required: true, message: t('changePw.newRequired') }, { min: 8, message: t('common.passwordMinLength') }]}
         >
           <Input.Password autoFocus={!isSelf} />
         </Form.Item>
         <Form.Item
           name="confirm"
-          label="确认新密码"
+          label={t('changePw.confirmNew')}
           dependencies={['newPassword']}
           rules={[
-            { required: true, message: '请确认新密码' },
+            { required: true, message: t('changePw.confirmRequired') },
             ({ getFieldValue }) => ({
               validator(_, value) {
                 if (!value || getFieldValue('newPassword') === value) return Promise.resolve()
-                return Promise.reject(new Error('两次密码不一致'))
+                return Promise.reject(new Error(t('common.passwordMismatch')))
               },
             }),
           ]}

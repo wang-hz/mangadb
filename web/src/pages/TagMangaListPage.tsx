@@ -2,7 +2,8 @@ import { AppstoreOutlined, ArrowLeftOutlined, BarsOutlined, CalendarOutlined, De
 import { Button, DatePicker, Descriptions, Form, Grid, Input, message, Modal, Pagination, Popconfirm, Segmented, Select, Space, Table } from 'antd'
 import dayjs from 'dayjs'
 import type { TableColumnsType, TablePaginationConfig } from 'antd'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
 import MangaGrid from '../components/MangaGrid'
@@ -14,22 +15,19 @@ import { getRole } from '../utils/token'
 
 type SortBy = 'updateAt' | 'createAt' | 'publishDate'
 type SortOrder = 'asc' | 'desc'
-const SORT_OPTIONS: { label: string; value: `${SortBy}-${SortOrder}` }[] = [
-  { label: '更新时间（最新）', value: 'updateAt-desc' },
-  { label: '更新时间（最早）', value: 'updateAt-asc' },
-  { label: '创建时间（最新）', value: 'createAt-desc' },
-  { label: '创建时间（最早）', value: 'createAt-asc' },
-  { label: '出版日期（最新）', value: 'publishDate-desc' },
-  { label: '出版日期（最早）', value: 'publishDate-asc' },
-]
 
-const VALID_SORTS: Set<string> = new Set(SORT_OPTIONS.map(o => o.value))
+const VALID_SORTS: Set<string> = new Set([
+  'updateAt-desc', 'updateAt-asc',
+  'createAt-desc', 'createAt-asc',
+  'publishDate-desc', 'publishDate-asc',
+])
 const { useBreakpoint } = Grid
 
 export default function TagMangaListPage() {
   const { uuid } = useParams<{ uuid: string }>()
   const navigate = useNavigate()
   const location = useLocation()
+  const { t } = useTranslation()
   const backTo: string = (location.state as { from?: string } | null)?.from ?? '/tags'
   const [searchParams, setSearchParams] = useSearchParams()
   const screens = useBreakpoint()
@@ -45,13 +43,11 @@ export default function TagMangaListPage() {
   const [searchInput, setSearchInput] = useState(search)
   const [tagTypes, setTagTypes] = useState<TagType[]>([])
 
-  // ── Inline edit ────────────────────────────────────────────────────────────
   const [form] = Form.useForm()
   const [isDirty, setIsDirty] = useState(false)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
-  // ── Batch operations ───────────────────────────────────────────────────────
   const [batchTagModalOpen, setBatchTagModalOpen] = useState(false)
   const [batchTagOptions, setBatchTagOptions] = useState<TagData[]>([])
   const [batchTagSearch, setBatchTagSearch] = useState('')
@@ -69,45 +65,37 @@ export default function TagMangaListPage() {
   useEffect(() => {
     api.getTagTypes({ page: 1, limit: 100 })
       .then(res => setTagTypes(res.items))
-      .catch(() => message.error('加载标签类型失败'))
+      .catch(() => message.error(t('tag.loadTypeError')))
   }, [])
 
   useEffect(() => {
     if (!uuid) return
     api.getTag(uuid)
-      .then(t => {
-        setTag(t)
-        form.setFieldsValue({ name: t.name, type: t.tagType.name })
-      })
-      .catch(() => message.error('加载标签信息失败'))
+      .then(tg => { setTag(tg); form.setFieldsValue({ name: tg.name, type: tg.tagType.name }) })
+      .catch(() => message.error(t('tagDetail.loadTagError')))
   }, [uuid, form])
 
   useEffect(() => {
     if (!batchTagModalOpen) return
     api.getTags({ page: 1, limit: 50, search: batchTagSearch || undefined })
       .then(res => setBatchTagOptions(res.items))
-      .catch(() => message.error('加载标签失败'))
+      .catch(() => message.error(t('tagDetail.loadTagsError')))
   }, [batchTagSearch, batchTagModalOpen])
 
-  // ── Handlers ───────────────────────────────────────────────────────────────
   const handleSave = async () => {
     if (!uuid) return
     let values: { name: string; type: string }
-    try {
-      values = await form.validateFields()
-    } catch {
-      return
-    }
+    try { values = await form.validateFields() } catch { return }
     setSaving(true)
     try {
       const updated = await api.updateTag(uuid, values)
       setTag(updated)
       form.setFieldsValue({ name: updated.name, type: updated.tagType.name })
       setIsDirty(false)
-      message.success('标签更新成功')
+      message.success(t('tagDetail.updateSuccess'))
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : ''
-      message.error(msg.startsWith('409') ? '标签名已存在' : '更新失败')
+      message.error(msg.startsWith('409') ? t('tagDetail.updateConflict') : t('tagDetail.updateError'))
     } finally {
       setSaving(false)
     }
@@ -118,10 +106,10 @@ export default function TagMangaListPage() {
     setDeleting(true)
     try {
       await api.deleteTag(uuid)
-      message.success('标签已删除')
+      message.success(t('tagDetail.deleteSuccess'))
       navigate('/tags', { replace: true })
     } catch {
-      message.error('删除失败')
+      message.error(t('tagDetail.deleteError'))
       setDeleting(false)
     }
   }
@@ -131,12 +119,12 @@ export default function TagMangaListPage() {
     setBatchTagLoading(true)
     try {
       const { added } = await api.batchAddTagToMangasByTag(uuid, batchSelectedTagUuid)
-      message.success(`已为 ${added} 部漫画添加标签`)
+      message.success(t('tagDetail.batchAddSuccess', { count: added }))
       setBatchTagModalOpen(false)
       setBatchSelectedTagUuid(undefined)
       setBatchTagSearch('')
     } catch {
-      message.error('批量添加失败')
+      message.error(t('tagDetail.batchAddError'))
     } finally {
       setBatchTagLoading(false)
     }
@@ -147,11 +135,11 @@ export default function TagMangaListPage() {
     setBatchDateLoading(true)
     try {
       const { updated } = await api.batchSetPublishDateByTag(uuid, batchDate.format('YYYY-MM-DD'))
-      message.success(`已为 ${updated} 部漫画设置出版日期`)
+      message.success(t('tagDetail.batchSetDateSuccess', { count: updated }))
       setBatchDateModalOpen(false)
       setBatchDate(null)
     } catch {
-      message.error('批量设置失败')
+      message.error(t('tagDetail.batchSetDateError'))
     } finally {
       setBatchDateLoading(false)
     }
@@ -160,7 +148,7 @@ export default function TagMangaListPage() {
   const { items: data, total, loading } = usePagedData(
     () => api.getMangasByTag(uuid!, { page, limit: pageSize, search: search || undefined, sortBy, sortOrder }),
     [uuid, page, pageSize, search, sort],
-    '加载漫画列表失败',
+    t('manga.loadError'),
   )
 
   const handlePageChange = (p: number) =>
@@ -169,100 +157,87 @@ export default function TagMangaListPage() {
   const handlePageSizeChange = (_: number, size: number) =>
     setSearchParams(prev => { prev.set('page', '1'); prev.set('limit', String(size)); return prev }, { replace: true })
 
-  const columns: TableColumnsType<Manga> = [
-    { title: '显示标题', dataIndex: 'displayTitle', ellipsis: true },
-    ...(!isMobile ? [
-      { title: '原始标题', dataIndex: 'originalTitle', ellipsis: true } as TableColumnsType<Manga>[number],
-      {
-        title: '出版日期',
-        dataIndex: 'publishDate',
-        width: 110,
-        render: (v: string | null) => v ? formatDate(v) : '-',
-      } as TableColumnsType<Manga>[number],
-      {
-        title: '创建时间',
-        dataIndex: 'createAt',
-        width: 180,
-        render: (v: string) => formatDateTime(v),
-      } as TableColumnsType<Manga>[number],
-      {
-        title: '更新时间',
-        dataIndex: 'updateAt',
-        width: 180,
-        render: (v: string) => formatDateTime(v),
-      } as TableColumnsType<Manga>[number],
-    ] : []),
-  ]
+  const sortOptions = useMemo(() => [
+    { label: t('sort.updateAtDesc'), value: 'updateAt-desc' },
+    { label: t('sort.updateAtAsc'),  value: 'updateAt-asc' },
+    { label: t('sort.createAtDesc'), value: 'createAt-desc' },
+    { label: t('sort.createAtAsc'),  value: 'createAt-asc' },
+    { label: t('sort.publishDateDesc'), value: 'publishDate-desc' },
+    { label: t('sort.publishDateAsc'),  value: 'publishDate-asc' },
+  ], [t])
 
-  const tablePagination: TablePaginationConfig = {
+  const columns: TableColumnsType<Manga> = useMemo(() => [
+    { title: t('manga.displayTitle'), dataIndex: 'displayTitle', ellipsis: true },
+    ...(!isMobile ? [
+      { title: t('manga.originalTitle'), dataIndex: 'originalTitle', ellipsis: true } as TableColumnsType<Manga>[number],
+      { title: t('manga.publishDate'), dataIndex: 'publishDate', width: 110, render: (v: string | null) => v ? formatDate(v) : '-' } as TableColumnsType<Manga>[number],
+      { title: t('common.createAt'), dataIndex: 'createAt', width: 180, render: (v: string) => formatDateTime(v) } as TableColumnsType<Manga>[number],
+      { title: t('common.updateAt'), dataIndex: 'updateAt', width: 180, render: (v: string) => formatDateTime(v) } as TableColumnsType<Manga>[number],
+    ] : []),
+  ], [t, isMobile])
+
+  const tablePagination: TablePaginationConfig = useMemo(() => ({
     current: page,
     pageSize,
     total,
     onChange: handlePageChange,
     onShowSizeChange: handlePageSizeChange,
     showSizeChanger: true,
-    showTotal: t => `共 ${t} 条`,
+    showTotal: (n: number) => t('common.total', { count: n }),
     position: ['topRight', 'bottomRight'],
-  }
+  }), [page, pageSize, total, t])
+
+  const from = location.pathname + location.search
 
   return (
     <Space direction="vertical" style={{ width: '100%' }} size="middle">
-
-      {/* Header row: back + delete on left, save on right */}
       <Space style={{ justifyContent: 'space-between', width: '100%' }}>
         <Space>
           <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(backTo, { replace: true })} />
           {isAdmin && (
             <Popconfirm
-              title={`删除标签「${tag?.name ?? ''}」？`}
-              description="此操作将同时移除该标签与所有漫画的关联，且不可撤销。"
+              title={t('tagDetail.confirmDeleteTitle', { name: tag?.name ?? '' })}
+              description={t('tagDetail.confirmDeleteDesc')}
               onConfirm={handleDelete}
-              okText="确认删除"
-              cancelText="取消"
+              okText={t('tagDetail.confirmDelete')}
+              cancelText={t('common.cancel')}
               okButtonProps={{ danger: true }}
               disabled={!tag}
             >
               <Button danger icon={<DeleteOutlined />} loading={deleting} disabled={!tag}>
-                删除标签
+                {t('tagDetail.deleteTag')}
               </Button>
             </Popconfirm>
           )}
         </Space>
         {isAdmin && (
-          <Button
-            type="primary"
-            loading={saving}
-            disabled={!isDirty}
-            onClick={handleSave}
-          >
-            保存
+          <Button type="primary" loading={saving} disabled={!isDirty} onClick={handleSave}>
+            {t('common.save')}
           </Button>
         )}
       </Space>
 
-      {/* Tag info */}
       <Form form={form} onValuesChange={() => setIsDirty(true)}>
         <Descriptions bordered size="small" column={isMobile ? 1 : 2}>
-          <Descriptions.Item label="标签名称">
-            <Form.Item name="name" noStyle rules={[{ required: true, message: '请输入标签名称' }]}>
+          <Descriptions.Item label={t('tag.name')}>
+            <Form.Item name="name" noStyle rules={[{ required: true, message: t('tagDetail.tagNameRequired') }]}>
               <Input style={{ width: '100%' }} disabled={!isAdmin} />
             </Form.Item>
           </Descriptions.Item>
-          <Descriptions.Item label="标签类型">
-            <Form.Item name="type" noStyle rules={[{ required: true, message: '请选择标签类型' }]}>
-              <Select style={{ width: '100%' }} options={tagTypes.map(t => ({ value: t.name, label: t.name }))} disabled={!isAdmin} />
+          <Descriptions.Item label={t('tag.type')}>
+            <Form.Item name="type" noStyle rules={[{ required: true, message: t('tagDetail.tagTypeRequired') }]}>
+              <Select style={{ width: '100%' }} options={tagTypes.map(tt => ({ value: tt.name, label: tt.name }))} disabled={!isAdmin} />
             </Form.Item>
           </Descriptions.Item>
-          <Descriptions.Item label="创建时间">{tag ? formatDateTime(tag.createAt) : '-'}</Descriptions.Item>
-          <Descriptions.Item label="更新时间">{tag ? formatDateTime(tag.updateAt) : '-'}</Descriptions.Item>
+          <Descriptions.Item label={t('common.createAt')}>{tag ? formatDateTime(tag.createAt) : '-'}</Descriptions.Item>
+          <Descriptions.Item label={t('common.updateAt')}>{tag ? formatDateTime(tag.updateAt) : '-'}</Descriptions.Item>
         </Descriptions>
       </Form>
 
-      {/* Manga list toolbar */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
         <Input
           prefix={<SearchOutlined />}
-          placeholder="搜索显示标题或原始标题，按回车搜索"
+          placeholder={t('manga.searchPlaceholder')}
           value={searchInput}
           onChange={e => {
             setSearchInput(e.target.value)
@@ -279,77 +254,69 @@ export default function TagMangaListPage() {
         <Select
           value={sort}
           onChange={v => setSearchParams(prev => { prev.set('sort', v); prev.set('page', '1'); return prev }, { replace: true })}
-          options={SORT_OPTIONS}
+          options={sortOptions}
           style={{ width: isMobile ? '100%' : 180 }}
         />
         {isAdmin && (
           <Button icon={<TagsOutlined />} onClick={() => setBatchTagModalOpen(true)}>
-            批量添加标签
+            {t('tagDetail.batchAddTag')}
           </Button>
         )}
         {isAdmin && (
           <Button icon={<CalendarOutlined />} onClick={() => setBatchDateModalOpen(true)}>
-            批量设置出版日期
+            {t('tagDetail.batchSetDate')}
           </Button>
         )}
         {!isMobile && (
           <Segmented
             value={viewMode}
             onChange={v => handleViewModeChange(v as 'list' | 'grid')}
-            options={[
-              { value: 'list', icon: <BarsOutlined /> },
-              { value: 'grid', icon: <AppstoreOutlined /> },
-            ]}
+            options={[{ value: 'list', icon: <BarsOutlined /> }, { value: 'grid', icon: <AppstoreOutlined /> }]}
           />
         )}
       </div>
 
-      {/* Batch modals */}
       <Modal
-        title="批量添加标签"
+        title={t('tagDetail.batchAddTag')}
         open={batchTagModalOpen}
         onCancel={() => { setBatchTagModalOpen(false); setBatchSelectedTagUuid(undefined); setBatchTagSearch('') }}
         onOk={handleBatchAddTag}
-        okText="确认添加"
-        cancelText="取消"
+        okText={t('tagDetail.confirmAdd')}
+        cancelText={t('common.cancel')}
         confirmLoading={batchTagLoading}
         okButtonProps={{ disabled: !batchSelectedTagUuid }}
       >
         <p style={{ marginBottom: 12, color: '#666' }}>
-          将选中的标签添加至「{tag?.tagType.name}: {tag?.name}」下的所有 {total} 部漫画（已有该标签的漫画会自动跳过）。
+          {t('tagDetail.batchAddTagDesc', { type: tag?.tagType.name ?? '', name: tag?.name ?? '', count: total })}
         </p>
         <Select
           style={{ width: '100%' }}
-          placeholder="搜索并选择标签"
+          placeholder={t('tagDetail.searchSelectTag')}
           value={batchSelectedTagUuid}
           onChange={setBatchSelectedTagUuid}
           onSearch={setBatchTagSearch}
           filterOption={false}
           showSearch
-          options={batchTagOptions.map(t => ({ value: t.uuid, label: `${t.tagType.name}: ${t.name}` }))}
+          options={batchTagOptions.map(tg => ({ value: tg.uuid, label: `${tg.tagType.name}: ${tg.name}` }))}
         />
       </Modal>
+
       <Modal
-        title="批量设置出版日期"
+        title={t('tagDetail.batchSetDate')}
         open={batchDateModalOpen}
         onCancel={() => { setBatchDateModalOpen(false); setBatchDate(null) }}
         onOk={handleBatchSetDate}
-        okText="确认设置"
-        cancelText="取消"
+        okText={t('tagDetail.confirmSet')}
+        cancelText={t('common.cancel')}
         confirmLoading={batchDateLoading}
         okButtonProps={{ disabled: !batchDate }}
       >
         <p style={{ marginBottom: 12, color: '#666' }}>
-          将选中日期设置为「{tag?.tagType.name}: {tag?.name}」下所有 {total} 部漫画的出版日期。
+          {t('tagDetail.batchSetDateDesc', { type: tag?.tagType.name ?? '', name: tag?.name ?? '', count: total })}
         </p>
-        <DatePicker
-          style={{ width: '100%' }}
-          value={batchDate}
-          onChange={setBatchDate}
-        />
+        <DatePicker style={{ width: '100%' }} value={batchDate} onChange={setBatchDate} />
       </Modal>
 
-      {/* Manga list */}
       {!isMobile && viewMode === 'list' ? (
         <Table
           rowKey="uuid"
@@ -359,34 +326,18 @@ export default function TagMangaListPage() {
           loading={loading}
           size="middle"
           onRow={record => ({
-            onClick: () => navigate(`/mangas/${record.uuid}`, { state: { from: location.pathname + location.search } }),
+            onClick: () => navigate(`/mangas/${record.uuid}`, { state: { from } }),
             style: { cursor: 'pointer' },
           })}
         />
       ) : (
         <Space direction="vertical" style={{ width: '100%' }} size="middle">
           <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <Pagination
-              current={page}
-              pageSize={pageSize}
-              total={total}
-              onChange={handlePageChange}
-              onShowSizeChange={handlePageSizeChange}
-              showSizeChanger
-              showTotal={t => `共 ${t} 条`}
-            />
+            <Pagination current={page} pageSize={pageSize} total={total} onChange={handlePageChange} onShowSizeChange={handlePageSizeChange} showSizeChanger showTotal={n => t('common.total', { count: n })} />
           </div>
-          <MangaGrid data={data} loading={loading} from={location.pathname + location.search} />
+          <MangaGrid data={data} loading={loading} from={from} />
           <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <Pagination
-              current={page}
-              pageSize={pageSize}
-              total={total}
-              onChange={handlePageChange}
-              onShowSizeChange={handlePageSizeChange}
-              showSizeChanger
-              showTotal={t => `共 ${t} 条`}
-            />
+            <Pagination current={page} pageSize={pageSize} total={total} onChange={handlePageChange} onShowSizeChange={handlePageSizeChange} showSizeChanger showTotal={n => t('common.total', { count: n })} />
           </div>
         </Space>
       )}

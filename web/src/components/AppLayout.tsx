@@ -1,7 +1,8 @@
 import { AuditOutlined, BookOutlined, DownOutlined, GithubOutlined, ImportOutlined, KeyOutlined, LogoutOutlined, TagOutlined, UserOutlined } from '@ant-design/icons'
 import type { MenuProps } from 'antd'
-import { Dropdown, Grid, Layout, Menu } from 'antd'
+import { Button, Dropdown, Grid, Layout, Menu } from 'antd'
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import ChangePasswordModal from './ChangePasswordModal'
 import { logout } from '../api/auth'
@@ -15,6 +16,7 @@ const { useBreakpoint } = Grid
 export default function AppLayout() {
   const navigate = useNavigate()
   const location = useLocation()
+  const { t, i18n } = useTranslation()
   const isAdmin = getRole() === 'admin'
   const username = getUsername()
   const uuid = getUuid()
@@ -34,20 +36,20 @@ export default function AppLayout() {
   const isMobile = screens.md === false
 
   const navItems = [
-    { key: 'mangas', icon: <BookOutlined />, label: '漫画', onClick: () => navigate('/mangas') },
-    { key: 'tags', icon: <TagOutlined />, label: '标签', onClick: () => navigate('/tags') },
+    { key: 'mangas', icon: <BookOutlined />, label: t('nav.manga'), onClick: () => navigate('/mangas') },
+    { key: 'tags', icon: <TagOutlined />, label: t('nav.tags'), onClick: () => navigate('/tags') },
   ]
 
   const userMenuItems: MenuProps['items'] = [
-    { key: 'change-password', icon: <KeyOutlined />, label: '修改密码', onClick: () => setChangePwOpen(true) },
+    { key: 'change-password', icon: <KeyOutlined />, label: t('user.changePassword'), onClick: () => setChangePwOpen(true) },
     ...(isAdmin ? [
       { type: 'divider' as const },
-      { key: 'admin-users', icon: <UserOutlined />, label: '用户管理', onClick: () => navigate('/admin/users') },
-      { key: 'admin-login-logs', icon: <AuditOutlined />, label: '登录日志', onClick: () => navigate('/admin/login-logs') },
-      { key: 'admin-import', icon: <ImportOutlined />, label: '漫画导入', onClick: () => navigate('/admin/import') },
+      { key: 'admin-users', icon: <UserOutlined />, label: t('user.userManagement'), onClick: () => navigate('/admin/users') },
+      { key: 'admin-login-logs', icon: <AuditOutlined />, label: t('user.loginLogs'), onClick: () => navigate('/admin/login-logs') },
+      { key: 'admin-import', icon: <ImportOutlined />, label: t('user.import'), onClick: () => navigate('/admin/import') },
     ] : []),
     { type: 'divider' as const },
-    { key: 'logout', icon: <LogoutOutlined />, label: '退出登录', danger: true, onClick: handleLogout },
+    { key: 'logout', icon: <LogoutOutlined />, label: t('user.logout'), danger: true, onClick: handleLogout },
   ]
 
   return (
@@ -84,6 +86,14 @@ export default function AppLayout() {
           />
         )}
         <div style={{ flex: isMobile ? 1 : 0 }} />
+        <Button
+          type="text"
+          size="small"
+          style={{ color: 'rgba(255,255,255,0.65)', flexShrink: 0 }}
+          onClick={() => i18n.changeLanguage(i18n.language.startsWith('en') ? 'zh' : 'en')}
+        >
+          {t('lang.switch')}
+        </Button>
         <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
           <span style={{ color: 'rgba(255,255,255,0.85)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
             <UserOutlined style={{ marginRight: isMobile ? 0 : 6 }} />

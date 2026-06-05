@@ -2,6 +2,7 @@ import { AppstoreOutlined, BarsOutlined, SearchOutlined } from '@ant-design/icon
 import { Grid, Input, Pagination, Segmented, Select, Space, Table } from 'antd'
 import type { TableColumnsType, TablePaginationConfig } from 'antd'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
 import MangaGrid from '../components/MangaGrid'
@@ -12,22 +13,19 @@ import { formatDate, formatDateTime } from '../utils/date'
 
 type SortBy = 'updateAt' | 'createAt' | 'publishDate'
 type SortOrder = 'asc' | 'desc'
-const SORT_OPTIONS: { label: string; value: `${SortBy}-${SortOrder}` }[] = [
-  { label: '更新时间（最新）', value: 'updateAt-desc' },
-  { label: '更新时间（最早）', value: 'updateAt-asc' },
-  { label: '创建时间（最新）', value: 'createAt-desc' },
-  { label: '创建时间（最早）', value: 'createAt-asc' },
-  { label: '出版日期（最新）', value: 'publishDate-desc' },
-  { label: '出版日期（最早）', value: 'publishDate-asc' },
-]
 
-const VALID_SORTS: Set<string> = new Set(SORT_OPTIONS.map(o => o.value))
+const VALID_SORTS = new Set([
+  'updateAt-desc', 'updateAt-asc',
+  'createAt-desc', 'createAt-asc',
+  'publishDate-desc', 'publishDate-asc',
+])
 
 const { useBreakpoint } = Grid
 
 export default function MangaListPage() {
   const navigate = useNavigate()
   const location = useLocation()
+  const { t } = useTranslation()
   const [searchParams, setSearchParams] = useSearchParams()
   const screens = useBreakpoint()
   const isMobile = screens.md === false
@@ -46,8 +44,17 @@ export default function MangaListPage() {
   const { items: data, total, loading } = usePagedData(
     () => api.getMangas({ page, limit: pageSize, search: search || undefined, sortBy, sortOrder }),
     [page, pageSize, search, sort],
-    '加载漫画列表失败',
+    t('manga.loadError'),
   )
+
+  const sortOptions = useMemo(() => [
+    { label: t('sort.updateAtDesc'), value: 'updateAt-desc' },
+    { label: t('sort.updateAtAsc'),  value: 'updateAt-asc' },
+    { label: t('sort.createAtDesc'), value: 'createAt-desc' },
+    { label: t('sort.createAtAsc'),  value: 'createAt-asc' },
+    { label: t('sort.publishDateDesc'), value: 'publishDate-desc' },
+    { label: t('sort.publishDateAsc'),  value: 'publishDate-asc' },
+  ], [t])
 
   const handlePageChange = useCallback(
     (p: number) => setSearchParams(prev => { prev.set('page', String(p)); return prev }, { replace: true }),
@@ -60,29 +67,14 @@ export default function MangaListPage() {
   )
 
   const columns: TableColumnsType<Manga> = useMemo(() => [
-    { title: '显示标题', dataIndex: 'displayTitle', ellipsis: true },
+    { title: t('manga.displayTitle'), dataIndex: 'displayTitle', ellipsis: true },
     ...(!isMobile ? [
-      { title: '原始标题', dataIndex: 'originalTitle', ellipsis: true } as TableColumnsType<Manga>[number],
-      {
-        title: '出版日期',
-        dataIndex: 'publishDate',
-        width: 120,
-        render: (v: string | null) => v ? formatDate(v) : '-',
-      } as TableColumnsType<Manga>[number],
-      {
-        title: '创建时间',
-        dataIndex: 'createAt',
-        width: 180,
-        render: (v: string) => formatDateTime(v),
-      } as TableColumnsType<Manga>[number],
-      {
-        title: '更新时间',
-        dataIndex: 'updateAt',
-        width: 180,
-        render: (v: string) => formatDateTime(v),
-      } as TableColumnsType<Manga>[number],
+      { title: t('manga.originalTitle'), dataIndex: 'originalTitle', ellipsis: true } as TableColumnsType<Manga>[number],
+      { title: t('manga.publishDate'), dataIndex: 'publishDate', width: 120, render: (v: string | null) => v ? formatDate(v) : '-' } as TableColumnsType<Manga>[number],
+      { title: t('common.createAt'), dataIndex: 'createAt', width: 180, render: (v: string) => formatDateTime(v) } as TableColumnsType<Manga>[number],
+      { title: t('common.updateAt'), dataIndex: 'updateAt', width: 180, render: (v: string) => formatDateTime(v) } as TableColumnsType<Manga>[number],
     ] : []),
-  ], [isMobile])
+  ], [t, isMobile])
 
   const from = useMemo(() => location.pathname + location.search, [location.pathname, location.search])
 
@@ -101,16 +93,16 @@ export default function MangaListPage() {
     onChange: handlePageChange,
     onShowSizeChange: handlePageSizeChange,
     showSizeChanger: true,
-    showTotal: (t: number) => `共 ${t} 条`,
+    showTotal: (n: number) => t('common.total', { count: n }),
     position: ['topRight', 'bottomRight'],
-  }), [page, pageSize, total, handlePageChange, handlePageSizeChange])
+  }), [page, pageSize, total, handlePageChange, handlePageSizeChange, t])
 
   return (
     <Space direction="vertical" style={{ width: '100%' }} size="middle">
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
         <Input
           prefix={<SearchOutlined />}
-          placeholder="搜索显示标题或原始标题，按回车搜索"
+          placeholder={t('manga.searchPlaceholder')}
           value={searchInput}
           onChange={e => {
             setSearchInput(e.target.value)
@@ -127,7 +119,7 @@ export default function MangaListPage() {
         <Select
           value={sort}
           onChange={v => setSearchParams(prev => { prev.set('sort', v); prev.set('page', '1'); return prev }, { replace: true })}
-          options={SORT_OPTIONS}
+          options={sortOptions}
           style={{ width: isMobile ? '100%' : 180 }}
         />
         {!isMobile && (
@@ -162,7 +154,7 @@ export default function MangaListPage() {
               onChange={handlePageChange}
               onShowSizeChange={handlePageSizeChange}
               showSizeChanger
-              showTotal={t => `共 ${t} 条`}
+              showTotal={n => t('common.total', { count: n })}
             />
           </div>
           <MangaGrid data={data} loading={loading} from={from} />
@@ -174,7 +166,7 @@ export default function MangaListPage() {
               onChange={handlePageChange}
               onShowSizeChange={handlePageSizeChange}
               showSizeChanger
-              showTotal={t => `共 ${t} 条`}
+              showTotal={n => t('common.total', { count: n })}
             />
           </div>
         </Space>

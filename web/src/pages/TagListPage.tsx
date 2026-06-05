@@ -1,7 +1,8 @@
 import { PlusOutlined, SearchOutlined } from '@ant-design/icons'
 import { Button, Form, Grid, Input, message, Modal, Select as AntSelect, Space, Table, Tag } from 'antd'
 import type { TableColumnsType, TablePaginationConfig } from 'antd'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
 import { usePagedData } from '../hooks/usePagedData'
@@ -11,19 +12,13 @@ import { getRole } from '../utils/token'
 
 type SortKey = 'updateAt-desc' | 'updateAt-asc' | 'createAt-desc' | 'createAt-asc'
 
-const SORT_OPTIONS: { label: string; value: SortKey }[] = [
-  { label: '更新时间（最新）', value: 'updateAt-desc' },
-  { label: '更新时间（最早）', value: 'updateAt-asc' },
-  { label: '创建时间（最新）', value: 'createAt-desc' },
-  { label: '创建时间（最早）', value: 'createAt-asc' },
-]
-
-const VALID_SORTS: Set<string> = new Set(SORT_OPTIONS.map(o => o.value))
+const VALID_SORTS: Set<string> = new Set(['updateAt-desc', 'updateAt-asc', 'createAt-desc', 'createAt-asc'])
 const { useBreakpoint } = Grid
 
 export default function TagListPage() {
   const navigate = useNavigate()
   const location = useLocation()
+  const { t } = useTranslation()
   const isAdmin = getRole() === 'admin'
   const [searchParams, setSearchParams] = useSearchParams()
   const screens = useBreakpoint()
@@ -40,7 +35,6 @@ export default function TagListPage() {
   const [tagTypes, setTagTypes] = useState<TagType[]>([])
   const [sortBy, sortOrder] = sort.split('-') as ['updateAt' | 'createAt', 'asc' | 'desc']
 
-  // ── Create ─────────────────────────────────────────────────────────────────
   const [createModalOpen, setCreateModalOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   const [createForm] = Form.useForm()
@@ -50,63 +44,54 @@ export default function TagListPage() {
   const { items: data, total, loading } = usePagedData(
     () => api.getTags({ page, limit: pageSize, search: search || undefined, sortBy, sortOrder, tagTypeName: tagTypeFilter }),
     [page, pageSize, search, sort, tagTypeFilter, refreshKey],
-    '加载标签列表失败',
+    t('tag.loadError'),
   )
 
   useEffect(() => {
     api.getTagTypes({ page: 1, limit: 100 })
       .then(res => setTagTypes(res.items))
-      .catch(() => message.error('加载标签类型失败'))
+      .catch(() => message.error(t('tag.loadTypeError')))
   }, [])
 
-  // ── Handlers ───────────────────────────────────────────────────────────────
+  const sortOptions = useMemo(() => [
+    { label: t('sort.updateAtDesc'), value: 'updateAt-desc' },
+    { label: t('sort.updateAtAsc'),  value: 'updateAt-asc' },
+    { label: t('sort.createAtDesc'), value: 'createAt-desc' },
+    { label: t('sort.createAtAsc'),  value: 'createAt-asc' },
+  ], [t])
+
   const handleCreate = async (values: { name: string; type: string }) => {
     setCreating(true)
     try {
       await api.createTag(values.name, values.type)
-      message.success('标签创建成功')
+      message.success(t('tag.createSuccess'))
       setCreateModalOpen(false)
       createForm.resetFields()
       setRefreshKey(k => k + 1)
     } catch {
-      message.error('创建失败，标签名可能已存在')
+      message.error(t('tag.createError'))
     } finally {
       setCreating(false)
     }
   }
 
-  // ── Columns ────────────────────────────────────────────────────────────────
-  const columns: TableColumnsType<TagData> = [
-    { title: '标签名称', dataIndex: 'name' },
-    {
-      title: '标签类型',
-      render: (_, record) => <Tag color="geekblue">{record.tagType.name}</Tag>,
-      width: 160,
-    },
-    {
-      title: '创建时间',
-      dataIndex: 'createAt',
-      width: 180,
-      render: (v: string) => formatDateTime(v),
-    },
-    {
-      title: '更新时间',
-      dataIndex: 'updateAt',
-      width: 180,
-      render: (v: string) => formatDateTime(v),
-    },
-  ]
+  const columns: TableColumnsType<TagData> = useMemo(() => [
+    { title: t('tag.name'), dataIndex: 'name' },
+    { title: t('tag.type'), render: (_, record) => <Tag color="geekblue">{record.tagType.name}</Tag>, width: 160 },
+    { title: t('common.createAt'), dataIndex: 'createAt', width: 180, render: (v: string) => formatDateTime(v) },
+    { title: t('common.updateAt'), dataIndex: 'updateAt', width: 180, render: (v: string) => formatDateTime(v) },
+  ], [t])
 
-  const pagination: TablePaginationConfig = {
+  const pagination: TablePaginationConfig = useMemo(() => ({
     current: page,
     pageSize,
     total,
-    onChange: p => setSearchParams(prev => { prev.set('page', String(p)); return prev }, { replace: true }),
-    onShowSizeChange: (_, size) => setSearchParams(prev => { prev.set('page', '1'); prev.set('limit', String(size)); return prev }, { replace: true }),
+    onChange: (p: number) => setSearchParams(prev => { prev.set('page', String(p)); return prev }, { replace: true }),
+    onShowSizeChange: (_: number, size: number) => setSearchParams(prev => { prev.set('page', '1'); prev.set('limit', String(size)); return prev }, { replace: true }),
     showSizeChanger: true,
-    showTotal: t => `共 ${t} 条`,
+    showTotal: (n: number) => t('common.total', { count: n }),
     position: ['topRight', 'bottomRight'],
-  }
+  }), [page, pageSize, total, t])
 
   return (
     <Space direction="vertical" style={{ width: '100%' }} size="middle">
@@ -114,7 +99,7 @@ export default function TagListPage() {
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, flex: 1 }}>
           <Input
             prefix={<SearchOutlined />}
-            placeholder="搜索标签名称，按回车搜索"
+            placeholder={t('tag.searchPlaceholder')}
             value={searchInput}
             onChange={e => {
               setSearchInput(e.target.value)
@@ -130,26 +115,22 @@ export default function TagListPage() {
           />
           <AntSelect
             value={tagTypeFilter}
-            onChange={v => setSearchParams(prev => {
-              if (v) prev.set('tagType', v); else prev.delete('tagType')
-              prev.set('page', '1')
-              return prev
-            }, { replace: true })}
-            placeholder="全部类型"
+            onChange={v => setSearchParams(prev => { if (v) prev.set('tagType', v); else prev.delete('tagType'); prev.set('page', '1'); return prev }, { replace: true })}
+            placeholder={t('tag.allTypes')}
             allowClear
-            options={tagTypes.map(t => ({ value: t.name, label: t.name }))}
+            options={tagTypes.map(tt => ({ value: tt.name, label: tt.name }))}
             style={{ width: isMobile ? 'calc(50% - 4px)' : 160 }}
           />
           <AntSelect
             value={sort}
             onChange={v => setSearchParams(prev => { prev.set('sort', v); prev.set('page', '1'); return prev }, { replace: true })}
-            options={SORT_OPTIONS}
+            options={sortOptions}
             style={{ width: isMobile ? 'calc(50% - 4px)' : 180 }}
           />
         </div>
         {isAdmin && (
           <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateModalOpen(true)}>
-            新建标签
+            {t('tag.create')}
           </Button>
         )}
       </div>
@@ -167,9 +148,8 @@ export default function TagListPage() {
         })}
       />
 
-      {/* Create modal */}
       <Modal
-        title="新建标签"
+        title={t('tag.create')}
         open={createModalOpen}
         onCancel={() => { setCreateModalOpen(false); createForm.resetFields() }}
         onOk={() => createForm.submit()}
@@ -177,14 +157,11 @@ export default function TagListPage() {
         destroyOnClose
       >
         <Form form={createForm} layout="vertical" onFinish={handleCreate} style={{ marginTop: 16 }}>
-          <Form.Item label="标签名称" name="name" rules={[{ required: true, message: '请输入标签名称' }]}>
-            <Input placeholder="输入标签名称" />
+          <Form.Item label={t('tag.name')} name="name" rules={[{ required: true, message: t('tag.nameRequired') }]}>
+            <Input placeholder={t('tag.namePlaceholder')} />
           </Form.Item>
-          <Form.Item label="标签类型" name="type" rules={[{ required: true, message: '请选择标签类型' }]}>
-            <AntSelect
-              placeholder="选择标签类型"
-              options={tagTypes.map(t => ({ value: t.name, label: t.name }))}
-            />
+          <Form.Item label={t('tag.type')} name="type" rules={[{ required: true, message: t('tag.typeRequired') }]}>
+            <AntSelect placeholder={t('tag.typePlaceholder')} options={tagTypes.map(tt => ({ value: tt.name, label: tt.name }))} />
           </Form.Item>
         </Form>
       </Modal>
