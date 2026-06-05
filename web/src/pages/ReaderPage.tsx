@@ -1,6 +1,6 @@
-import { ArrowLeftOutlined, LeftOutlined, RightOutlined, StarFilled, StarOutlined } from '@ant-design/icons'
+import { ArrowLeftOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons'
 import { useDrag } from '@use-gesture/react'
-import { Button, InputNumber, message, Popconfirm, Segmented, Spin } from 'antd'
+import { Button, InputNumber, message, Segmented, Spin } from 'antd'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
@@ -25,12 +25,10 @@ export default function ReaderPage() {
 
   const [manga, setManga] = useState<Manga | null>(null)
   const [loading, setLoading] = useState(true)
-  const [savingCover, setSavingCover] = useState(false)
 
   const mode = (searchParams.get('mode') === 'scroll' ? 'scroll' : 'flip') as Mode
   const currentPage = Math.max(0, parseInt(searchParams.get('page') ?? '0') || 0)
   const totalPages = manga?.pages.length ?? 0
-  const coverPage = manga?.cover ?? 0
 
   useEffect(() => {
     if (!uuid) return
@@ -42,20 +40,6 @@ export default function ReaderPage() {
   const goToPage = (p: number) => {
     const clamped = Math.max(0, Math.min(totalPages - 1, p))
     setSearchParams(prev => { prev.set('page', String(clamped)); return prev }, { replace: true })
-  }
-
-  const handleSetCover = async (pageIndex: number) => {
-    if (!uuid || !manga) return
-    setSavingCover(true)
-    try {
-      await api.updateManga(uuid, { cover: pageIndex })
-      setManga(prev => prev ? { ...prev, cover: pageIndex } : prev)
-      message.success(t('reader.setCoverSuccess', { page: pageIndex + 1 }))
-    } catch {
-      message.error(t('reader.setCoverError'))
-    } finally {
-      setSavingCover(false)
-    }
   }
 
   useEffect(() => {
@@ -84,8 +68,6 @@ export default function ReaderPage() {
       </div>
     )
   }
-
-  const isCover = currentPage === coverPage
 
   const topBar = (
     <div style={{ flexShrink: 0, height: 48, background: 'rgba(0,0,0,0.92)', borderBottom: '1px solid #2a2a2a', display: 'flex', alignItems: 'center', padding: '0 12px', gap: 12 }}>
@@ -145,18 +127,6 @@ export default function ReaderPage() {
             onChange={v => { if (v != null) goToPage(v - 1) }}
           />
           <span style={{ color: '#666', fontSize: 13 }}>/ {totalPages} {t('reader.pageUnit')}</span>
-          <Popconfirm
-            title={t('reader.setCoverConfirm', { page: currentPage + 1 })}
-            onConfirm={() => handleSetCover(currentPage)}
-            okText={t('common.confirm')}
-            cancelText={t('common.cancel')}
-            disabled={isCover || savingCover}
-            placement="top"
-          >
-            <Button type="text" icon={isCover ? <StarFilled /> : <StarOutlined />} disabled={isCover} loading={savingCover} style={{ color: isCover ? '#faad14' : '#888' }}>
-              {isCover ? t('reader.currentCover') : t('reader.setCover')}
-            </Button>
-          </Popconfirm>
           <Button type="text" disabled={!hasNext} onClick={() => goToPage(currentPage + 1)} style={{ color: hasNext ? '#ccc' : '#444' }}>
             {t('reader.nextPage')} <RightOutlined />
           </Button>
@@ -178,9 +148,6 @@ export default function ReaderPage() {
               style={{ width: '100%', display: 'block' }}
               onError={onImgError}
             />
-            <div style={{ textAlign: 'center', padding: '2px 0', fontSize: 11, color: '#3a3a3a', background: '#141414' }}>
-              {i + 1}
-            </div>
           </div>
         ))}
         <div style={{ height: 32 }} />
