@@ -17,6 +17,8 @@ const onImgError = (e: React.SyntheticEvent<HTMLImageElement>) => {
 
 type Mode = 'flip' | 'scroll'
 
+const TOP_BAR_H = 48
+
 export default function ReaderPage() {
   const { uuid } = useParams<{ uuid: string }>()
   const navigate = useNavigate()
@@ -41,6 +43,12 @@ export default function ReaderPage() {
     const clamped = Math.max(0, Math.min(totalPages - 1, p))
     setSearchParams(prev => { prev.set('page', String(clamped)); return prev }, { replace: true })
   }
+
+  // Reset window scroll position when entering flip mode so the fixed
+  // viewport layout isn't offset by a leftover scroll from scroll mode.
+  useEffect(() => {
+    if (mode === 'flip') window.scrollTo(0, 0)
+  }, [mode])
 
   useEffect(() => {
     if (!manga) return
@@ -69,8 +77,9 @@ export default function ReaderPage() {
     )
   }
 
-  const topBar = (
-    <div style={{ flexShrink: 0, height: 48, background: 'rgba(0,0,0,0.92)', borderBottom: '1px solid #2a2a2a', display: 'flex', alignItems: 'center', padding: '0 12px', gap: 12 }}>
+  // Inner content of the top bar — shared between both modes.
+  const topBarContent = (
+    <>
       <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => navigate(`/mangas/${uuid}`, { replace: true })} style={{ color: '#ccc', flexShrink: 0 }} />
       <span style={{ color: '#aaa', flex: 1, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {manga?.displayTitle}
@@ -82,13 +91,24 @@ export default function ReaderPage() {
         size="small"
         style={{ flexShrink: 0 }}
       />
-    </div>
+    </>
   )
 
+  const topBarStyle: React.CSSProperties = {
+    height: TOP_BAR_H,
+    background: 'rgba(0,0,0,0.92)',
+    borderBottom: '1px solid #2a2a2a',
+    display: 'flex',
+    alignItems: 'center',
+    padding: '0 12px',
+    gap: 12,
+  }
+
+  // ── Flip mode ──────────────────────────────────────────────────────────────
   if (mode === 'flip') {
     return (
       <div style={{ height: '100vh', background: '#141414', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        {topBar}
+        <div style={{ flexShrink: 0, ...topBarStyle }}>{topBarContent}</div>
         <div
           {...bindSwipe()}
           style={{ flex: 1, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', cursor: 'pointer', userSelect: 'none', touchAction: 'pan-y' }}
@@ -112,7 +132,7 @@ export default function ReaderPage() {
             onError={onImgError}
           />
         </div>
-        <div style={{ flexShrink: 0, height: 48, background: 'rgba(0,0,0,0.92)', borderTop: '1px solid #2a2a2a', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+        <div style={{ flexShrink: 0, height: TOP_BAR_H, background: 'rgba(0,0,0,0.92)', borderTop: '1px solid #2a2a2a', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
           <Button type="text" icon={<LeftOutlined />} disabled={!hasPrev} onClick={() => goToPage(currentPage - 1)} style={{ color: hasPrev ? '#ccc' : '#444' }}>
             {t('reader.prevPage')}
           </Button>
@@ -135,10 +155,15 @@ export default function ReaderPage() {
     )
   }
 
+  // ── Scroll mode ────────────────────────────────────────────────────────────
+  // The top bar is position:fixed so the window itself scrolls. Mobile browsers
+  // auto-hide their address bar / toolbar when the window scrolls downward.
   return (
-    <div style={{ height: '100vh', background: '#141414', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      {topBar}
-      <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+    <div style={{ background: '#141414', minHeight: '100vh' }}>
+      <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100, ...topBarStyle }}>
+        {topBarContent}
+      </div>
+      <div style={{ paddingTop: TOP_BAR_H, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         {manga?.pages.map((_, i) => (
           <div key={i} style={{ width: '100%', maxWidth: 800 }}>
             <img
