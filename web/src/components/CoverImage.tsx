@@ -14,6 +14,8 @@ export default function CoverImage({ uuid, cover, style }: Props) {
     <img
       src={`/api/file/mangas/${uuid}/pages/${cover ?? 0}`}
       alt=""
+      loading="lazy"
+      decoding="async"
       style={{ display: 'block', ...style }}
       onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
         e.currentTarget.onerror = null

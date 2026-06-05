@@ -1,7 +1,7 @@
 import { AppstoreOutlined, BarsOutlined, SearchOutlined } from '@ant-design/icons'
 import { Grid, Input, Pagination, Segmented, Select, Space, Table } from 'antd'
 import type { TableColumnsType, TablePaginationConfig } from 'antd'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
 import MangaGrid from '../components/MangaGrid'
@@ -49,13 +49,17 @@ export default function MangaListPage() {
     '加载漫画列表失败',
   )
 
-  const handlePageChange = (p: number) =>
-    setSearchParams(prev => { prev.set('page', String(p)); return prev }, { replace: true })
+  const handlePageChange = useCallback(
+    (p: number) => setSearchParams(prev => { prev.set('page', String(p)); return prev }, { replace: true }),
+    [setSearchParams],
+  )
 
-  const handlePageSizeChange = (_: number, size: number) =>
-    setSearchParams(prev => { prev.set('page', '1'); prev.set('limit', String(size)); return prev }, { replace: true })
+  const handlePageSizeChange = useCallback(
+    (_: number, size: number) => setSearchParams(prev => { prev.set('page', '1'); prev.set('limit', String(size)); return prev }, { replace: true }),
+    [setSearchParams],
+  )
 
-  const columns: TableColumnsType<Manga> = [
+  const columns: TableColumnsType<Manga> = useMemo(() => [
     { title: '显示标题', dataIndex: 'displayTitle', ellipsis: true },
     ...(!isMobile ? [
       { title: '原始标题', dataIndex: 'originalTitle', ellipsis: true } as TableColumnsType<Manga>[number],
@@ -78,18 +82,28 @@ export default function MangaListPage() {
         render: (v: string) => formatDateTime(v),
       } as TableColumnsType<Manga>[number],
     ] : []),
-  ]
+  ], [isMobile])
 
-  const tablePagination: TablePaginationConfig = {
+  const from = useMemo(() => location.pathname + location.search, [location.pathname, location.search])
+
+  const onRow = useCallback(
+    (record: Manga) => ({
+      onClick: () => navigate(`/mangas/${record.uuid}`, { state: { from } }),
+      style: { cursor: 'pointer' },
+    }),
+    [navigate, from],
+  )
+
+  const tablePagination: TablePaginationConfig = useMemo(() => ({
     current: page,
     pageSize,
     total,
     onChange: handlePageChange,
     onShowSizeChange: handlePageSizeChange,
     showSizeChanger: true,
-    showTotal: t => `共 ${t} 条`,
+    showTotal: (t: number) => `共 ${t} 条`,
     position: ['topRight', 'bottomRight'],
-  }
+  }), [page, pageSize, total, handlePageChange, handlePageSizeChange])
 
   return (
     <Space direction="vertical" style={{ width: '100%' }} size="middle">
@@ -136,10 +150,7 @@ export default function MangaListPage() {
           pagination={tablePagination}
           loading={loading}
           size="middle"
-          onRow={record => ({
-            onClick: () => navigate(`/mangas/${record.uuid}`, { state: { from: location.pathname + location.search } }),
-            style: { cursor: 'pointer' },
-          })}
+          onRow={onRow}
         />
       ) : (
         <Space direction="vertical" style={{ width: '100%' }} size="middle">
@@ -154,7 +165,7 @@ export default function MangaListPage() {
               showTotal={t => `共 ${t} 条`}
             />
           </div>
-          <MangaGrid data={data} loading={loading} from={location.pathname + location.search} />
+          <MangaGrid data={data} loading={loading} from={from} />
           <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
             <Pagination
               current={page}
