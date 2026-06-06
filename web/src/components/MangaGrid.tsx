@@ -14,7 +14,7 @@ interface Props {
 // Style for 2-line title clamp; cast required because WebkitBoxOrient is
 // not in React's CSSProperties typings.
 const titleStyle = {
-  fontSize: 12,
+  fontSize: 14,
   lineHeight: '1.5',
   overflow: 'hidden',
   display: '-webkit-box',
@@ -24,7 +24,7 @@ const titleStyle = {
 
 const coverContainerStyle = { aspectRatio: '2/3', overflow: 'hidden', background: '#f5f5f5', borderRadius: '8px 8px 0 0' } as const
 const coverImgStyle = { width: '100%', height: '100%', objectFit: 'cover' as const, borderRadius: 0 }
-const dateStyle = { fontSize: 11, color: '#999', marginTop: 2 } as const
+const dateStyle = { fontSize: 12, color: '#999', marginTop: 2 } as const
 const gridStyle = {
   display: 'grid',
   gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
