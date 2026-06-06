@@ -48,7 +48,11 @@ export class AuthController {
     const parsed = credentialsSchema.safeParse(req.body);
     if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
     const { username, password } = parsed.data;
-    const ip = req.ip ?? 'unknown';
+    const forwarded = req.headers['x-forwarded-for'];
+    const ip = (Array.isArray(forwarded) ? forwarded[0] : forwarded?.split(',')[0]?.trim())
+      ?? (req.headers['x-real-ip'] as string | undefined)
+      ?? req.ip
+      ?? 'unknown';
     const userAgent = (req.headers['user-agent'] ?? '').slice(0, 512);
     const user = await userService.findByUsername(username);
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
