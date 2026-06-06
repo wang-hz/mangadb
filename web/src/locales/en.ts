@@ -1,6 +1,4 @@
 const en = {
-  'lang.switch': '中文',
-
   'nav.manga': 'Manga',
   'nav.tags': 'Tags',
 

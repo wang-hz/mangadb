@@ -1,6 +1,4 @@
 const zh = {
-  'lang.switch': 'EN',
-
   'nav.manga': '漫画',
   'nav.tags': '标签',
 

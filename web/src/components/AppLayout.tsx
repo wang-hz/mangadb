@@ -74,14 +74,31 @@ export default function AppLayout() {
           />
         )}
         <div style={{ flex: isMobile ? 1 : 0 }} />
-        <Button
-          type="text"
-          size="small"
-          style={{ color: 'rgba(255,255,255,0.65)', flexShrink: 0 }}
-          onClick={() => i18n.changeLanguage(i18n.language.startsWith('en') ? 'zh' : 'en')}
+        <Dropdown
+          menu={{
+            items: [
+              { key: 'zh', label: '简体中文' },
+              { key: 'zh-TW', label: '繁體中文' },
+              { key: 'ja', label: '日本語' },
+              { key: 'en', label: 'English' },
+            ],
+            selectedKeys: [
+              i18n.language === 'zh-TW' ? 'zh-TW'
+              : i18n.language.startsWith('ja') ? 'ja'
+              : i18n.language.startsWith('en') ? 'en'
+              : 'zh'
+            ],
+            onClick: ({ key }) => i18n.changeLanguage(key),
+          }}
+          placement="bottomRight"
         >
-          {t('lang.switch')}
-        </Button>
+          <Button type="text" size="small" style={{ color: 'rgba(255,255,255,0.65)', flexShrink: 0 }}>
+            {i18n.language === 'zh-TW' ? '繁中'
+              : i18n.language.startsWith('ja') ? '日本語'
+              : i18n.language.startsWith('en') ? 'EN'
+              : '简中'}
+          </Button>
+        </Dropdown>
         <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
           <span style={{ color: 'rgba(255,255,255,0.85)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
             <UserOutlined style={{ marginRight: isMobile ? 0 : 6 }} />
