@@ -2,6 +2,8 @@
 
 A self-hosted manga library server with a web UI and OPDS feed support.
 
+[中文说明](README.zh.md)
+
 ## Features
 
 - Browse and manage your manga collection through a web interface
@@ -9,12 +11,13 @@ A self-hosted manga library server with a web UI and OPDS feed support.
 - Tag-based organization with customizable tag types; inline tag editing on the detail page
 - Batch operations: set publish date or add a tag across all mangas in a tag
 - **Bulk import**: drag-and-drop ZIP/CBZ archives or image folders; filenames are auto-parsed for title, group, artist, event, parody, publish date, and tags
-- OPDS v1.2 catalog feed for compatibility with e-reader apps (e.g. Kyobook, Moon+ Reader)
+- OPDS v1.2 catalog feed for compatibility with e-reader apps (e.g. KOReader, Moon+ Reader, Chunky, Panels); built-in setup guide under the user menu
 - Download manga as ZIP archives
 - User authentication with admin/user roles and a first-time setup wizard
 - Admin login log: view login history with username, IP, user agent, and result
 - PWA support — installable on mobile devices
 - Mobile-responsive UI with bottom tab navigation
+- Multilingual UI: Simplified Chinese, Traditional Chinese, Japanese, English
 - Docker support with images published to GitHub Container Registry
 
 ## Tech Stack
@@ -120,6 +123,10 @@ services:
 volumes:
   pgdata:
 ```
+
+## OPDS
+
+The OPDS v1.2 catalog is available at `/api/opds/v1.2/catalog`. It supports HTTP Basic Auth using your MangaDB username and password — no additional configuration required. A setup guide for common e-reader apps is available under the user menu → **OPDS Config**.
 
 ## Import Filename Convention
 
