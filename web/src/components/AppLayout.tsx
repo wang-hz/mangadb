@@ -140,7 +140,7 @@ export default function AppLayout() {
               }}
             >
               {item.icon}
-              <span style={{ fontSize: 10 }}>{item.label}</span>
+              <span style={{ fontSize: 12 }}>{item.label}</span>
             </div>
           ))}
         </div>
