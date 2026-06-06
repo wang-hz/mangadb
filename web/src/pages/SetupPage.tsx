@@ -30,7 +30,7 @@ export default function SetupPage() {
 
   return (
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', background: '#f0f2f5' }}>
-      <Card title={t('setup.title')} style={{ width: 400 }}>
+      <Card title={t('setup.title')} style={{ width: 400, maxWidth: '100vw' }}>
         <p style={{ color: '#666', marginBottom: 24 }}>{t('setup.description')}</p>
         <Form onFinish={onFinish} layout="vertical" autoComplete="off">
           <Form.Item name="username" label={t('common.username')} rules={[{ required: true, message: t('login.usernameRequired') }]}>

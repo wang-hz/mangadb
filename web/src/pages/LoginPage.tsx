@@ -34,7 +34,7 @@ export default function LoginPage() {
 
   return (
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', background: '#f0f2f5' }}>
-      <Card title="MangaDB" style={{ width: 360 }}>
+      <Card title="MangaDB" style={{ width: 360, maxWidth: '100vw' }}>
         <Form onFinish={onFinish} layout="vertical" autoComplete="on">
           <Form.Item name="username" label={t('common.username')} rules={[{ required: true, message: t('login.usernameRequired') }]}>
             <Input autoFocus autoComplete="username" />
