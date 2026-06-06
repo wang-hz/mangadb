@@ -122,19 +122,17 @@ export default function MangaListPage() {
           options={sortOptions}
           style={{ width: isMobile ? '100%' : 180 }}
         />
-        {!isMobile && (
-          <Segmented
-            value={viewMode}
-            onChange={v => handleViewModeChange(v as 'list' | 'grid')}
-            options={[
-              { value: 'list', icon: <BarsOutlined /> },
-              { value: 'grid', icon: <AppstoreOutlined /> },
-            ]}
-          />
-        )}
+        <Segmented
+          value={viewMode}
+          onChange={v => handleViewModeChange(v as 'list' | 'grid')}
+          options={[
+            { value: 'list', icon: <BarsOutlined /> },
+            { value: 'grid', icon: <AppstoreOutlined /> },
+          ]}
+        />
       </div>
 
-      {!isMobile && viewMode === 'list' ? (
+      {viewMode === 'list' ? (
         <Table
           rowKey="uuid"
           dataSource={data}
