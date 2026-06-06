@@ -118,10 +118,10 @@ export default function ReaderPage() {
             else { if (hasNext) goToPage(currentPage + 1) }
           }}
         >
-          <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '12%', display: 'flex', alignItems: 'center', justifyContent: 'flex-start', padding: '0 8px', opacity: hasPrev ? 0.25 : 0, pointerEvents: 'none', transition: 'opacity 0.2s' }}>
+          <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '22%', display: 'flex', alignItems: 'center', justifyContent: 'flex-start', padding: '0 12px', opacity: hasPrev ? 0.45 : 0, pointerEvents: 'none', transition: 'opacity 0.2s' }}>
             <LeftOutlined style={{ color: '#fff', fontSize: 28 }} />
           </div>
-          <div style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: '12%', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', padding: '0 8px', opacity: hasNext ? 0.25 : 0, pointerEvents: 'none', transition: 'opacity 0.2s' }}>
+          <div style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: '22%', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', padding: '0 12px', opacity: hasNext ? 0.45 : 0, pointerEvents: 'none', transition: 'opacity 0.2s' }}>
             <RightOutlined style={{ color: '#fff', fontSize: 28 }} />
           </div>
           <img
