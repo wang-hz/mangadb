@@ -43,6 +43,7 @@ export default function ChangePasswordModal({ open, onClose, targetUuid, isSelf 
   return (
     <Modal
       title={t('changePw.title')}
+      width="min(520px, 95vw)"
       open={open}
       onOk={handleOk}
       onCancel={handleCancel}

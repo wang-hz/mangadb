@@ -150,6 +150,7 @@ export default function TagListPage() {
 
       <Modal
         title={t('tag.create')}
+        width="min(520px, 95vw)"
         open={createModalOpen}
         onCancel={() => { setCreateModalOpen(false); createForm.resetFields() }}
         onOk={() => createForm.submit()}

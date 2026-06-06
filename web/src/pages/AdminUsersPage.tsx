@@ -84,6 +84,7 @@ export default function AdminUsersPage() {
 
       <Modal
         title={t('adminUsers.createTitle')}
+        width="min(520px, 95vw)"
         open={createModalOpen}
         onCancel={() => { setCreateModalOpen(false); form.resetFields() }}
         onOk={() => form.submit()}

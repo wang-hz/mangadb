@@ -278,6 +278,7 @@ export default function TagMangaListPage() {
 
       <Modal
         title={t('tagDetail.batchAddTag')}
+        width="min(520px, 95vw)"
         open={batchTagModalOpen}
         onCancel={() => { setBatchTagModalOpen(false); setBatchSelectedTagUuid(undefined); setBatchTagSearch('') }}
         onOk={handleBatchAddTag}
@@ -303,6 +304,7 @@ export default function TagMangaListPage() {
 
       <Modal
         title={t('tagDetail.batchSetDate')}
+        width="min(520px, 95vw)"
         open={batchDateModalOpen}
         onCancel={() => { setBatchDateModalOpen(false); setBatchDate(null) }}
         onOk={handleBatchSetDate}
