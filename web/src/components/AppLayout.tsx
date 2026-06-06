@@ -1,14 +1,14 @@
-import { AuditOutlined, BookOutlined, DownOutlined, GithubOutlined, ImportOutlined, KeyOutlined, LogoutOutlined, TagOutlined, UserOutlined } from '@ant-design/icons'
+import { AuditOutlined, BookOutlined, DownOutlined, ImportOutlined, InfoCircleOutlined, KeyOutlined, LogoutOutlined, TagOutlined, UserOutlined, WifiOutlined } from '@ant-design/icons'
 import type { MenuProps } from 'antd'
 import { Button, Dropdown, Grid, Layout, Menu } from 'antd'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import ChangePasswordModal from './ChangePasswordModal'
+import AboutModal from './AboutModal'
+import OpdsInfoModal from './OpdsInfoModal'
 import { logout } from '../api/auth'
 import { clearSession, getRole, getUsername, getUuid } from '../utils/token'
-
-declare const __APP_VERSION__: string
 
 const { Header, Content } = Layout
 const { useBreakpoint } = Grid
@@ -21,6 +21,8 @@ export default function AppLayout() {
   const username = getUsername()
   const uuid = getUuid()
   const [changePwOpen, setChangePwOpen] = useState(false)
+  const [opdsOpen, setOpdsOpen] = useState(false)
+  const [aboutOpen, setAboutOpen] = useState(false)
 
   const selectedKey = location.pathname.startsWith('/mangas') ? 'mangas'
     : location.pathname.startsWith('/tags') ? 'tags'
@@ -49,6 +51,9 @@ export default function AppLayout() {
       { key: 'admin-import', icon: <ImportOutlined />, label: t('user.import'), onClick: () => navigate('/admin/import') },
     ] : []),
     { type: 'divider' as const },
+    { key: 'opds', icon: <WifiOutlined />, label: t('opds.title'), onClick: () => setOpdsOpen(true) },
+    { key: 'about', icon: <InfoCircleOutlined />, label: t('about.title'), onClick: () => setAboutOpen(true) },
+    { type: 'divider' as const },
     { key: 'logout', icon: <LogoutOutlined />, label: t('user.logout'), danger: true, onClick: handleLogout },
   ]
 
@@ -57,24 +62,7 @@ export default function AppLayout() {
       <Header style={{ display: 'flex', alignItems: 'center', padding: isMobile ? '0 16px' : '0 24px', gap: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, whiteSpace: 'nowrap' }}>
           <img src="/favicon.svg" style={{ width: 30, height: 30, flexShrink: 0 }} />
-          <div>
-            <div style={{ color: 'white', fontWeight: 700, fontSize: 17, lineHeight: 1.2 }}>MangaDB</div>
-            {!isMobile && (
-              <div style={{ fontSize: 11, lineHeight: 1.3, color: 'rgba(255,255,255,0.38)', marginTop: 1 }}>
-                <a
-                  href="https://github.com/wang-hz/mangadb"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ color: 'inherit', textDecoration: 'none' }}
-                >
-                  <GithubOutlined style={{ marginRight: 3 }} />
-                  GitHub
-                </a>
-                <span style={{ margin: '0 5px', opacity: 0.6 }}>·</span>
-                v{__APP_VERSION__}
-              </div>
-            )}
-          </div>
+          <div style={{ color: 'white', fontWeight: 700, fontSize: 17 }}>MangaDB</div>
         </div>
         {!isMobile && (
           <Menu
@@ -145,6 +133,9 @@ export default function AppLayout() {
           ))}
         </div>
       )}
+
+      <OpdsInfoModal open={opdsOpen} onClose={() => setOpdsOpen(false)} />
+      <AboutModal open={aboutOpen} onClose={() => setAboutOpen(false)} />
 
       {uuid && (
         <ChangePasswordModal

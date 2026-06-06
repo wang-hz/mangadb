@@ -168,6 +168,19 @@ const en = {
   'import.tagName': 'Tag Name',
   'import.searchTags': 'Search existing tags',
   'import.newTag': 'New Tag',
+
+  'about.title': 'About',
+  'about.description': 'A self-hosted manga database with OPDS support.',
+
+  'opds.title': 'OPDS Config',
+  'opds.urlLabel': 'URL',
+  'opds.authLabel': 'Authentication',
+  'opds.authDesc': 'Connect using your MangaDB username and password via HTTP Basic Auth — no extra setup required.',
+  'opds.appsLabel': 'App Setup Guides',
+  'opds.guide.koreader': 'Menu → Search → OPDS Catalog Browser → Add Catalog. Enter the URL above with your username and password.',
+  'opds.guide.moon': 'Library → Online Library → OPDS → Add OPDS. Enter the URL above with your username and password.',
+  'opds.guide.chunky': 'Sidebar → Import → Servers → Add OPDS. Enter the URL above with your username and password.',
+  'opds.guide.panels': 'Collections → + → OPDS. Enter the URL above with your username and password.',
 } as const
 
 export default en

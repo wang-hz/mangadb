@@ -168,6 +168,19 @@ const zh = {
   'import.tagName': '标签名',
   'import.searchTags': '搜索已有标签',
   'import.newTag': '新建标签',
+
+  'about.title': '关于',
+  'about.description': '自托管漫画数据库，支持 OPDS 协议。',
+
+  'opds.title': 'OPDS 配置',
+  'opds.urlLabel': '地址',
+  'opds.authLabel': '认证方式',
+  'opds.authDesc': '使用您的 MangaDB 用户名和密码通过 HTTP Basic Auth 连接，无需额外配置。',
+  'opds.appsLabel': '客户端配置参考',
+  'opds.guide.koreader': '菜单 → 搜索 → OPDS 目录浏览器 → 添加目录，输入上方地址、用户名和密码。',
+  'opds.guide.moon': '书库 → 在线书库 → OPDS → 添加 OPDS，输入上方地址、用户名和密码。',
+  'opds.guide.chunky': '侧边栏 → 导入 → 服务器 → 添加 OPDS，输入上方地址、用户名和密码。',
+  'opds.guide.panels': 'Collections → + → OPDS，输入上方地址、用户名和密码。',
 } as const
 
 export default zh
