@@ -141,9 +141,9 @@ export default function ReaderPage() {
             value={currentPage + 1}
             min={1}
             max={totalPages}
-            size="small"
+            size="middle"
             controls={false}
-            style={{ width: 56, textAlign: 'center' }}
+            style={{ width: 72, textAlign: 'center' }}
             onChange={v => { if (v != null) goToPage(v - 1) }}
           />
           <span style={{ color: '#666', fontSize: 13 }}>/ {totalPages} {t('reader.pageUnit')}</span>
