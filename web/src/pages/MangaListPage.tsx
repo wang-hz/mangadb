@@ -81,6 +81,7 @@ export default function MangaListPage() {
   const onRow = useCallback(
     (record: Manga) => ({
       onClick: () => navigate(`/mangas/${record.uuid}`, { state: { from } }),
+      className: 'row-clickable',
       style: { cursor: 'pointer' },
     }),
     [navigate, from],

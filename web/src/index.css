@@ -25,6 +25,17 @@
 .manga-card:hover::after {
   opacity: 1;
 }
+.manga-card:active {
+  transform: scale(0.97);
+}
+.manga-card:active::after {
+  opacity: 1;
+}
+
+/* Touch feedback for clickable table rows */
+.ant-table-tbody > tr.row-clickable:active > td {
+  background: rgba(0, 0, 0, 0.04) !important;
+}
 
 /* Override antd disabled field styles to look similar to editable state */
 
