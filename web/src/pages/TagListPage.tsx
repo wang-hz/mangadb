@@ -3,7 +3,7 @@ import { Button, Form, Grid, Input, message, Modal, Select as AntSelect, Space, 
 import type { TableColumnsType, TablePaginationConfig } from 'antd'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
 import { usePagedData } from '../hooks/usePagedData'
 import type { Tag as TagData, TagType } from '../types'
@@ -76,11 +76,23 @@ export default function TagListPage() {
   }
 
   const columns: TableColumnsType<TagData> = useMemo(() => [
-    { title: t('tag.name'), dataIndex: 'name' },
+    {
+      title: t('tag.name'),
+      dataIndex: 'name',
+      render: (text: string, record: TagData) => (
+        <Link
+          to={`/tags/${record.uuid}/mangas?name=${encodeURIComponent(record.name)}`}
+          state={{ from: location.pathname + location.search }}
+          onClick={e => e.stopPropagation()}
+        >
+          {text}
+        </Link>
+      ),
+    },
     { title: t('tag.type'), render: (_, record) => <Tag color="geekblue">{record.tagType.name}</Tag>, width: 160 },
     { title: t('common.createAt'), dataIndex: 'createAt', width: 180, render: (v: string) => formatDateTime(v) },
     { title: t('common.updateAt'), dataIndex: 'updateAt', width: 180, render: (v: string) => formatDateTime(v) },
-  ], [t])
+  ], [t, location.pathname, location.search])
 
   const pagination: TablePaginationConfig = useMemo(() => ({
     current: page,

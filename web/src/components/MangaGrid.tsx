@@ -1,6 +1,6 @@
 import { Empty } from 'antd'
-import { memo, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { memo } from 'react'
+import { Link } from 'react-router-dom'
 import type { Manga } from '../types'
 import { formatDate } from '../utils/date'
 import CoverImage from './CoverImage'
@@ -34,14 +34,17 @@ const gridStyle = {
 
 interface CardProps {
   manga: Manga
-  onNavigate: (uuid: string) => void
+  from?: string
 }
 
-const MangaCard = memo(function MangaCard({ manga, onNavigate }: CardProps) {
-  const handleClick = useCallback(() => onNavigate(manga.uuid), [onNavigate, manga.uuid])
-
+const MangaCard = memo(function MangaCard({ manga, from }: CardProps) {
   return (
-    <div className="manga-card" onClick={handleClick}>
+    <Link
+      to={`/mangas/${manga.uuid}`}
+      state={from ? { from } : undefined}
+      className="manga-card"
+      style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}
+    >
       <div style={coverContainerStyle}>
         <CoverImage uuid={manga.uuid} cover={manga.cover} thumb style={coverImgStyle} />
       </div>
@@ -51,18 +54,11 @@ const MangaCard = memo(function MangaCard({ manga, onNavigate }: CardProps) {
           <div style={dateStyle}>{formatDate(manga.publishDate)}</div>
         )}
       </div>
-    </div>
+    </Link>
   )
 })
 
 export default function MangaGrid({ data, loading, from }: Props) {
-  const navigate = useNavigate()
-
-  const handleNavigate = useCallback(
-    (uuid: string) => navigate(`/mangas/${uuid}`, from ? { state: { from } } : undefined),
-    [navigate, from],
-  )
-
   if (loading) return <div style={{ minHeight: 200 }} />
 
   if (data.length === 0) return <Empty description="暂无漫画" style={{ padding: '48px 0' }} />
@@ -70,7 +66,7 @@ export default function MangaGrid({ data, loading, from }: Props) {
   return (
     <div style={gridStyle}>
       {data.map(manga => (
-        <MangaCard key={manga.uuid} manga={manga} onNavigate={handleNavigate} />
+        <MangaCard key={manga.uuid} manga={manga} from={from} />
       ))}
     </div>
   )

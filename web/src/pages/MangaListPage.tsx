@@ -3,7 +3,7 @@ import { Grid, Input, Pagination, Segmented, Select, Space, Table } from 'antd'
 import type { TableColumnsType, TablePaginationConfig } from 'antd'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
 import MangaGrid from '../components/MangaGrid'
 import { usePagedData } from '../hooks/usePagedData'
@@ -66,17 +66,26 @@ export default function MangaListPage() {
     [setSearchParams],
   )
 
+  const from = useMemo(() => location.pathname + location.search, [location.pathname, location.search])
+
   const columns: TableColumnsType<Manga> = useMemo(() => [
-    { title: t('manga.displayTitle'), dataIndex: 'displayTitle', ellipsis: true },
+    {
+      title: t('manga.displayTitle'),
+      dataIndex: 'displayTitle',
+      ellipsis: true,
+      render: (text: string, record: Manga) => (
+        <Link to={`/mangas/${record.uuid}`} state={{ from }} onClick={e => e.stopPropagation()}>
+          {text}
+        </Link>
+      ),
+    },
     ...(!isMobile ? [
       { title: t('manga.originalTitle'), dataIndex: 'originalTitle', ellipsis: true } as TableColumnsType<Manga>[number],
       { title: t('manga.publishDate'), dataIndex: 'publishDate', width: 120, render: (v: string | null) => v ? formatDate(v) : '-' } as TableColumnsType<Manga>[number],
       { title: t('common.createAt'), dataIndex: 'createAt', width: 180, render: (v: string) => formatDateTime(v) } as TableColumnsType<Manga>[number],
       { title: t('common.updateAt'), dataIndex: 'updateAt', width: 180, render: (v: string) => formatDateTime(v) } as TableColumnsType<Manga>[number],
     ] : []),
-  ], [t, isMobile])
-
-  const from = useMemo(() => location.pathname + location.search, [location.pathname, location.search])
+  ], [t, isMobile, from])
 
   const onRow = useCallback(
     (record: Manga) => ({
