@@ -1,5 +1,6 @@
 import prisma from '@/config/database';
-import type { PaginationQuery } from '@/type';
+import type { MangaListView, MangaSortBy, SortOrder } from '@/type';
+import type { Prisma } from '@/generated/prisma/client';
 import { DATA_DIR } from '@/config/env';
 import fs from 'fs';
 import path from 'path';
@@ -32,6 +33,19 @@ const mangaSelect = {
   },
 };
 
+const mangaSummarySelect = {
+  uuid: true,
+  displayTitle: true,
+  originalTitle: true,
+  publishDate: true,
+  cover: true,
+  createAt: true,
+  updateAt: true,
+};
+
+type MangaDetail = Prisma.MangaGetPayload<{ select: typeof mangaSelect }>;
+type MangaSummary = Prisma.MangaGetPayload<{ select: typeof mangaSummarySelect }>;
+
 function buildWhere(search?: string) {
   if (!search) {
     return {};
@@ -45,12 +59,13 @@ function buildWhere(search?: string) {
 }
 
 function buildOrderBy(
-  sortBy: PaginationQuery['sortBy'],
-  sortOrder: PaginationQuery['sortOrder'],
-) {
-  return {
-    [sortBy ?? 'createAt']: sortOrder ?? 'desc',
-  } as const;
+  sortBy: MangaSortBy,
+  sortOrder: SortOrder,
+): Prisma.MangaOrderByWithRelationInput[] {
+  return [
+    { [sortBy]: sortOrder },
+    { pid: sortOrder },
+  ];
 }
 
 export class MangaService {
@@ -64,12 +79,41 @@ export class MangaService {
   async getMangasByPage(
     page: number,
     limit: number,
-    sortBy: 'createAt' | 'updateAt' | 'publishDate' | undefined,
-    sortOrder: 'asc' | 'desc' | undefined,
+    sortBy: MangaSortBy,
+    sortOrder: SortOrder,
+    search: string | undefined,
+    view: 'summary',
+  ): Promise<[MangaSummary[], number]>;
+  async getMangasByPage(
+    page: number,
+    limit: number,
+    sortBy: MangaSortBy,
+    sortOrder: SortOrder,
     search?: string,
+    view?: 'full',
+  ): Promise<[MangaDetail[], number]>;
+  async getMangasByPage(
+    page: number,
+    limit: number,
+    sortBy: MangaSortBy,
+    sortOrder: SortOrder,
+    search?: string,
+    view: MangaListView = 'full',
   ) {
     const where = buildWhere(search);
     const orderBy = buildOrderBy(sortBy, sortOrder);
+    if (view === 'summary') {
+      return prisma.$transaction([
+        prisma.manga.findMany({
+          select: mangaSummarySelect,
+          where,
+          orderBy,
+          skip: page * limit,
+          take: limit,
+        }),
+        prisma.manga.count({ where }),
+      ]);
+    }
     return prisma.$transaction([
       prisma.manga.findMany({
         select: mangaSelect,
@@ -171,13 +215,44 @@ export class MangaService {
     tagUuid: string,
     pageIndex: number,
     pageSize: number,
-    sortBy?: 'createAt' | 'updateAt' | 'publishDate',
-    sortOrder?: 'asc' | 'desc',
+    sortBy: MangaSortBy,
+    sortOrder: SortOrder,
+    search: string | undefined,
+    view: 'summary',
+  ): Promise<[MangaSummary[], number]>;
+  async getMangasByTagUuid(
+    tagUuid: string,
+    pageIndex: number,
+    pageSize: number,
+    sortBy?: MangaSortBy,
+    sortOrder?: SortOrder,
     search?: string,
+    view?: 'full',
+  ): Promise<[MangaDetail[], number]>;
+  async getMangasByTagUuid(
+    tagUuid: string,
+    pageIndex: number,
+    pageSize: number,
+    sortBy: MangaSortBy = 'createAt',
+    sortOrder: SortOrder = 'desc',
+    search?: string,
+    view: MangaListView = 'full',
   ) {
     const tagFilter = { mangaTags: { some: { tag: { uuid: tagUuid } } } };
     const where = search ? { AND: [tagFilter, buildWhere(search)] } : tagFilter;
     const orderBy = buildOrderBy(sortBy, sortOrder);
+    if (view === 'summary') {
+      return prisma.$transaction([
+        prisma.manga.findMany({
+          select: mangaSummarySelect,
+          where,
+          orderBy,
+          skip: pageIndex * pageSize,
+          take: pageSize,
+        }),
+        prisma.manga.count({ where }),
+      ]);
+    }
     return prisma.$transaction([
       prisma.manga.findMany({
         select: mangaSelect,

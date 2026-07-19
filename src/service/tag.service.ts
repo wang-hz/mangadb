@@ -1,5 +1,6 @@
 import prisma from '@/config/database';
-import type { PaginationQuery } from '@/type';
+import type { Prisma } from '@/generated/prisma/client';
+import type { SortOrder, TagListQuery } from '@/type';
 
 const tagSelect = {
   uuid: true,
@@ -29,12 +30,13 @@ function buildWhere(search?: string) {
 }
 
 function buildOrderBy(
-  sortBy: PaginationQuery['sortBy'],
-  sortOrder: PaginationQuery['sortOrder'],
-) {
-  return {
-    [sortBy ?? 'createAt']: sortOrder ?? 'desc',
-  } as const;
+  sortBy: TagListQuery['sortBy'],
+  sortOrder: SortOrder,
+): Prisma.TagOrderByWithRelationInput[] {
+  return [
+    { [sortBy]: sortOrder },
+    { pid: sortOrder },
+  ];
 }
 
 export class TagService {
@@ -62,8 +64,8 @@ export class TagService {
   async getTagsByPage(
     page: number,
     limit: number,
-    sortBy: 'createAt' | 'updateAt' | undefined,
-    sortOrder: 'asc' | 'desc' | undefined,
+    sortBy: TagListQuery['sortBy'] = 'createAt',
+    sortOrder: SortOrder = 'desc',
     search?: string,
     tagTypeName?: string,
   ) {

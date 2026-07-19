@@ -4,4 +4,7 @@ export interface PaginationQuery {
   search?: string;
   sortBy?: 'createAt' | 'updateAt' | 'publishDate';
   sortOrder?: 'asc' | 'desc';
+  view?: 'full' | 'summary';
 }
+
+export * from './pagination';

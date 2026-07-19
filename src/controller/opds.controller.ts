@@ -226,7 +226,7 @@ export class OpdsController {
       return res.sendStatus(404);
     }
     const page = getPage(req.query.page);
-    const [mangas, total] = await mangaService.getMangasByTagUuid(tagUuid, page-1, PAGE_SIZE, undefined, undefined);
+    const [mangas, total] = await mangaService.getMangasByTagUuid(tagUuid, page - 1, PAGE_SIZE);
     const content = await getMangasResContent(mangas);
     content.feed.id = tagUuid;
     content.feed.title = tag.name;
@@ -319,7 +319,7 @@ export class OpdsController {
       return res.sendStatus(400);
     }
     const page = getPage(req.query.page);
-    const [mangas, total] = await mangaService.getMangasByPage(page - 1, PAGE_SIZE, undefined, undefined, keyword);
+    const [mangas, total] = await mangaService.getMangasByPage(page - 1, PAGE_SIZE, 'createAt', 'desc', keyword);
     const content = await getMangasResContent(mangas);
     content.feed.id = keyword;
     content.feed.title = keyword;

@@ -2,7 +2,7 @@ import { Prisma, Tag } from '@/generated/prisma/client';
 import { mangaService } from '@/service/manga.service';
 import { tagService } from '@/service/tag.service';
 import { Request, Response } from 'express';
-import type { PaginationQuery } from '@/type';
+import { mangaListQuerySchema, paginationQuerySchema, tagListQuerySchema } from '@/type';
 import { z } from 'zod';
 
 const updateMangaSchema = z.object({
@@ -36,25 +36,14 @@ const updatePagesSchema = z.object({
   cover: z.number().int().nonnegative(),
 });
 
-function parsePositiveInt(value: string | undefined, defaultValue: number) {
-  if (!value) {
-    return defaultValue;
-  }
-  const n = Number(value);
-  if (!Number.isInteger(n) || n <= 0) {
-    return defaultValue;
-  }
-  return n;
-}
-
 export class MangadbController {
-  async getMangasByPage(req: Request<any, any, any, PaginationQuery>, res: Response) {
-    const page = parsePositiveInt(req.query.page, 1);
-    const limit = parsePositiveInt(req.query.limit, 10);
-    const search = req.query.search;
-    const sortBy = req.query.sortBy;
-    const sortOrder = req.query.sortOrder;
-    const [items, total] = await mangaService.getMangasByPage(page-1, limit, sortBy, sortOrder, search);
+  async getMangasByPage(req: Request, res: Response) {
+    const parsed = mangaListQuerySchema.safeParse(req.query);
+    if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+    const { page, limit, search, sortBy, sortOrder, view } = parsed.data;
+    const [items, total] = view === 'summary'
+      ? await mangaService.getMangasByPage(page - 1, limit, sortBy, sortOrder, search, 'summary')
+      : await mangaService.getMangasByPage(page - 1, limit, sortBy, sortOrder, search, 'full');
     res.json({ items, total, page, limit });
   }
 
@@ -124,21 +113,22 @@ export class MangadbController {
     res.json(tag);
   }
 
-  async getMangasByTagUuid(req: Request<any, any, any, PaginationQuery>, res: Response) {
+  async getMangasByTagUuid(req: Request, res: Response) {
     const tagUuid = req.params.uuid;
-    const page = parsePositiveInt(req.query.page, 1);
-    const limit = parsePositiveInt(req.query.limit, 10);
-    const { search, sortBy, sortOrder } = req.query;
-    const [items, total] = await mangaService.getMangasByTagUuid(tagUuid, page - 1, limit, sortBy, sortOrder, search);
+    const parsed = mangaListQuerySchema.safeParse(req.query);
+    if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+    const { page, limit, search, sortBy, sortOrder, view } = parsed.data;
+    const [items, total] = view === 'summary'
+      ? await mangaService.getMangasByTagUuid(tagUuid, page - 1, limit, sortBy, sortOrder, search, 'summary')
+      : await mangaService.getMangasByTagUuid(tagUuid, page - 1, limit, sortBy, sortOrder, search, 'full');
     res.json({ items, total, page, limit });
   }
 
-  async getTagsByPage(req: Request<any, any, any, PaginationQuery & { tagTypeName?: string }>, res: Response) {
-    const page = parsePositiveInt(req.query.page, 1);
-    const limit = parsePositiveInt(req.query.limit, 10);
-    const { search, sortBy, sortOrder, tagTypeName } = req.query;
-    const tagSortBy = sortBy === 'publishDate' ? undefined : sortBy;
-    const [items, total] = await tagService.getTagsByPage(page-1, limit, tagSortBy, sortOrder, search, tagTypeName);
+  async getTagsByPage(req: Request, res: Response) {
+    const parsed = tagListQuerySchema.safeParse(req.query);
+    if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+    const { page, limit, search, sortBy, sortOrder, tagTypeName } = parsed.data;
+    const [items, total] = await tagService.getTagsByPage(page - 1, limit, sortBy, sortOrder, search, tagTypeName);
     res.json({ items, total, page, limit });
   }
 
@@ -190,9 +180,10 @@ export class MangadbController {
     }
   }
 
-  async getTagTypesByPage(req: Request<any, any, any, PaginationQuery>, res: Response) {
-    const page = parsePositiveInt(req.query.page, 1);
-    const limit = parsePositiveInt(req.query.limit, 10);
+  async getTagTypesByPage(req: Request, res: Response) {
+    const parsed = paginationQuerySchema.safeParse(req.query);
+    if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+    const { page, limit } = parsed.data;
     const [items, total] = await tagService.getTagTypesByPage(page-1, limit);
     res.json({ items, total, page, limit });
   }
