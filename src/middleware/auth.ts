@@ -53,8 +53,10 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
 
 export async function requireBasicOrBearer(req: Request, res: Response, next: NextFunction) {
   const auth = req.headers.authorization ?? '';
-  if (await verifyBearer(auth)) { next(); return; }
-  if (await verifyBearer(`Bearer ${req.cookies?.token ?? ''}`)) { next(); return; }
+  const headerPayload = await verifyBearer(auth);
+  if (headerPayload) { req.user = headerPayload; next(); return; }
+  const cookiePayload = await verifyBearer(`Bearer ${req.cookies?.token ?? ''}`);
+  if (cookiePayload) { req.user = cookiePayload; next(); return; }
   if (await verifyBasic(auth)) { next(); return; }
   res.set('WWW-Authenticate', 'Basic realm="MangaDB"');
   res.status(401).json({ error: 'Unauthorized' });

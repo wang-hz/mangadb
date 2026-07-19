@@ -1,6 +1,7 @@
 import { DATA_DIR } from '@/config/env';
 import { mangaService } from '@/service/manga.service';
 import archiver from 'archiver';
+import { createHash } from 'crypto';
 import { Request, Response } from 'express';
 import fs from 'fs';
 import mime from 'mime-types';
@@ -18,9 +19,16 @@ export function safeJoin(base: string, filename: string): string | null {
   return resolved.startsWith(resolvedBase + path.sep) ? resolved : null;
 }
 
-export function isRegisteredPage(pages: string[], filename: string): boolean {
-  return pages.includes(filename);
-};
+export function parsePageIndex(value: string): number | null {
+  if (!/^\d+$/.test(value)) return null;
+  const pageIndex = Number(value);
+  return Number.isSafeInteger(pageIndex) ? pageIndex : null;
+}
+
+function thumbnailCacheKey(mangaUuid: string, filename: string): string {
+  const filenameHash = createHash('sha256').update(filename).digest('hex');
+  return `${mangaUuid}/${filenameHash}`;
+}
 
 async function serveImageFile(req: Request, res: Response, imgPath: string): Promise<void> {
   let stat: fs.Stats;
@@ -63,6 +71,7 @@ async function serveThumbnail(req: Request, res: Response, imgPath: string, cach
     if (thumbStat.mtimeMs >= srcStat.mtimeMs) {
       res.setHeader('Cache-Control', 'private, max-age=86400');
       res.setHeader('Content-Type', 'image/webp');
+      res.setHeader('Content-Length', thumbStat.size);
       const stream = fs.createReadStream(thumbPath);
       stream.on('error', () => { if (!res.headersSent) res.sendStatus(500) });
       stream.pipe(res);
@@ -122,7 +131,7 @@ export class FileController {
       return res.sendStatus(400);
     }
     const pages = await mangaService.getMangaPagesByUuid(mangaUuid);
-    if (!pages || !isRegisteredPage(pages, filename)) return res.sendStatus(404);
+    if (!pages) return res.sendStatus(404);
     const mangaPath = path.join(DATA_DIR, mangaUuid);
     const imgPath = safeJoin(mangaPath, filename);
     if (!imgPath) return res.sendStatus(400);
@@ -135,8 +144,8 @@ export class FileController {
     if (!mangaUuid || !UUID_RE.test(mangaUuid) || !pageNumber) {
       return res.sendStatus(400);
     }
-    const pageIndex = parseInt(pageNumber);
-    if (!Number.isInteger(pageIndex) || pageIndex < 0) {
+    const pageIndex = parsePageIndex(pageNumber);
+    if (pageIndex === null) {
       return res.sendStatus(400);
     }
     const pages = await mangaService.getMangaPagesByUuid(mangaUuid);
@@ -152,7 +161,7 @@ export class FileController {
     if (!imgPath) return res.sendStatus(400);
 
     if (req.query.thumb === '1') {
-      await serveThumbnail(req, res, imgPath, `${mangaUuid}/${pageIndex}`);
+      await serveThumbnail(req, res, imgPath, thumbnailCacheKey(mangaUuid, imgFilename));
       return;
     }
     await serveImageFile(req, res, imgPath);

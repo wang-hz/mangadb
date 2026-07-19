@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { describe, it } from 'node:test';
-import { isRegisteredPage, safeJoin } from './file.controller';
+import { parsePageIndex, safeJoin } from './file.controller';
 
 describe('file controller path checks', () => {
   it('resolves registered files inside the manga directory', () => {
@@ -15,10 +15,11 @@ describe('file controller path checks', () => {
     assert.equal(safeJoin(base, '.'), null);
   });
 
-  it('only accepts filenames registered in the page manifest', () => {
-    const pages = ['001.jpg', 'nested/002.png'];
-    assert.equal(isRegisteredPage(pages, '001.jpg'), true);
-    assert.equal(isRegisteredPage(pages, 'nested/002.png'), true);
-    assert.equal(isRegisteredPage(pages, 'notes.txt'), false);
+  it('requires page indexes to be complete non-negative integers', () => {
+    assert.equal(parsePageIndex('0'), 0);
+    assert.equal(parsePageIndex('001'), 1);
+    assert.equal(parsePageIndex('1abc'), null);
+    assert.equal(parsePageIndex('-1'), null);
+    assert.equal(parsePageIndex('9007199254740992'), null);
   });
 });
