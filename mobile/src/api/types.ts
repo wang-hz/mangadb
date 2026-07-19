@@ -60,3 +60,15 @@ export interface SessionUser {
   role: string
   expiresAt: number
 }
+
+export interface HealthResponse {
+  status: 'ok' | 'error'
+}
+
+export interface SetupStatusResponse {
+  needsSetup: boolean
+}
+
+export interface LoginResponse {
+  token: string
+}
