@@ -29,3 +29,7 @@ export async function login(
   }
   return response
 }
+
+export async function logout(client: ApiClient): Promise<void> {
+  await client.request<void>('/api/auth/logout', { method: 'POST' })
+}

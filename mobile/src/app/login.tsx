@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import {
+  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -57,7 +58,13 @@ export default function LoginScreen() {
     setSubmitting(true)
     setError(null)
     try {
-      await session.clearServer()
+      const result = await session.clearServer()
+      if (!result.cacheCleared) {
+        Alert.alert(
+          '本机缓存未完全清理',
+          '服务器配置已经清除，但部分查询或图片缓存未能清理。下次退出时会再次尝试。',
+        )
+      }
       router.replace('/connect')
     } catch {
       setError('无法清除本机服务器配置，请重试')

@@ -27,6 +27,10 @@ interface AuthSession {
   user: SessionUser
 }
 
+export interface SessionCleanupResult {
+  cacheCleared: boolean
+}
+
 interface SessionContextValue {
   status: SessionStatus
   serverUrl: string | null
@@ -34,33 +38,56 @@ interface SessionContextValue {
   api: ApiClient | null
   configureServer: (serverUrl: string) => Promise<void>
   authenticate: (token: string) => Promise<void>
-  signOut: () => Promise<void>
-  clearServer: () => Promise<void>
+  signOut: () => Promise<SessionCleanupResult>
+  clearServer: () => Promise<SessionCleanupResult>
 }
 
 const SessionContext = createContext<SessionContextValue | null>(null)
+const noopSessionCleanup = async () => true
 
-export function SessionProvider({ children }: PropsWithChildren) {
+interface SessionProviderProps extends PropsWithChildren {
+  onSessionCleanup?: () => Promise<boolean>
+}
+
+export function SessionProvider({
+  children,
+  onSessionCleanup = noopSessionCleanup,
+}: SessionProviderProps) {
   const [loading, setLoading] = useState(true)
   const [serverUrl, setServerUrl] = useState<string | null>(null)
   const [auth, setAuth] = useState<AuthSession | null>(null)
   const serverUrlRef = useRef<string | null>(null)
   const authRef = useRef<AuthSession | null>(null)
   const authVersionRef = useRef(0)
-  const tokenStorageQueueRef = useRef<Promise<void>>(Promise.resolve())
+  const sessionTransitionQueueRef = useRef<Promise<void>>(Promise.resolve())
+  const signOutInFlightRef = useRef<Promise<SessionCleanupResult> | null>(null)
+  const clearServerInFlightRef = useRef<Promise<SessionCleanupResult> | null>(null)
 
-  const runTokenStorageOperation = useCallback((operation: () => Promise<void>) => {
-    const result = tokenStorageQueueRef.current.then(operation, operation)
-    tokenStorageQueueRef.current = result.catch(() => {})
+  const runSessionTransition = useCallback(<T,>(operation: () => Promise<T>): Promise<T> => {
+    const result = sessionTransitionQueueRef.current.then(operation, operation)
+    sessionTransitionQueueRef.current = result.then(() => {}, () => {})
     return result
   }, [])
 
-  const signOut = useCallback(async () => {
+  const cleanupCaches = useCallback(async () => {
+    try { return await onSessionCleanup() } catch { return false }
+  }, [onSessionCleanup])
+
+  const signOut = useCallback((): Promise<SessionCleanupResult> => {
+    if (signOutInFlightRef.current) return signOutInFlightRef.current
     authVersionRef.current += 1
-    authRef.current = null
-    setAuth(null)
-    await runTokenStorageOperation(removeAccessToken)
-  }, [runTokenStorageOperation])
+    const operation = runSessionTransition(async () => {
+      await removeAccessToken()
+      authRef.current = null
+      setAuth(null)
+      return { cacheCleared: await cleanupCaches() }
+    })
+    signOutInFlightRef.current = operation
+    void operation.finally(() => {
+      if (signOutInFlightRef.current === operation) signOutInFlightRef.current = null
+    }).catch(() => {})
+    return operation
+  }, [cleanupCaches, runSessionTransition])
 
   useEffect(() => {
     let active = true
@@ -76,7 +103,13 @@ export function SessionProvider({ children }: PropsWithChildren) {
             authRef.current = storedAuth
             setAuth(storedAuth)
           }
-          else await removeAccessToken()
+          else {
+            try { await removeAccessToken() } catch {}
+            await cleanupCaches()
+          }
+        } else if (token) {
+          try { await removeAccessToken() } catch {}
+          await cleanupCaches()
         }
       })
       .catch(() => {
@@ -88,7 +121,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
       })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [])
+  }, [cleanupCaches])
 
   const configureServer = useCallback(async (nextServerUrl: string) => {
     if (nextServerUrl !== serverUrlRef.current) await signOut()
@@ -103,38 +136,54 @@ export function SessionProvider({ children }: PropsWithChildren) {
     const nextAuth = { token, user }
     const authVersion = authVersionRef.current + 1
     authVersionRef.current = authVersion
-    authRef.current = nextAuth
-    try {
-      await runTokenStorageOperation(() => saveAccessToken(token))
-      if (authVersionRef.current === authVersion) setAuth(nextAuth)
-    } catch (error) {
+    await runSessionTransition(async () => {
+      if (!serverUrlRef.current) throw new Error('请先配置服务器')
+      await saveAccessToken(token)
       if (authVersionRef.current === authVersion) {
-        authRef.current = null
-        setAuth(null)
+        authRef.current = nextAuth
+        setAuth(nextAuth)
       }
-      throw error
-    }
-  }, [runTokenStorageOperation])
+    })
+  }, [runSessionTransition])
 
   const expireAuth = useCallback(async (sourceServerUrl: string, sourceToken: string) => {
     if (
       serverUrlRef.current !== sourceServerUrl ||
       authRef.current?.token !== sourceToken
     ) return
-    await signOut()
-  }, [signOut])
+    try {
+      await signOut()
+    } catch {
+      await runSessionTransition(async () => {
+        if (
+          serverUrlRef.current !== sourceServerUrl ||
+          authRef.current?.token !== sourceToken
+        ) return
+        authVersionRef.current += 1
+        authRef.current = null
+        setAuth(null)
+        await Promise.allSettled([removeAccessToken(), cleanupCaches()])
+      })
+    }
+  }, [cleanupCaches, runSessionTransition, signOut])
 
-  const clearServer = useCallback(async () => {
+  const clearServer = useCallback((): Promise<SessionCleanupResult> => {
+    if (clearServerInFlightRef.current) return clearServerInFlightRef.current
     authVersionRef.current += 1
-    authRef.current = null
-    serverUrlRef.current = null
-    setAuth(null)
-    setServerUrl(null)
-    await Promise.all([
-      runTokenStorageOperation(removeAccessToken),
-      removeServerUrl(),
-    ])
-  }, [runTokenStorageOperation])
+    const operation = runSessionTransition(async () => {
+      await Promise.all([removeAccessToken(), removeServerUrl()])
+      authRef.current = null
+      serverUrlRef.current = null
+      setAuth(null)
+      setServerUrl(null)
+      return { cacheCleared: await cleanupCaches() }
+    })
+    clearServerInFlightRef.current = operation
+    void operation.finally(() => {
+      if (clearServerInFlightRef.current === operation) clearServerInFlightRef.current = null
+    }).catch(() => {})
+    return operation
+  }, [cleanupCaches, runSessionTransition])
 
   const api = useMemo(() => {
     if (!serverUrl) return null

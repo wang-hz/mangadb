@@ -1,4 +1,4 @@
-import { checkServer, login } from './auth'
+import { checkServer, login, logout } from './auth'
 import type { ApiClient } from './client'
 
 describe('authentication API', () => {
@@ -38,5 +38,12 @@ describe('authentication API', () => {
 
     request.mockResolvedValueOnce({})
     await expect(login(client, 'reader', 'password')).rejects.toMatchObject({ status: 502 })
+  })
+
+  it('revokes the current server session', async () => {
+    request.mockResolvedValueOnce(undefined)
+
+    await expect(logout(client)).resolves.toBeUndefined()
+    expect(request).toHaveBeenLastCalledWith('/api/auth/logout', { method: 'POST' })
   })
 })

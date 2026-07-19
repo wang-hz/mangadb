@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { type PropsWithChildren, useState } from 'react'
+import { type PropsWithChildren, useCallback, useState } from 'react'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
+import { clearSessionCaches } from '@/session/cleanup'
 import { SessionProvider } from '@/session/SessionContext'
 
 export function AppProviders({ children }: PropsWithChildren) {
@@ -18,11 +19,15 @@ export function AppProviders({ children }: PropsWithChildren) {
       },
     },
   }))
+  const onSessionCleanup = useCallback(
+    () => clearSessionCaches(queryClient),
+    [queryClient],
+  )
 
   return (
     <SafeAreaProvider>
       <QueryClientProvider client={queryClient}>
-        <SessionProvider>{children}</SessionProvider>
+        <SessionProvider onSessionCleanup={onSessionCleanup}>{children}</SessionProvider>
       </QueryClientProvider>
     </SafeAreaProvider>
   )
