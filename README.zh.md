@@ -17,6 +17,7 @@
 - 管理员登录日志：查看登录历史，包含用户名、IP、User-Agent 及结果
 - PWA 支持，可安装至移动设备主屏
 - 移动端响应式 UI，底部标签栏导航
+- 原生 Android/iPhone 客户端，支持漫画与标签浏览、详情以及翻页/连续滚动阅读
 - 多语言界面：简体中文、繁体中文、日本语、英文
 - Docker 支持，镜像发布至 GitHub Container Registry
 
@@ -25,6 +26,7 @@
 - **后端**：Node.js、Express 5、TypeScript、Prisma ORM
 - **数据库**：PostgreSQL
 - **前端**：React 18、Ant Design、Vite
+- **移动端**：Expo SDK 55、React Native、Expo Router、TanStack Query
 - **容器**：Docker，镜像发布至 GitHub Container Registry
 
 ## 运行要求
@@ -54,6 +56,79 @@ npm run web:dev
 ```
 
 服务默认运行在 `http://localhost:3000`。首次启动会跳转至初始化页面，创建管理员账号。
+
+## Expo 移动端
+
+`mobile/` 下是独立的 Android/iPhone 客户端，双端应用标识均为 `top.wanghaizhou.mangadb`。界面使用简体中文，支持服务器配置、登录、漫画与标签浏览、漫画详情、翻页与连续滚动阅读、本机按账号隔离的阅读位置、设置和退出。
+
+移动端只提供在线阅读，不包含管理功能、离线下载、收藏、历史列表或跨设备进度同步。
+
+### 移动端环境
+
+- Node.js 20 系列的 20.19.4 或更高版本；本项目已使用 Node.js 20.20.2 验证
+- Android Studio 自带或独立的 JDK 17、Android SDK Platform 36、Build Tools 36.0.0、NDK 27.1.12297006 和 CMake 3.22.1
+- iOS Simulator 构建需要 Xcode 26.2 和 CocoaPods
+
+移动端依赖需要单独安装；安装仓库根目录依赖不会创建 `mobile/node_modules`：
+
+```bash
+npm --prefix mobile ci
+```
+
+版本要求遵循 [Expo SDK 55 兼容矩阵](https://docs.expo.dev/versions/v55.0.0/)。缺少 Platform 36 或 Build Tools 36.0.0 时，请参考 [Android SDK 36 配置说明](https://developer.android.com/about/versions/16/setup-sdk)。接受 Android SDK 许可后，首次 Gradle 构建可自动安装固定版本的 NDK 和 CMake。
+
+### 开发与服务器连接
+
+在两个终端分别启动 API 和 Expo：
+
+```bash
+npm run dev
+npm run mobile:dev
+```
+
+使用 `npm run mobile:android` 或 `npm run mobile:ios` 生成并运行本地原生工程。常用服务器地址如下：
+
+- Android Emulator：`http://10.0.2.2:3000`
+- iOS Simulator：`http://localhost:3000`
+- 同一 Wi-Fi 下的真机：`http://<电脑局域网-IP>:3000` 或 `.local` 主机名
+
+公网服务器必须使用可信 HTTPS。应用会拒绝公共 HTTP，直接允许 loopback HTTP，私网 IP 或 `.local` 的 HTTP 需确认明文风险后才能保存；自签名 HTTPS 的证书错误不会被绕过。iOS 首次连接局域网服务器时会请求本地网络权限。Android 原生层为本地开发开放明文流量，公共 HTTP 限制由应用的地址校验执行。
+
+### 验证
+
+```bash
+npm run mobile:typecheck
+npm run mobile:test
+cd mobile && npx expo install --check
+```
+
+根目录的 `npm run build:all` 只构建 Web 与 API；原生应用需使用下方命令单独构建。
+
+### Android 测试 APK
+
+Release 构建需要 JDK 17。在 macOS 上可以直接选择 Android Studio 自带的运行时：
+
+```bash
+export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
+export ANDROID_HOME="$HOME/Library/Android/sdk"
+npm run mobile:build:android
+```
+
+产物位于 `mobile/android/app/build/outputs/apk/release/app-release.apk`，可使用 `adb install -r mobile/android/app/build/outputs/apk/release/app-release.apk` 安装。该 APK 使用 Expo 模板的调试密钥签名，仅用于本地测试，不是应用商店发行包。
+
+### iOS Simulator Release
+
+```bash
+npm run mobile:build:ios
+```
+
+如需指定 Simulator，先执行 `xcrun simctl list devices available`，再运行 `npm --prefix mobile run build:ios:simulator -- --device <Simulator-UUID>`。该命令会构建、安装并启动 Release Simulator 应用，不会生成 IPA。`.app` 通常位于 `~/Library/Developer/Xcode/DerivedData/MangaDB-*/Build/Products/Release-iphonesimulator/MangaDB.app`。
+
+Simulator 构建不需要 Apple 开发者账号；iPhone 真机安装和 IPA 输出需要 Apple 签名与 provisioning，不在本轮交付范围内。
+
+### Continuous Native Generation
+
+`mobile/android/` 和 `mobile/ios/` 是已忽略的生成目录。原生构建脚本会执行 clean Expo prebuild，因此不要在这些目录中保存持久修改。后续 clean Android 构建会删除之前的 Android 产物；如需保留 APK，请在 Android 重建前复制到其他位置。
 
 ## 环境变量
 
@@ -165,3 +240,5 @@ npm run build
 # 仅构建前端
 npm run web:build
 ```
+
+移动端构建见 [Expo 移动端](#expo-移动端)，并且不会包含在 `build:all` 中。

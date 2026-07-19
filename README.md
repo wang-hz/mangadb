@@ -17,6 +17,7 @@ A self-hosted manga library server with a web UI and OPDS feed support.
 - Admin login log: view login history with username, IP, user agent, and result
 - PWA support — installable on mobile devices
 - Mobile-responsive UI with bottom tab navigation
+- Native Android and iPhone client for browsing, tags, manga details, and flip or continuous-scroll reading
 - Multilingual UI: Simplified Chinese, Traditional Chinese, Japanese, English
 - Docker support with images published to GitHub Container Registry
 
@@ -25,6 +26,7 @@ A self-hosted manga library server with a web UI and OPDS feed support.
 - **Backend**: Node.js, Express 5, TypeScript, Prisma ORM
 - **Database**: PostgreSQL
 - **Frontend**: React 18, Ant Design, Vite
+- **Mobile**: Expo SDK 55, React Native, Expo Router, TanStack Query
 - **Container**: Docker, published to GitHub Container Registry
 
 ## Prerequisites
@@ -54,6 +56,79 @@ npm run web:dev
 ```
 
 The server runs at `http://localhost:3000` by default. On first launch you will be redirected to a setup page to create the initial admin account.
+
+## Expo Mobile App
+
+The independent client under `mobile/` targets Android and iPhone with the application identifier `top.wanghaizhou.mangadb`. Its UI is Simplified Chinese and supports server setup, login, manga and tag browsing, manga details, paged and continuous-scroll readers, per-account local reading positions, settings, and logout.
+
+The client is online-only. It does not include administration, offline downloads, favorites, a history list, or cross-device progress synchronization.
+
+### Mobile toolchain
+
+- Node.js 20.19.4 or later in the Node 20 line; this project was validated with Node.js 20.20.2
+- Android Studio with JDK 17, Android SDK Platform 36, Build Tools 36.0.0, NDK 27.1.12297006, and CMake 3.22.1
+- Xcode 26.2 and CocoaPods for iOS Simulator builds
+
+Install the mobile dependencies separately; installing the repository root does not install `mobile/node_modules`:
+
+```bash
+npm --prefix mobile ci
+```
+
+The versions follow the [Expo SDK 55 compatibility matrix](https://docs.expo.dev/versions/v55.0.0/). See the [Android SDK setup guide](https://developer.android.com/about/versions/16/setup-sdk) when Platform 36 or Build Tools 36.0.0 are missing. With the Android SDK licenses accepted, the first Gradle build can install the pinned NDK and CMake automatically.
+
+### Development and server connection
+
+Start the API and Expo in separate terminals:
+
+```bash
+npm run dev
+npm run mobile:dev
+```
+
+Use `npm run mobile:android` or `npm run mobile:ios` to generate and run a local native project. Useful server addresses are:
+
+- Android Emulator: `http://10.0.2.2:3000`
+- iOS Simulator: `http://localhost:3000`
+- Physical phone on the same Wi-Fi: `http://<computer-LAN-IP>:3000` or a `.local` hostname
+
+Public servers must use trusted HTTPS. The app rejects public HTTP, permits loopback HTTP directly, asks for confirmation before saving private-network or `.local` HTTP, and does not bypass self-signed HTTPS certificate errors. iOS asks for local-network access the first time it connects to a LAN server. Android cleartext support is enabled at the native layer for local development; the app-level URL validation enforces the public-HTTP restriction.
+
+### Validation
+
+```bash
+npm run mobile:typecheck
+npm run mobile:test
+cd mobile && npx expo install --check
+```
+
+The root `npm run build:all` command builds only the web client and API; run the native build commands below separately.
+
+### Android test APK
+
+The Release build requires JDK 17. On macOS, Android Studio's bundled runtime can be selected before building:
+
+```bash
+export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
+export ANDROID_HOME="$HOME/Library/Android/sdk"
+npm run mobile:build:android
+```
+
+The APK is written to `mobile/android/app/build/outputs/apk/release/app-release.apk` and can be installed with `adb install -r mobile/android/app/build/outputs/apk/release/app-release.apk`. It is signed with the Expo template's debug key for local testing and is not a store-distribution artifact.
+
+### iOS Simulator Release
+
+```bash
+npm run mobile:build:ios
+```
+
+To choose a specific simulator, list devices with `xcrun simctl list devices available`, then run `npm --prefix mobile run build:ios:simulator -- --device <simulator-UUID>`. The command builds, installs, and launches a Release Simulator app; it does not produce an IPA. The `.app` is normally under `~/Library/Developer/Xcode/DerivedData/MangaDB-*/Build/Products/Release-iphonesimulator/MangaDB.app`.
+
+Simulator builds do not require an Apple Developer account. Physical iPhone installation and IPA output require Apple signing and provisioning and are outside this release's scope.
+
+### Continuous Native Generation
+
+`mobile/android/` and `mobile/ios/` are ignored generated directories. The native build scripts use a clean Expo prebuild, so do not make persistent changes inside them. A later clean Android build removes earlier Android build output; copy an APK elsewhere before rebuilding Android if it must be retained.
 
 ## Environment Variables
 
@@ -165,3 +240,5 @@ npm run build
 # Frontend only
 npm run web:build
 ```
+
+Mobile builds are documented in [Expo Mobile App](#expo-mobile-app) and are intentionally not part of `build:all`.
