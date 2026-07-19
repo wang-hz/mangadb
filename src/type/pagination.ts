@@ -1,7 +1,14 @@
 import { z } from 'zod';
 
-const pageSchema = z.coerce.number().int().positive().default(1);
-const limitSchema = z.coerce.number().int().positive().max(100).default(10);
+function decimalInteger(max: number) {
+  return z.preprocess(
+    value => typeof value === 'string' && /^[1-9]\d*$/.test(value) ? Number(value) : value,
+    z.number().int().positive().max(max).safe(),
+  );
+}
+
+const pageSchema = decimalInteger(1_000_000).default(1);
+const limitSchema = decimalInteger(100).default(10);
 const sortOrderSchema = z.enum(['asc', 'desc']).default('desc');
 
 const basePaginationShape = {

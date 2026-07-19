@@ -109,6 +109,7 @@ export class TagService {
     return prisma.$transaction([
       prisma.tagType.findMany({
         select: tagTypeSelect,
+        orderBy: { pid: 'asc' },
         skip: page * limit,
         take: limit,
       }),

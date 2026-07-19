@@ -36,6 +36,11 @@ describe('pagination query schemas', () => {
   it('rejects malformed and excessive pagination values', () => {
     assert.equal(mangaListQuerySchema.safeParse({ page: '0' }).success, false);
     assert.equal(mangaListQuerySchema.safeParse({ page: '1.5' }).success, false);
+    assert.equal(mangaListQuerySchema.safeParse({ page: '1e2' }).success, false);
+    assert.equal(mangaListQuerySchema.safeParse({ page: '0x10' }).success, false);
+    assert.equal(mangaListQuerySchema.safeParse({ page: '' }).success, false);
+    assert.equal(mangaListQuerySchema.safeParse({ page: ['1'] }).success, false);
+    assert.equal(mangaListQuerySchema.safeParse({ page: '1000001' }).success, false);
     assert.equal(mangaListQuerySchema.safeParse({ limit: '101' }).success, false);
     assert.equal(paginationQuerySchema.safeParse({ limit: 'not-a-number' }).success, false);
   });
