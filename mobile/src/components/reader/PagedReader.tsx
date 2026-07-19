@@ -20,9 +20,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { ApiClient } from '@/api/client'
 import type { MangaDetail } from '@/api/types'
 import { PrimaryButton } from '@/components/PrimaryButton'
+import { ReaderTopBar } from '@/components/reader/ReaderTopBar'
 import { mangaPageImageSource } from '@/media/images'
 import { colors } from '@/theme/colors'
-import { clampPageIndex } from '@/utils/reader'
+import { clampPageIndex, type ReaderMode } from '@/utils/reader'
 
 interface PagedReaderProps {
   manga: MangaDetail
@@ -33,6 +34,8 @@ interface PagedReaderProps {
   onPageChange: (pageIndex: number) => void
   onImageError: () => void
   onBack: () => void
+  mode: ReaderMode
+  onModeChange: (mode: ReaderMode) => void
 }
 
 export function PagedReader({
@@ -44,6 +47,8 @@ export function PagedReader({
   onPageChange,
   onImageError,
   onBack,
+  mode,
+  onModeChange,
 }: PagedReaderProps) {
   const { width, height } = useWindowDimensions()
   const insets = useSafeAreaInsets()
@@ -69,7 +74,6 @@ export function PagedReader({
 
   const scrollToPage = (nextIndex: number, animated = true) => {
     const clamped = clampPageIndex(nextIndex, manga.pages.length)
-    onPageChange(clamped)
     listRef.current?.scrollToIndex({ index: clamped, animated })
   }
 
@@ -132,19 +136,13 @@ export function PagedReader({
       {controlsVisible
         ? (
             <>
-              <View style={[styles.topBar, { paddingTop: insets.top }]}>
-                <Pressable
-                  accessibilityLabel="退出阅读器"
-                  accessibilityRole="button"
-                  hitSlop={10}
-                  onPress={onBack}
-                  style={styles.controlButton}
-                >
-                  <Ionicons color="#ffffff" name="chevron-back" size={27} />
-                </Pressable>
-                <Text numberOfLines={1} style={styles.readerTitle}>{manga.displayTitle}</Text>
-                <View style={styles.controlSpacer} />
-              </View>
+              <ReaderTopBar
+                mode={mode}
+                onBack={onBack}
+                onModeChange={onModeChange}
+                title={manga.displayTitle}
+                topInset={insets.top}
+              />
               <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 10) }]}>
                 <Pressable
                   accessibilityLabel="上一页"
@@ -385,18 +383,6 @@ const styles = StyleSheet.create({
     color: '#60a5fa',
     fontSize: 13,
   },
-  topBar: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    left: 0,
-    minHeight: 52,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingBottom: 6,
-    backgroundColor: 'rgba(0,0,0,0.82)',
-  },
   bottomBar: {
     position: 'absolute',
     right: 0,
@@ -419,16 +405,6 @@ const styles = StyleSheet.create({
   },
   controlDisabled: {
     opacity: 0.3,
-  },
-  readerTitle: {
-    flex: 1,
-    color: '#ffffff',
-    fontSize: 15,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  controlSpacer: {
-    width: 44,
   },
   pageIndicator: {
     minWidth: 100,

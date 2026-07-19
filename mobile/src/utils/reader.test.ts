@@ -1,4 +1,9 @@
-import { clampPageIndex, parsePageIndexParam } from './reader'
+import {
+  clampPageIndex,
+  pageIndexAtViewportCenter,
+  parsePageIndexParam,
+  parseReaderMode,
+} from './reader'
 
 describe('reader helpers', () => {
   it('clamps page indices after the page count changes', () => {
@@ -14,5 +19,23 @@ describe('reader helpers', () => {
     expect(parsePageIndexParam('-1')).toBe(0)
     expect(parsePageIndexParam('1e2')).toBe(0)
     expect(parsePageIndexParam(undefined)).toBe(0)
+  })
+
+  it('normalizes supported reader modes', () => {
+    expect(parseReaderMode('scroll')).toBe('scroll')
+    expect(parseReaderMode('paged')).toBe('paged')
+    expect(parseReaderMode('flip')).toBe('paged')
+    expect(parseReaderMode('unknown')).toBeUndefined()
+  })
+
+  it('finds the page crossing the viewport center for tall and short pages', () => {
+    const layouts = [
+      { offset: 0, length: 1_200 },
+      { offset: 1_200, length: 300 },
+      { offset: 1_500, length: 900 },
+    ]
+    expect(pageIndexAtViewportCenter(layouts, 100, 600)).toBe(0)
+    expect(pageIndexAtViewportCenter(layouts, 950, 600)).toBe(1)
+    expect(pageIndexAtViewportCenter(layouts, 1_400, 600)).toBe(2)
   })
 })

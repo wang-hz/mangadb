@@ -1,23 +1,35 @@
 import { useQuery } from '@tanstack/react-query'
 import { StatusBar } from 'expo-status-bar'
 import { router, useLocalSearchParams } from 'expo-router'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { ApiError } from '@/api/client'
+import { ApiError, type ApiClient } from '@/api/client'
 import { getManga } from '@/api/mangas'
 import type { MangaDetail } from '@/api/types'
 import { PrimaryButton } from '@/components/PrimaryButton'
 import { PagedReader } from '@/components/reader/PagedReader'
+import { ScrollingReader } from '@/components/reader/ScrollingReader'
 import { useSession } from '@/session/SessionContext'
+import {
+  loadReadingProgress,
+  type ReadingProgress,
+  saveReadingProgress,
+} from '@/storage/progress'
 import { colors } from '@/theme/colors'
-import { clampPageIndex, parsePageIndexParam } from '@/utils/reader'
+import {
+  clampPageIndex,
+  parsePageIndexParam,
+  parseReaderMode,
+  type ReaderMode,
+} from '@/utils/reader'
 
 export default function ReaderScreen() {
   const params = useLocalSearchParams<{
     uuid?: string | string[]
     title?: string | string[]
     page?: string | string[]
+    mode?: string | string[]
   }>()
   const mangaUuid = firstParam(params.uuid)
   const fallbackTitle = firstParam(params.title)
@@ -56,9 +68,10 @@ export default function ReaderScreen() {
             : query.data
               ? (
                   <ReaderContent
-                    initialPageIndex={parsePageIndexParam(params.page)}
                     manga={query.data}
                     onImageError={() => { void query.refetch() }}
+                    requestedMode={firstParam(params.mode)}
+                    requestedPage={firstParam(params.page)}
                   />
                 )
               : null}
@@ -68,19 +81,45 @@ export default function ReaderScreen() {
 
 function ReaderContent({
   manga,
-  initialPageIndex,
   onImageError,
+  requestedPage,
+  requestedMode,
 }: {
   manga: MangaDetail
-  initialPageIndex: number
   onImageError: () => void
+  requestedPage?: string
+  requestedMode?: string
 }) {
   const { api, auth, serverUrl } = useSession()
-  const [pageIndex, setPageIndex] = useState(() => clampPageIndex(initialPageIndex, manga.pages.length))
+  const sessionIdentity = [serverUrl, auth?.user.uuid, manga.uuid].join(':')
+  const progressIdentity = [serverUrl, auth?.user.uuid, manga.uuid, manga.pages.length].join(':')
+  const [loadedProgress, setLoadedProgress] = useState<{
+    identity: string
+    value: ReadingProgress | null
+  } | null>(null)
+  const consumedOverrideIdentityRef = useRef<string | null>(null)
+  const markOverrideConsumed = useCallback(() => {
+    if (requestedPage !== undefined || requestedMode !== undefined) {
+      consumedOverrideIdentityRef.current = sessionIdentity
+    }
+  }, [requestedPage, requestedMode, sessionIdentity])
 
   useEffect(() => {
-    setPageIndex(index => clampPageIndex(index, manga.pages.length))
-  }, [manga.pages.length])
+    let active = true
+    loadReadingProgress(
+      serverUrl!,
+      auth!.user.uuid,
+      manga.uuid,
+      manga.pages.length,
+    )
+      .then(value => {
+        if (active) setLoadedProgress({ identity: progressIdentity, value })
+      })
+      .catch(() => {
+        if (active) setLoadedProgress({ identity: progressIdentity, value: null })
+      })
+    return () => { active = false }
+  }, [serverUrl, auth?.user.uuid, manga.uuid, manga.pages.length, progressIdentity])
 
   if (manga.pages.length === 0) {
     return (
@@ -93,18 +132,113 @@ function ReaderContent({
     )
   }
 
+  if (loadedProgress?.identity !== progressIdentity) {
+    return <ReaderState loading message="正在恢复本机阅读位置" title={manga.displayTitle} />
+  }
+
+  const progress = loadedProgress.value
+  const hasPendingOverride = consumedOverrideIdentityRef.current !== sessionIdentity &&
+    (requestedPage !== undefined || requestedMode !== undefined)
+  const initialPageIndex = !hasPendingOverride || requestedPage === undefined
+    ? progress?.pageIndex ?? 0
+    : parsePageIndexParam(requestedPage)
+  const initialMode = (hasPendingOverride ? parseReaderMode(requestedMode) : undefined) ??
+    progress?.mode ??
+    'paged'
+
   return (
-    <PagedReader
+    <ReaderExperience
       api={api!}
+      initialMode={initialMode}
+      initialPageIndex={clampPageIndex(initialPageIndex, manga.pages.length)}
+      key={JSON.stringify([
+        serverUrl,
+        auth!.user.uuid,
+        manga.uuid,
+        manga.pages.length,
+        progress?.updatedAt ?? 'new',
+      ])}
       manga={manga}
-      onBack={goBackOrLibrary}
       onImageError={onImageError}
-      onPageChange={setPageIndex}
-      pageIndex={pageIndex}
+      onReaderReady={markOverrideConsumed}
       serverUrl={serverUrl!}
       userUuid={auth!.user.uuid}
     />
   )
+}
+
+function ReaderExperience({
+  manga,
+  api,
+  serverUrl,
+  userUuid,
+  initialPageIndex,
+  initialMode,
+  onImageError,
+  onReaderReady,
+}: {
+  manga: MangaDetail
+  api: ApiClient
+  serverUrl: string
+  userUuid: string
+  initialPageIndex: number
+  initialMode: ReaderMode
+  onImageError: () => void
+  onReaderReady: () => void
+}) {
+  const [pageIndex, setPageIndex] = useState(initialPageIndex)
+  const [mode, setMode] = useState<ReaderMode>(initialMode)
+  const pageIndexRef = useRef(initialPageIndex)
+  const modeRef = useRef<ReaderMode>(initialMode)
+  const initialStateRef = useRef({ pageIndex: initialPageIndex, mode: initialMode })
+
+  const persist = useCallback((nextPageIndex: number, nextMode: ReaderMode) => {
+    void saveReadingProgress(
+      serverUrl,
+      userUuid,
+      manga.uuid,
+      manga.pages.length,
+      nextPageIndex,
+      nextMode,
+    ).catch(() => {})
+  }, [serverUrl, userUuid, manga.uuid, manga.pages.length])
+
+  useEffect(() => {
+    persist(initialStateRef.current.pageIndex, initialStateRef.current.mode)
+    onReaderReady()
+  }, [persist, onReaderReady])
+
+  const changePage = useCallback((nextPageIndex: number) => {
+    const clamped = clampPageIndex(nextPageIndex, manga.pages.length)
+    if (clamped === pageIndexRef.current) return
+    pageIndexRef.current = clamped
+    setPageIndex(clamped)
+    persist(clamped, modeRef.current)
+  }, [manga.pages.length, persist])
+
+  const changeMode = useCallback((nextMode: ReaderMode) => {
+    if (nextMode === modeRef.current) return
+    modeRef.current = nextMode
+    setMode(nextMode)
+    persist(pageIndexRef.current, nextMode)
+  }, [persist])
+
+  const commonProps = {
+    api,
+    manga,
+    mode,
+    onBack: goBackOrLibrary,
+    onImageError,
+    onModeChange: changeMode,
+    onPageChange: changePage,
+    pageIndex,
+    serverUrl,
+    userUuid,
+  }
+
+  return mode === 'paged'
+    ? <PagedReader {...commonProps} />
+    : <ScrollingReader {...commonProps} />
 }
 
 function ReaderState({

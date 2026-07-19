@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons'
 import { Image } from 'expo-image'
 import { useQuery } from '@tanstack/react-query'
-import { router, useLocalSearchParams } from 'expo-router'
-import { useEffect, useState } from 'react'
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router'
+import { useCallback, useEffect, useState } from 'react'
 import {
   ActivityIndicator,
   Pressable,
@@ -20,6 +20,7 @@ import { PrimaryButton } from '@/components/PrimaryButton'
 import { ScreenHeader } from '@/components/ScreenHeader'
 import { mangaPageImageSource } from '@/media/images'
 import { useSession } from '@/session/SessionContext'
+import { loadReadingProgress, type ReadingProgress } from '@/storage/progress'
 import { colors } from '@/theme/colors'
 import { validCoverIndex } from '@/utils/manga'
 
@@ -88,6 +89,12 @@ export default function MangaDetailScreen() {
 function MangaMetadata({ manga }: { manga: MangaDetail }) {
   const { api, auth, serverUrl } = useSession()
   const [coverFailed, setCoverFailed] = useState(false)
+  const progressIdentity = [serverUrl, auth?.user.uuid, manga.uuid, manga.pages.length].join(':')
+  const [loadedProgress, setLoadedProgress] = useState<{
+    identity: string
+    value: ReadingProgress | null
+  } | null>(null)
+  const progress = loadedProgress?.identity === progressIdentity ? loadedProgress.value : null
   const coverIndex = validCoverIndex(manga.cover, manga.pages.length)
   const coverSource = manga.pages.length > 0
     ? mangaPageImageSource(
@@ -102,6 +109,18 @@ function MangaMetadata({ manga }: { manga: MangaDetail }) {
     : null
 
   useEffect(() => setCoverFailed(false), [coverSource?.cacheKey])
+
+  useFocusEffect(useCallback(() => {
+    let active = true
+    loadReadingProgress(serverUrl!, auth!.user.uuid, manga.uuid, manga.pages.length)
+      .then(value => {
+        if (active) setLoadedProgress({ identity: progressIdentity, value })
+      })
+      .catch(() => {
+        if (active) setLoadedProgress({ identity: progressIdentity, value: null })
+      })
+    return () => { active = false }
+  }, [serverUrl, auth?.user.uuid, manga.uuid, manga.pages.length, progressIdentity]))
 
   const openReader = () => {
     router.push({
@@ -160,10 +179,20 @@ function MangaMetadata({ manga }: { manga: MangaDetail }) {
 
       <View style={styles.readSection}>
         <PrimaryButton disabled={manga.pages.length === 0} onPress={openReader}>
-          {manga.pages.length > 0 ? '开始 / 继续阅读' : '暂无可阅读页面'}
+          {manga.pages.length === 0
+            ? '暂无可阅读页面'
+            : progress
+              ? `继续阅读 · 第 ${progress.pageIndex + 1} 页`
+              : '开始阅读'}
         </PrimaryButton>
         {manga.pages.length > 0
-          ? <Text style={styles.readHint}>阅读器会从本机保存的位置继续。</Text>
+          ? (
+              <Text style={styles.readHint}>
+                {progress
+                  ? `上次使用${progress.mode === 'paged' ? '翻页' : '滚动'}模式，本机独立保存。`
+                  : '阅读位置只保存在本机。'}
+              </Text>
+            )
           : <Text style={styles.readHint}>请联系管理员为此漫画添加页面。</Text>}
       </View>
     </>
