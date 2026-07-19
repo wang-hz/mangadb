@@ -76,6 +76,17 @@ export class MangaService {
     });
   }
 
+  async getMangaPagesByUuid(uuid: string): Promise<string[] | null> {
+    const manga = await prisma.manga.findUnique({
+      where: { uuid },
+      select: { pages: true },
+    });
+    if (!manga || !Array.isArray(manga.pages) || !manga.pages.every(page => typeof page === 'string')) {
+      return null;
+    }
+    return manga.pages;
+  }
+
   async getMangasByPage(
     page: number,
     limit: number,

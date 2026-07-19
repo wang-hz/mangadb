@@ -12,9 +12,14 @@ const THUMB_DIR = path.join(DATA_DIR, '.thumbs');
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-function safeJoin(base: string, filename: string): string | null {
-  const resolved = path.resolve(base, filename);
-  return resolved.startsWith(base + path.sep) ? resolved : null;
+export function safeJoin(base: string, filename: string): string | null {
+  const resolvedBase = path.resolve(base);
+  const resolved = path.resolve(resolvedBase, filename);
+  return resolved.startsWith(resolvedBase + path.sep) ? resolved : null;
+}
+
+export function isRegisteredPage(pages: string[], filename: string): boolean {
+  return pages.includes(filename);
 };
 
 async function serveImageFile(req: Request, res: Response, imgPath: string): Promise<void> {
@@ -30,6 +35,7 @@ async function serveImageFile(req: Request, res: Response, imgPath: string): Pro
   res.setHeader('ETag', etag);
   res.setHeader('Last-Modified', stat.mtime.toUTCString());
   res.setHeader('Cache-Control', 'private, max-age=86400');
+  res.setHeader('Content-Length', stat.size);
 
   if (req.headers['if-none-match'] === etag) {
     res.sendStatus(304);
@@ -86,8 +92,8 @@ export class FileController {
     if (!mangaUuid || !UUID_RE.test(mangaUuid)) {
       return res.sendStatus(400);
     }
-    const manga = await mangaService.getMangaByUuid(mangaUuid);
-    if (!manga) {
+    const pages = await mangaService.getMangaPagesByUuid(mangaUuid);
+    if (!pages) {
       return res.sendStatus(404);
     }
     const mangaPath = path.join(DATA_DIR, mangaUuid);
@@ -102,10 +108,6 @@ export class FileController {
       if (!res.headersSent) res.sendStatus(500);
     });
     archive.pipe(res);
-    const pages = manga.pages as string[] | null;
-    if (!Array.isArray(pages)) {
-      return res.sendStatus(404);
-    }
     for (const imgFilename of pages) {
       const imgPath = safeJoin(mangaPath, imgFilename);
       if (!imgPath) continue;
@@ -119,8 +121,8 @@ export class FileController {
     if (!mangaUuid || !UUID_RE.test(mangaUuid) || !filename) {
       return res.sendStatus(400);
     }
-    const manga = await mangaService.getMangaByUuid(mangaUuid);
-    if (!manga) return res.sendStatus(404);
+    const pages = await mangaService.getMangaPagesByUuid(mangaUuid);
+    if (!pages || !isRegisteredPage(pages, filename)) return res.sendStatus(404);
     const mangaPath = path.join(DATA_DIR, mangaUuid);
     const imgPath = safeJoin(mangaPath, filename);
     if (!imgPath) return res.sendStatus(400);
@@ -137,12 +139,8 @@ export class FileController {
     if (!Number.isInteger(pageIndex) || pageIndex < 0) {
       return res.sendStatus(400);
     }
-    const manga = await mangaService.getMangaByUuid(mangaUuid);
-    if (!manga) {
-      return res.sendStatus(404);
-    }
-    const pages = manga.pages as string[] | null;
-    if (!Array.isArray(pages)) {
+    const pages = await mangaService.getMangaPagesByUuid(mangaUuid);
+    if (!pages) {
       return res.sendStatus(404);
     }
     const imgFilename = pages[pageIndex];
