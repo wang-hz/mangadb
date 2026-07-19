@@ -11,7 +11,14 @@
     "prisma:migrate": "prisma migrate dev",
     "web:dev": "cd web && npm run dev",
     "web:build": "cd web && npm run build",
-    "build:all": "npm run web:build && npm run build"
+    "build:all": "npm run web:build && npm run build",
+    "mobile:dev": "npm --prefix mobile run start",
+    "mobile:android": "npm --prefix mobile run android",
+    "mobile:ios": "npm --prefix mobile run ios",
+    "mobile:typecheck": "npm --prefix mobile run typecheck",
+    "mobile:test": "npm --prefix mobile run test",
+    "mobile:build:android": "npm --prefix mobile run build:android:apk",
+    "mobile:build:ios": "npm --prefix mobile run build:ios:simulator"
   },
   "dependencies": {
     "@prisma/client": "^6.19.1",

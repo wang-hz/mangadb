@@ -1,0 +1,47 @@
+{
+  "name": "mangadb-mobile",
+  "version": "0.1.0",
+  "private": true,
+  "main": "expo-router/entry",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "prebuild": "expo prebuild",
+    "typecheck": "tsc --noEmit",
+    "test": "jest --runInBand",
+    "test:watch": "jest --watch",
+    "build:android:apk": "expo prebuild --clean --platform android && cd android && ./gradlew assembleRelease",
+    "build:ios:simulator": "expo prebuild --clean --platform ios && expo run:ios --configuration Release"
+  },
+  "dependencies": {
+    "@expo/vector-icons": "^15.0.2",
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-community/netinfo": "11.5.2",
+    "@tanstack/react-query": "^5.101.2",
+    "expo": "~55.0.28",
+    "expo-build-properties": "~55.0.16",
+    "expo-constants": "~55.0.17",
+    "expo-image": "~55.0.11",
+    "expo-linking": "~55.0.16",
+    "expo-router": "~55.0.17",
+    "expo-secure-store": "~55.0.16",
+    "expo-splash-screen": "~55.0.23",
+    "expo-status-bar": "~55.0.6",
+    "expo-web-browser": "~55.0.18",
+    "jwt-decode": "^4.0.0",
+    "react": "19.2.0",
+    "react-native": "0.83.10",
+    "react-native-safe-area-context": "~5.6.2",
+    "react-native-screens": "~4.23.0"
+  },
+  "devDependencies": {
+    "@testing-library/react-native": "13.3.3",
+    "@types/jest": "^29.5.14",
+    "@types/react": "~19.2.2",
+    "jest": "^29.7.0",
+    "jest-expo": "~55.0.20",
+    "react-test-renderer": "19.2.0",
+    "typescript": "~5.9.2"
+  }
+}
