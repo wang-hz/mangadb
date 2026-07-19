@@ -1,4 +1,4 @@
-import { getMangas, nextMangaPage, uniqueMangas } from './mangas'
+import { getManga, getMangas, nextMangaPage, uniqueMangas } from './mangas'
 import type { ApiClient } from './client'
 import type { MangaSummary, PageResult } from './types'
 
@@ -19,6 +19,45 @@ describe('manga API', () => {
       '/api/mangadb/mangas?page=2&limit=24&sortBy=updateAt&sortOrder=desc&view=summary&search=%E7%A7%91%E5%B9%BB+%E6%BC%AB%E7%94%BB',
       { signal: controller.signal },
     )
+  })
+
+  it('encodes a manga detail identifier', async () => {
+    const request = jest.fn().mockResolvedValue({
+      uuid: 'manga/id',
+      fullname: '/data/manga',
+      displayTitle: 'Title',
+      originalTitle: 'Original',
+      publishDate: null,
+      pages: ['one.jpg'],
+      cover: 0,
+      createAt: '2026-01-01T00:00:00.000Z',
+      updateAt: '2026-01-02T00:00:00.000Z',
+      mangaTags: [],
+    })
+    const client = { request } as unknown as ApiClient
+
+    await getManga(client, 'manga/id')
+    expect(request).toHaveBeenCalledWith('/api/mangadb/mangas/manga%2Fid', { signal: undefined })
+  })
+
+  it('treats an invalid pages JSON array as empty without shifting indices', async () => {
+    const request = jest.fn().mockResolvedValue({
+      uuid: 'manga-1',
+      fullname: '/data/manga',
+      displayTitle: 'Title',
+      originalTitle: 'Original',
+      publishDate: null,
+      pages: ['one.jpg', 2, 'three.jpg'],
+      cover: 0,
+      createAt: '2026-01-01T00:00:00.000Z',
+      updateAt: '2026-01-02T00:00:00.000Z',
+      mangaTags: [{ tag: { uuid: 'tag-1', name: '科幻', tagType: { uuid: 'type-1', name: '题材' } } }, {}],
+    })
+    const client = { request } as unknown as ApiClient
+
+    const manga = await getManga(client, 'manga-1')
+    expect(manga.pages).toEqual([])
+    expect(manga.mangaTags).toHaveLength(1)
   })
 
   it('continues until all reported items are loaded and stops on an empty page', () => {

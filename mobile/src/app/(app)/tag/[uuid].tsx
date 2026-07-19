@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons'
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { router, useLocalSearchParams } from 'expo-router'
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import {
   ActivityIndicator,
   FlatList,
@@ -61,6 +61,9 @@ export default function TagMangasScreen() {
   const cardWidth = (width - GRID_PADDING * 2 - GRID_GAP) / 2
   const title = tagQuery.data?.name ?? fallbackName ?? '标签漫画'
   const subtitle = tagQuery.data?.tagType.name
+  const openManga = useCallback((uuid: string) => {
+    router.push({ pathname: '/(app)/manga/[uuid]', params: { uuid } })
+  }, [])
 
   return (
     <View style={styles.root}>
@@ -153,6 +156,7 @@ export default function TagMangasScreen() {
                   <MangaCard
                     api={api!}
                     manga={item}
+                    onPress={openManga}
                     serverUrl={serverUrl!}
                     userUuid={auth!.user.uuid}
                     width={cardWidth}

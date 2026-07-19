@@ -1,7 +1,7 @@
 import { memo, useEffect, useState } from 'react'
 import { Image } from 'expo-image'
 import { Ionicons } from '@expo/vector-icons'
-import { StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
 import type { MangaSummary } from '@/api/types'
 import type { ApiClient } from '@/api/client'
 import { mangaPageImageSource } from '@/media/images'
@@ -13,9 +13,17 @@ interface MangaCardProps {
   serverUrl: string
   userUuid: string
   width: number
+  onPress?: (uuid: string) => void
 }
 
-export const MangaCard = memo(function MangaCard({ manga, api, serverUrl, userUuid, width }: MangaCardProps) {
+export const MangaCard = memo(function MangaCard({
+  manga,
+  api,
+  serverUrl,
+  userUuid,
+  width,
+  onPress,
+}: MangaCardProps) {
   const [imageFailed, setImageFailed] = useState(false)
   const coverIndex = manga.cover ?? 0
   const imageSource = mangaPageImageSource(
@@ -31,7 +39,13 @@ export const MangaCard = memo(function MangaCard({ manga, api, serverUrl, userUu
   useEffect(() => setImageFailed(false), [imageSource.cacheKey])
 
   return (
-    <View style={[styles.card, { width }]}>
+    <Pressable
+      accessibilityHint="打开漫画详情"
+      accessibilityRole="button"
+      disabled={!onPress}
+      onPress={() => onPress?.(manga.uuid)}
+      style={({ pressed }) => [styles.card, { width }, pressed && onPress ? styles.pressed : null]}
+    >
       <View style={styles.coverContainer}>
         {!imageFailed
           ? (
@@ -59,7 +73,7 @@ export const MangaCard = memo(function MangaCard({ manga, api, serverUrl, userUu
           : null}
         <Text style={styles.date}>{displayDate(manga.publishDate)}</Text>
       </View>
-    </View>
+    </Pressable>
   )
 })
 
@@ -76,6 +90,9 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: 12,
     backgroundColor: colors.surface,
+  },
+  pressed: {
+    opacity: 0.76,
   },
   coverContainer: {
     width: '100%',

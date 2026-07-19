@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons'
 import { useInfiniteQuery } from '@tanstack/react-query'
-import { useMemo, useState } from 'react'
+import { router } from 'expo-router'
+import { useCallback, useMemo, useState } from 'react'
 import {
   ActivityIndicator,
   FlatList,
@@ -63,6 +64,9 @@ export default function MangasScreen() {
   )
   const total = query.data?.pages[0]?.total ?? 0
   const cardWidth = (width - GRID_PADDING * 2 - GRID_GAP) / 2
+  const openManga = useCallback((uuid: string) => {
+    router.push({ pathname: '/(app)/manga/[uuid]', params: { uuid } })
+  }, [])
 
   const loadMore = () => {
     if (query.hasNextPage && !query.isFetchingNextPage) void query.fetchNextPage()
@@ -131,6 +135,7 @@ export default function MangasScreen() {
         <MangaCard
           api={api!}
           manga={item}
+          onPress={openManga}
           serverUrl={serverUrl!}
           userUuid={auth!.user.uuid}
           width={cardWidth}
