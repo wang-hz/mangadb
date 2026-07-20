@@ -1,12 +1,18 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native'
+import { useKeepAwake } from 'expo-keep-awake'
 import type { ApiClient } from '@/api/client'
 import type { MangaDetail } from '@/api/types'
+import { DEFAULT_READER_PREFERENCES } from '@/storage/readerPreferences'
 import { ReaderExperience } from './ReaderExperience'
 
 const mockSaveReadingProgress = jest.fn()
 
 jest.mock('@/storage/progress', () => ({
   saveReadingProgress: (...args: unknown[]) => mockSaveReadingProgress(...args),
+}))
+
+jest.mock('@/components/reader/ReaderSettingsModal', () => ({
+  ReaderSettingsModal: () => null,
 }))
 
 jest.mock('@/components/reader/PagedReader', () => {
@@ -90,6 +96,7 @@ describe('ReaderExperience', () => {
         onBack={jest.fn()}
         onImageError={jest.fn()}
         onReaderReady={onReaderReady}
+        preferences={DEFAULT_READER_PREFERENCES}
         serverUrl="https://example.com"
         userUuid="user-1"
       />,
@@ -149,5 +156,40 @@ describe('ReaderExperience', () => {
       'paged',
     )
     expect(mockSaveReadingProgress).toHaveBeenCalledTimes(5)
+  })
+
+  it('keeps the screen awake only when the preference is enabled', async () => {
+    const { rerender } = render(
+      <ReaderExperience
+        api={{} as ApiClient}
+        initialMode="paged"
+        initialPageIndex={0}
+        manga={manga}
+        onBack={jest.fn()}
+        onImageError={jest.fn()}
+        onReaderReady={jest.fn()}
+        preferences={{ ...DEFAULT_READER_PREFERENCES, keepAwake: true }}
+        serverUrl="https://example.com"
+        userUuid="user-1"
+      />,
+    )
+    await waitFor(() => expect(useKeepAwake).toHaveBeenCalledWith('mangadb-reader'))
+
+    jest.mocked(useKeepAwake).mockClear()
+    rerender(
+      <ReaderExperience
+        api={{} as ApiClient}
+        initialMode="paged"
+        initialPageIndex={0}
+        manga={manga}
+        onBack={jest.fn()}
+        onImageError={jest.fn()}
+        onReaderReady={jest.fn()}
+        preferences={DEFAULT_READER_PREFERENCES}
+        serverUrl="https://example.com"
+        userUuid="user-1"
+      />,
+    )
+    expect(useKeepAwake).not.toHaveBeenCalled()
   })
 })

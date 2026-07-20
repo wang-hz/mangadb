@@ -9,6 +9,7 @@ import { getManga } from '@/api/mangas'
 import type { MangaDetail } from '@/api/types'
 import { PrimaryButton } from '@/components/PrimaryButton'
 import { ReaderExperience } from '@/components/reader/ReaderExperience'
+import { useReaderPreferences } from '@/providers/ReaderPreferencesContext'
 import { useSession } from '@/session/SessionContext'
 import {
   loadReadingProgress,
@@ -18,7 +19,7 @@ import { colors } from '@/theme/colors'
 import {
   clampPageIndex,
   parsePageIndexParam,
-  parseReaderMode,
+  resolveInitialReaderMode,
 } from '@/utils/reader'
 
 export default function ReaderScreen() {
@@ -88,6 +89,7 @@ function ReaderContent({
   requestedMode?: string
 }) {
   const { api, auth, serverUrl } = useSession()
+  const { preferences, status: preferencesStatus } = useReaderPreferences()
   const sessionIdentity = [serverUrl, auth?.user.uuid, manga.uuid].join(':')
   const progressIdentity = [serverUrl, auth?.user.uuid, manga.uuid, manga.pages.length].join(':')
   const [loadedProgress, setLoadedProgress] = useState<{
@@ -133,15 +135,21 @@ function ReaderContent({
     return <ReaderState loading message="正在恢复本机阅读位置" title={manga.displayTitle} />
   }
 
+  if (preferencesStatus === 'loading') {
+    return <ReaderState loading message="正在加载阅读设置" title={manga.displayTitle} />
+  }
+
   const progress = loadedProgress.value
   const hasPendingOverride = consumedOverrideIdentityRef.current !== sessionIdentity &&
     (requestedPage !== undefined || requestedMode !== undefined)
   const initialPageIndex = !hasPendingOverride || requestedPage === undefined
     ? progress?.pageIndex ?? 0
     : parsePageIndexParam(requestedPage)
-  const initialMode = (hasPendingOverride ? parseReaderMode(requestedMode) : undefined) ??
-    progress?.mode ??
-    'paged'
+  const initialMode = resolveInitialReaderMode(
+    hasPendingOverride ? requestedMode : undefined,
+    progress?.mode,
+    preferences.defaultMode,
+  )
 
   return (
     <ReaderExperience
@@ -159,6 +167,7 @@ function ReaderContent({
       onBack={goBackOrLibrary}
       onImageError={onImageError}
       onReaderReady={markOverrideConsumed}
+      preferences={preferences}
       serverUrl={serverUrl!}
       userUuid={auth!.user.uuid}
     />

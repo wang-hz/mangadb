@@ -8,6 +8,10 @@ jest.mock('expo-secure-store', () => ({
   deleteItemAsync: jest.fn(),
 }))
 
+jest.mock('expo-keep-awake', () => ({
+  useKeepAwake: jest.fn(),
+}))
+
 jest.mock('@expo/vector-icons', () => {
   const React = require('react')
   const { Text } = require('react-native')

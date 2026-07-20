@@ -1,8 +1,13 @@
 import {
+  buildScrollingPageLayouts,
   clampPageIndex,
+  displayIndexForPage,
+  pageIndexesForDirection,
+  pageDeltaForTap,
   pageIndexAtViewportCenter,
   parsePageIndexParam,
   parseReaderMode,
+  resolveInitialReaderMode,
 } from './reader'
 
 describe('reader helpers', () => {
@@ -28,11 +33,36 @@ describe('reader helpers', () => {
     expect(parseReaderMode('unknown')).toBeUndefined()
   })
 
+  it('resolves explicit, saved and default reader modes in order', () => {
+    expect(resolveInitialReaderMode('scroll', 'paged', 'paged')).toBe('scroll')
+    expect(resolveInitialReaderMode(undefined, 'scroll', 'paged')).toBe('scroll')
+    expect(resolveInitialReaderMode(undefined, undefined, 'scroll')).toBe('scroll')
+  })
+
+  it('maps logical page indices for both paging directions', () => {
+    expect(pageIndexesForDirection(4, 'ltr')).toEqual([0, 1, 2, 3])
+    expect(pageIndexesForDirection(4, 'rtl')).toEqual([3, 2, 1, 0])
+    expect(displayIndexForPage(1, 4, 'ltr')).toBe(1)
+    expect(displayIndexForPage(1, 4, 'rtl')).toBe(2)
+    expect(pageDeltaForTap('ltr', 'left')).toBe(-1)
+    expect(pageDeltaForTap('ltr', 'right')).toBe(1)
+    expect(pageDeltaForTap('rtl', 'left')).toBe(1)
+    expect(pageDeltaForTap('rtl', 'right')).toBe(-1)
+  })
+
+  it('includes scrolling gaps except after the final page', () => {
+    expect(buildScrollingPageLayouts([0.5, 1, 2], 100, 8)).toEqual([
+      { index: 0, offset: 0, length: 208 },
+      { index: 1, offset: 208, length: 108 },
+      { index: 2, offset: 316, length: 50 },
+    ])
+  })
+
   it('finds the page crossing the viewport center for tall and short pages', () => {
     const layouts = [
-      { offset: 0, length: 1_200 },
-      { offset: 1_200, length: 300 },
-      { offset: 1_500, length: 900 },
+      { index: 0, offset: 0, length: 1_200 },
+      { index: 1, offset: 1_200, length: 300 },
+      { index: 2, offset: 1_500, length: 900 },
     ]
     expect(pageIndexAtViewportCenter(layouts, 100, 600)).toBe(0)
     expect(pageIndexAtViewportCenter(layouts, 950, 600)).toBe(1)

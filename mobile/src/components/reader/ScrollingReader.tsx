@@ -16,10 +16,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { ApiClient } from '@/api/client'
 import type { MangaDetail } from '@/api/types'
 import { ReaderTopBar } from '@/components/reader/ReaderTopBar'
-import { ReaderSettingsModal } from '@/components/reader/ReaderSettingsModal'
 import { mangaPageImageSource } from '@/media/images'
+import type { ReaderPreferences } from '@/storage/readerPreferences'
 import { colors } from '@/theme/colors'
-import { pageIndexAtViewportCenter, type ReaderMode } from '@/utils/reader'
+import {
+  buildScrollingPageLayouts,
+  pageIndexAtViewportCenter,
+  type ReaderMode,
+} from '@/utils/reader'
 
 interface ScrollingReaderProps {
   manga: MangaDetail
@@ -32,6 +36,9 @@ interface ScrollingReaderProps {
   onBack: () => void
   mode: ReaderMode
   onModeChange: (mode: ReaderMode) => void
+  preferences: ReaderPreferences
+  settingsVisible: boolean
+  onOpenSettings: () => void
 }
 
 export function ScrollingReader({
@@ -45,6 +52,9 @@ export function ScrollingReader({
   onBack,
   mode,
   onModeChange,
+  preferences,
+  settingsVisible,
+  onOpenSettings,
 }: ScrollingReaderProps) {
   const { width, height } = useWindowDimensions()
   const insets = useSafeAreaInsets()
@@ -59,28 +69,23 @@ export function ScrollingReader({
   const scrollOffsetRef = useRef(0)
   const [aspectRatios, setAspectRatios] = useState<Record<number, number>>({})
   const [controlsVisible, setControlsVisible] = useState(true)
-  const [settingsVisible, setSettingsVisible] = useState(false)
   const imageWidth = Math.min(width, 900)
-  const layouts = useMemo(() => {
-    let offset = 0
-    return manga.pages.map((_, index) => {
-      const ratio = aspectRatios[index] ?? 2 / 3
-      const length = imageWidth / ratio
-      const layout = { index, length, offset }
-      offset += length
-      return layout
-    })
-  }, [manga.pages, aspectRatios, imageWidth])
+  const layouts = useMemo(() => buildScrollingPageLayouts(
+    manga.pages.map((_, index) => aspectRatios[index] ?? 2 / 3),
+    imageWidth,
+    preferences.scrollGap,
+  ), [manga.pages, aspectRatios, imageWidth, preferences.scrollGap])
   const layoutsRef = useRef(layouts)
   layoutsRef.current = layouts
 
   useEffect(() => { callbackRef.current = onPageChange }, [onPageChange])
 
   useEffect(() => {
-    if (!controlsVisible) return
-    const timeout = setTimeout(() => setControlsVisible(false), 3_000)
+    if (!controlsVisible || settingsVisible) return
+    if (preferences.controlsAutoHideMs === null) return
+    const timeout = setTimeout(() => setControlsVisible(false), preferences.controlsAutoHideMs)
     return () => clearTimeout(timeout)
-  }, [controlsVisible, pageIndex])
+  }, [controlsVisible, settingsVisible, pageIndex, preferences.controlsAutoHideMs])
 
   useEffect(() => {
     if (previousWidthRef.current === width) return
@@ -184,6 +189,7 @@ export function ScrollingReader({
             onAspectRatio={updateAspectRatio}
             onImageError={onImageError}
             onTap={() => setControlsVisible(visible => !visible)}
+            pageGap={index === manga.pages.length - 1 ? 0 : preferences.scrollGap}
             serverUrl={serverUrl}
             userUuid={userUuid}
             viewportWidth={width}
@@ -201,7 +207,7 @@ export function ScrollingReader({
                 mode={mode}
                 onBack={onBack}
                 onModeChange={onModeChange}
-                onOpenSettings={() => setSettingsVisible(true)}
+                onOpenSettings={onOpenSettings}
                 title={manga.displayTitle}
                 topInset={insets.top}
               />
@@ -211,11 +217,6 @@ export function ScrollingReader({
             </>
           )
         : null}
-      <ReaderSettingsModal
-        onClose={() => setSettingsVisible(false)}
-        onDefaultModeChange={onModeChange}
-        visible={settingsVisible}
-      />
     </View>
   )
 }
@@ -231,6 +232,7 @@ interface ScrollingPageProps {
   onTap: () => void
   onImageError: () => void
   onAspectRatio: (index: number, aspectRatio: number) => void
+  pageGap: number
 }
 
 const ScrollingPage = memo(function ScrollingPage({
@@ -244,6 +246,7 @@ const ScrollingPage = memo(function ScrollingPage({
   onTap,
   onImageError,
   onAspectRatio,
+  pageGap,
 }: ScrollingPageProps) {
   const [loading, setLoading] = useState(true)
   const [failed, setFailed] = useState(false)
@@ -265,7 +268,10 @@ const ScrollingPage = memo(function ScrollingPage({
   }, [source.cacheKey, attempt])
 
   return (
-    <Pressable onPress={onTap} style={[styles.scrollPage, { width: viewportWidth }]}>
+    <Pressable
+      onPress={onTap}
+      style={[styles.scrollPage, { width: viewportWidth, paddingBottom: pageGap }]}
+    >
       {!failed
         ? (
             <Image

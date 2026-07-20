@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons'
 import { Image } from 'expo-image'
 import { StatusBar } from 'expo-status-bar'
-import { memo, useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   FlatList,
@@ -21,10 +21,16 @@ import type { ApiClient } from '@/api/client'
 import type { MangaDetail } from '@/api/types'
 import { PrimaryButton } from '@/components/PrimaryButton'
 import { ReaderTopBar } from '@/components/reader/ReaderTopBar'
-import { ReaderSettingsModal } from '@/components/reader/ReaderSettingsModal'
 import { mangaPageImageSource } from '@/media/images'
+import type { ReaderPreferences } from '@/storage/readerPreferences'
 import { colors } from '@/theme/colors'
-import { clampPageIndex, type ReaderMode } from '@/utils/reader'
+import {
+  clampPageIndex,
+  displayIndexForPage,
+  pageDeltaForTap,
+  pageIndexesForDirection,
+  type ReaderMode,
+} from '@/utils/reader'
 
 interface PagedReaderProps {
   manga: MangaDetail
@@ -37,6 +43,9 @@ interface PagedReaderProps {
   onBack: () => void
   mode: ReaderMode
   onModeChange: (mode: ReaderMode) => void
+  preferences: ReaderPreferences
+  settingsVisible: boolean
+  onOpenSettings: () => void
 }
 
 export function PagedReader({
@@ -50,42 +59,62 @@ export function PagedReader({
   onBack,
   mode,
   onModeChange,
+  preferences,
+  settingsVisible,
+  onOpenSettings,
 }: PagedReaderProps) {
   const { width, height } = useWindowDimensions()
   const insets = useSafeAreaInsets()
-  const listRef = useRef<FlatList<string>>(null)
+  const listRef = useRef<FlatList<number>>(null)
   const previousWidthRef = useRef(width)
   const [controlsVisible, setControlsVisible] = useState(true)
   const [jumpVisible, setJumpVisible] = useState(false)
-  const [settingsVisible, setSettingsVisible] = useState(false)
+  const pageIndexes = useMemo(
+    () => pageIndexesForDirection(manga.pages.length, preferences.pagedDirection),
+    [manga.pages.length, preferences.pagedDirection],
+  )
+  const leftTarget = pageIndex + pageDeltaForTap(preferences.pagedDirection, 'left')
+  const rightTarget = pageIndex + pageDeltaForTap(preferences.pagedDirection, 'right')
+  const validPage = (target: number) => target >= 0 && target < manga.pages.length
 
   useEffect(() => {
-    if (!controlsVisible || jumpVisible) return
-    const timeout = setTimeout(() => setControlsVisible(false), 3_000)
+    if (!controlsVisible || jumpVisible || settingsVisible) return
+    if (preferences.controlsAutoHideMs === null) return
+    const timeout = setTimeout(() => setControlsVisible(false), preferences.controlsAutoHideMs)
     return () => clearTimeout(timeout)
-  }, [controlsVisible, jumpVisible, pageIndex])
+  }, [controlsVisible, jumpVisible, settingsVisible, pageIndex, preferences.controlsAutoHideMs])
 
   useEffect(() => {
     if (previousWidthRef.current === width) return
     previousWidthRef.current = width
     const frame = requestAnimationFrame(() => {
-      listRef.current?.scrollToOffset({ offset: pageIndex * width, animated: false })
+      listRef.current?.scrollToOffset({
+        offset: displayIndexForPage(
+          pageIndex,
+          manga.pages.length,
+          preferences.pagedDirection,
+        ) * width,
+        animated: false,
+      })
     })
     return () => cancelAnimationFrame(frame)
-  }, [width, pageIndex])
+  }, [width, pageIndex, manga.pages.length, preferences.pagedDirection])
 
   const scrollToPage = (nextIndex: number, animated = true) => {
     const clamped = clampPageIndex(nextIndex, manga.pages.length)
-    listRef.current?.scrollToIndex({ index: clamped, animated })
+    listRef.current?.scrollToIndex({
+      index: displayIndexForPage(clamped, manga.pages.length, preferences.pagedDirection),
+      animated,
+    })
   }
 
   const handlePageTap = (event: GestureResponderEvent) => {
     const x = event.nativeEvent.locationX
     if (x < width * 0.32) {
-      if (pageIndex > 0) scrollToPage(pageIndex - 1)
+      if (validPage(leftTarget)) scrollToPage(leftTarget)
       else setControlsVisible(true)
     } else if (x > width * 0.68) {
-      if (pageIndex < manga.pages.length - 1) scrollToPage(pageIndex + 1)
+      if (validPage(rightTarget)) scrollToPage(rightTarget)
       else setControlsVisible(true)
     } else {
       setControlsVisible(visible => !visible)
@@ -97,19 +126,25 @@ export function PagedReader({
       <StatusBar hidden={!controlsVisible} style="light" />
       {/* A three-viewport window prefetches neighbors with the same authenticated cache key. */}
       <FlatList
-        data={manga.pages}
+        data={pageIndexes}
         decelerationRate="fast"
         getItemLayout={(_, index) => ({ length: width, offset: width * index, index })}
         horizontal
         initialNumToRender={3}
-        initialScrollIndex={pageIndex}
-        keyExtractor={(_, index) => String(index)}
+        initialScrollIndex={displayIndexForPage(
+          pageIndex,
+          manga.pages.length,
+          preferences.pagedDirection,
+        )}
+        key={preferences.pagedDirection}
+        keyExtractor={index => String(index)}
         maxToRenderPerBatch={3}
         onMomentumScrollEnd={event => {
-          const nextIndex = clampPageIndex(
+          const displayIndex = clampPageIndex(
             Math.round(event.nativeEvent.contentOffset.x / width),
             manga.pages.length,
           )
+          const nextIndex = pageIndexes[displayIndex] ?? 0
           if (nextIndex !== pageIndex) onPageChange(nextIndex)
         }}
         onScrollToIndexFailed={info => {
@@ -118,9 +153,10 @@ export function PagedReader({
         pagingEnabled
         ref={listRef}
         removeClippedSubviews={Platform.OS === 'android'}
-        renderItem={({ index }) => (
+        renderItem={({ item: index }) => (
           <ReaderPage
             api={api}
+            contentFit={preferences.pagedFit}
             height={height}
             index={index}
             manga={manga}
@@ -142,17 +178,17 @@ export function PagedReader({
                 mode={mode}
                 onBack={onBack}
                 onModeChange={onModeChange}
-                onOpenSettings={() => setSettingsVisible(true)}
+                onOpenSettings={onOpenSettings}
                 title={manga.displayTitle}
                 topInset={insets.top}
               />
               <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 10) }]}>
                 <Pressable
-                  accessibilityLabel="上一页"
+                  accessibilityLabel={preferences.pagedDirection === 'rtl' ? '下一页' : '上一页'}
                   accessibilityRole="button"
-                  disabled={pageIndex === 0}
-                  onPress={() => scrollToPage(pageIndex - 1)}
-                  style={[styles.controlButton, pageIndex === 0 ? styles.controlDisabled : null]}
+                  disabled={!validPage(leftTarget)}
+                  onPress={() => scrollToPage(leftTarget)}
+                  style={[styles.controlButton, !validPage(leftTarget) ? styles.controlDisabled : null]}
                 >
                   <Ionicons color="#ffffff" name="chevron-back" size={25} />
                 </Pressable>
@@ -165,13 +201,13 @@ export function PagedReader({
                   <Text style={styles.pageIndicatorText}>{pageIndex + 1} / {manga.pages.length}</Text>
                 </Pressable>
                 <Pressable
-                  accessibilityLabel="下一页"
+                  accessibilityLabel={preferences.pagedDirection === 'rtl' ? '上一页' : '下一页'}
                   accessibilityRole="button"
-                  disabled={pageIndex === manga.pages.length - 1}
-                  onPress={() => scrollToPage(pageIndex + 1)}
+                  disabled={!validPage(rightTarget)}
+                  onPress={() => scrollToPage(rightTarget)}
                   style={[
                     styles.controlButton,
-                    pageIndex === manga.pages.length - 1 ? styles.controlDisabled : null,
+                    !validPage(rightTarget) ? styles.controlDisabled : null,
                   ]}
                 >
                   <Ionicons color="#ffffff" name="chevron-forward" size={25} />
@@ -192,11 +228,6 @@ export function PagedReader({
         pageCount={manga.pages.length}
         visible={jumpVisible}
       />
-      <ReaderSettingsModal
-        onClose={() => setSettingsVisible(false)}
-        onDefaultModeChange={onModeChange}
-        visible={settingsVisible}
-      />
     </View>
   )
 }
@@ -211,6 +242,7 @@ interface ReaderPageProps {
   height: number
   onImageError: () => void
   onTap: (event: GestureResponderEvent) => void
+  contentFit: 'contain' | 'cover'
 }
 
 const ReaderPage = memo(function ReaderPage({
@@ -223,6 +255,7 @@ const ReaderPage = memo(function ReaderPage({
   height,
   onImageError,
   onTap,
+  contentFit,
 }: ReaderPageProps) {
   const [failed, setFailed] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -247,7 +280,7 @@ const ReaderPage = memo(function ReaderPage({
         ? (
             <Image
               cachePolicy="memory-disk"
-              contentFit="contain"
+              contentFit={contentFit}
               key={attempt}
               onError={() => {
                 setLoading(false)
