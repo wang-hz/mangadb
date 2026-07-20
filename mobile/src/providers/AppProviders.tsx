@@ -3,6 +3,7 @@ import { type PropsWithChildren, useCallback, useState } from 'react'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { clearSessionCaches } from '@/session/cleanup'
 import { SessionProvider } from '@/session/SessionContext'
+import { ReaderPreferencesProvider } from './ReaderPreferencesContext'
 
 export function AppProviders({ children }: PropsWithChildren) {
   const [queryClient] = useState(() => new QueryClient({
@@ -26,9 +27,11 @@ export function AppProviders({ children }: PropsWithChildren) {
 
   return (
     <SafeAreaProvider>
-      <QueryClientProvider client={queryClient}>
-        <SessionProvider onSessionCleanup={onSessionCleanup}>{children}</SessionProvider>
-      </QueryClientProvider>
+      <ReaderPreferencesProvider>
+        <QueryClientProvider client={queryClient}>
+          <SessionProvider onSessionCleanup={onSessionCleanup}>{children}</SessionProvider>
+        </QueryClientProvider>
+      </ReaderPreferencesProvider>
     </SafeAreaProvider>
   )
 }
