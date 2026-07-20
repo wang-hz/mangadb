@@ -8,6 +8,7 @@ interface ReaderTopBarProps {
   mode: ReaderMode
   onBack: () => void
   onModeChange: (mode: ReaderMode) => void
+  onOpenSettings: () => void
 }
 
 export function ReaderTopBar({
@@ -16,6 +17,7 @@ export function ReaderTopBar({
   mode,
   onBack,
   onModeChange,
+  onOpenSettings,
 }: ReaderTopBarProps) {
   return (
     <View style={[styles.bar, { paddingTop: topInset }]}>
@@ -29,6 +31,15 @@ export function ReaderTopBar({
         <Ionicons color="#ffffff" name="chevron-back" size={27} />
       </Pressable>
       <Text numberOfLines={1} style={styles.title}>{title}</Text>
+      <Pressable
+        accessibilityLabel="打开阅读设置"
+        accessibilityRole="button"
+        hitSlop={6}
+        onPress={onOpenSettings}
+        style={styles.settingsButton}
+      >
+        <Ionicons color="#ffffff" name="settings-outline" size={21} />
+      </Pressable>
       <View accessibilityRole="tablist" style={styles.modeSwitch}>
         <ModeButton
           active={mode === 'paged'}
@@ -78,6 +89,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 22,
+  },
+  settingsButton: {
+    width: 38,
+    height: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 19,
   },
   title: {
     flex: 1,

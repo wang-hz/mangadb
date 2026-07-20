@@ -21,6 +21,7 @@ import type { ApiClient } from '@/api/client'
 import type { MangaDetail } from '@/api/types'
 import { PrimaryButton } from '@/components/PrimaryButton'
 import { ReaderTopBar } from '@/components/reader/ReaderTopBar'
+import { ReaderSettingsModal } from '@/components/reader/ReaderSettingsModal'
 import { mangaPageImageSource } from '@/media/images'
 import { colors } from '@/theme/colors'
 import { clampPageIndex, type ReaderMode } from '@/utils/reader'
@@ -56,6 +57,7 @@ export function PagedReader({
   const previousWidthRef = useRef(width)
   const [controlsVisible, setControlsVisible] = useState(true)
   const [jumpVisible, setJumpVisible] = useState(false)
+  const [settingsVisible, setSettingsVisible] = useState(false)
 
   useEffect(() => {
     if (!controlsVisible || jumpVisible) return
@@ -140,6 +142,7 @@ export function PagedReader({
                 mode={mode}
                 onBack={onBack}
                 onModeChange={onModeChange}
+                onOpenSettings={() => setSettingsVisible(true)}
                 title={manga.displayTitle}
                 topInset={insets.top}
               />
@@ -188,6 +191,11 @@ export function PagedReader({
         }}
         pageCount={manga.pages.length}
         visible={jumpVisible}
+      />
+      <ReaderSettingsModal
+        onClose={() => setSettingsVisible(false)}
+        onDefaultModeChange={onModeChange}
+        visible={settingsVisible}
       />
     </View>
   )

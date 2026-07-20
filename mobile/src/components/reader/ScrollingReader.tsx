@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { ApiClient } from '@/api/client'
 import type { MangaDetail } from '@/api/types'
 import { ReaderTopBar } from '@/components/reader/ReaderTopBar'
+import { ReaderSettingsModal } from '@/components/reader/ReaderSettingsModal'
 import { mangaPageImageSource } from '@/media/images'
 import { colors } from '@/theme/colors'
 import { pageIndexAtViewportCenter, type ReaderMode } from '@/utils/reader'
@@ -58,6 +59,7 @@ export function ScrollingReader({
   const scrollOffsetRef = useRef(0)
   const [aspectRatios, setAspectRatios] = useState<Record<number, number>>({})
   const [controlsVisible, setControlsVisible] = useState(true)
+  const [settingsVisible, setSettingsVisible] = useState(false)
   const imageWidth = Math.min(width, 900)
   const layouts = useMemo(() => {
     let offset = 0
@@ -199,6 +201,7 @@ export function ScrollingReader({
                 mode={mode}
                 onBack={onBack}
                 onModeChange={onModeChange}
+                onOpenSettings={() => setSettingsVisible(true)}
                 title={manga.displayTitle}
                 topInset={insets.top}
               />
@@ -208,6 +211,11 @@ export function ScrollingReader({
             </>
           )
         : null}
+      <ReaderSettingsModal
+        onClose={() => setSettingsVisible(false)}
+        onDefaultModeChange={onModeChange}
+        visible={settingsVisible}
+      />
     </View>
   )
 }

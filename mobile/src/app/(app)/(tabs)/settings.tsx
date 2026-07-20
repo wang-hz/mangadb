@@ -11,6 +11,7 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { logout } from '@/api/auth'
+import { ReaderPreferencesControls } from '@/components/reader/ReaderPreferencesControls'
 import { useSession } from '@/session/SessionContext'
 import { colors } from '@/theme/colors'
 
@@ -80,6 +81,14 @@ export default function SettingsScreen() {
         <View style={[styles.card, styles.serverCard]}>
           <Ionicons color={colors.brand} name="server-outline" size={24} />
           <Text selectable style={styles.serverUrl}>{session.serverUrl ?? '未配置'}</Text>
+        </View>
+
+        <Text style={styles.sectionTitle}>阅读设置</Text>
+        <View style={styles.preferencesCard}>
+          <Text style={styles.explanation}>
+            本机所有服务器和账号共用。已读漫画仍优先使用该漫画上次选择的模式。
+          </Text>
+          <ReaderPreferencesControls />
         </View>
 
         <Text style={styles.sectionTitle}>会话</Text>
@@ -241,6 +250,14 @@ const styles = StyleSheet.create({
   },
   actionCard: {
     gap: 12,
+    padding: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    borderRadius: 14,
+    backgroundColor: colors.surface,
+  },
+  preferencesCard: {
+    gap: 18,
     padding: 16,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
