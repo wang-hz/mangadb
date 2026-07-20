@@ -1,8 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { render, screen, waitFor } from '@testing-library/react-native'
+import SettingsScreen from '@/app/(app)/(tabs)/settings'
 import { ReaderPreferencesProvider } from '@/providers/ReaderPreferencesContext'
 import { useSession } from '@/session/SessionContext'
-import SettingsScreen from './settings'
 
 jest.mock('@/session/SessionContext', () => ({ useSession: jest.fn() }))
 
