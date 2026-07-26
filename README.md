@@ -104,6 +104,22 @@ cd mobile && npx expo install --check
 
 The root `npm run build:all` command builds only the web client and API; run the native build commands below separately.
 
+### Automated mobile releases
+
+Pushing a `mobile-v*` tag runs the independent mobile release workflow. For example:
+
+```bash
+git tag mobile-v0.2.0
+git push origin mobile-v0.2.0
+```
+
+The workflow validates the Expo project, builds both platforms, and creates a GitHub Release named `MangaDB Mobile 0.2.0` with:
+
+- `mangadb-0.2.0-android.apk`: an Android test APK signed with the Expo template debug key
+- `mangadb-0.2.0-ios-simulator.app.zip`: an unsigned iOS Simulator application
+
+The version embedded in each app is derived from the tag, while the native build number uses the GitHub Actions run number. These artifacts are intended for Android sideloading and iOS Simulator use only; they cannot be submitted to an app store or installed on a physical iPhone.
+
 ### Android test APK
 
 The Release build requires JDK 17. On macOS, Android Studio's bundled runtime can be selected before building:
@@ -146,7 +162,14 @@ Manga image files are served directly from `DATA_DIR`. The `pages` field on each
 
 ## Docker
 
-Images are published to GitHub Container Registry on every `v*` tag push.
+Pushing a `v*` tag runs the Docker-only release workflow and publishes the combined Web/API image to GitHub Container Registry for `linux/amd64`. Both the version tag and `latest` are updated:
+
+```bash
+git tag v0.5.0
+git push origin v0.5.0
+```
+
+This produces `ghcr.io/wang-hz/mangadb:v0.5.0` and `ghcr.io/wang-hz/mangadb:latest`. Docker releases and `mobile-v*` releases are independent; neither workflow triggers the other.
 
 ```bash
 docker run -d \

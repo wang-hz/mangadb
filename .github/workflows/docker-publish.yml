@@ -1,41 +1,105 @@
-name: Build and Publish Docker Image
+name: Publish Docker Image
 
 on:
   push:
     tags:
       - 'v*'
 
+concurrency:
+  group: docker-publish-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  NODE_VERSION: 20.20.2
 
 jobs:
-  build:
+  validate:
+    name: Validate Web and API
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            web/package-lock.json
+
+      - name: Install API dependencies
+        run: npm ci
+
+      - name: Install Web dependencies
+        run: npm --prefix web ci
+
+      - name: Generate Prisma client
+        env:
+          DATABASE_URL: postgresql://user:pass@localhost:5432/dummy
+        run: npm run prisma:generate
+
+      - name: Test API
+        run: npm test
+
+      - name: Type-check API
+        run: npm run typecheck
+
+      - name: Build Web and API
+        env:
+          VITE_APP_VERSION: ${{ github.ref_name }}
+        run: npm run build:all
+
+  publish:
+    name: Publish linux/amd64 image
+    needs: validate
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out repository
+        uses: actions/checkout@v4
 
-      - uses: docker/setup-buildx-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      - uses: docker/login-action@v3
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push
-        uses: docker/build-push-action@v5
+      - name: Generate image metadata
+        id: metadata
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest
+            type=raw,value=${{ github.ref_name }}
+          labels: |
+            org.opencontainers.image.title=MangaDB
+            org.opencontainers.image.description=Self-hosted manga library with Web and OPDS support
+            org.opencontainers.image.version=${{ github.ref_name }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
         with:
           context: .
           push: true
           platforms: linux/amd64
           build-args: |
-            DATABASE_URL=postgresql://user:pass@localhost:5432/dummy
             VITE_APP_VERSION=${{ github.ref_name }}
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+          tags: ${{ steps.metadata.outputs.tags }}
+          labels: ${{ steps.metadata.outputs.labels }}
+          cache-from: type=gha,scope=docker-publish
+          cache-to: type=gha,mode=max,scope=docker-publish

@@ -1,9 +1,17 @@
 import type { ExpoConfig } from 'expo/config'
 
+const appVersion = process.env.MANGADB_APP_VERSION?.trim() || '0.1.0'
+const buildNumber = process.env.MANGADB_BUILD_NUMBER?.trim() || '1'
+const androidVersionCode = Number(buildNumber)
+
+if (!Number.isSafeInteger(androidVersionCode) || androidVersionCode < 1) {
+  throw new Error('MANGADB_BUILD_NUMBER must be a positive integer')
+}
+
 const config: ExpoConfig = {
   name: 'MangaDB',
   slug: 'mangadb',
-  version: '0.1.0',
+  version: appVersion,
   scheme: 'mangadb',
   platforms: ['ios', 'android'],
   orientation: 'default',
@@ -11,7 +19,7 @@ const config: ExpoConfig = {
   icon: './assets/icon.png',
   ios: {
     bundleIdentifier: 'top.wanghaizhou.mangadb',
-    buildNumber: '1',
+    buildNumber,
     supportsTablet: false,
     config: {
       usesNonExemptEncryption: false,
@@ -25,7 +33,7 @@ const config: ExpoConfig = {
   },
   android: {
     package: 'top.wanghaizhou.mangadb',
-    versionCode: 1,
+    versionCode: androidVersionCode,
     adaptiveIcon: {
       foregroundImage: './assets/adaptive-icon.png',
       backgroundColor: '#111827',

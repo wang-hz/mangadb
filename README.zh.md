@@ -104,6 +104,22 @@ cd mobile && npx expo install --check
 
 根目录的 `npm run build:all` 只构建 Web 与 API；原生应用需使用下方命令单独构建。
 
+### 自动发布移动端
+
+推送 `mobile-v*` 标签会运行独立的移动端发布工作流。例如：
+
+```bash
+git tag mobile-v0.2.0
+git push origin mobile-v0.2.0
+```
+
+工作流会验证 Expo 项目、构建两个平台，并创建名为 `MangaDB Mobile 0.2.0` 的 GitHub Release，其中包含：
+
+- `mangadb-0.2.0-android.apk`：使用 Expo 模板调试密钥签名的 Android 测试 APK
+- `mangadb-0.2.0-ios-simulator.app.zip`：未签名的 iOS Simulator 应用
+
+应用内版本来自标签，原生构建号使用 GitHub Actions 的运行编号。这些产物仅用于 Android 侧载和 iOS Simulator，不能提交应用商店，也不能安装到 iPhone 真机。
+
 ### Android 测试 APK
 
 Release 构建需要 JDK 17。在 macOS 上可以直接选择 Android Studio 自带的运行时：
@@ -146,7 +162,14 @@ Simulator 构建不需要 Apple 开发者账号；iPhone 真机安装和 IPA 输
 
 ## Docker
 
-每次推送 `v*` tag 时，镜像会自动发布至 GitHub Container Registry。
+推送 `v*` 标签会运行仅发布 Docker 的工作流，将 Web/API 合并镜像以 `linux/amd64` 平台发布至 GitHub Container Registry，同时更新版本标签和 `latest`：
+
+```bash
+git tag v0.5.0
+git push origin v0.5.0
+```
+
+以上操作会生成 `ghcr.io/wang-hz/mangadb:v0.5.0` 和 `ghcr.io/wang-hz/mangadb:latest`。Docker 发布与 `mobile-v*` 移动端发布相互独立，不会互相触发。
 
 ```bash
 docker run -d \

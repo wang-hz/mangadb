@@ -1,0 +1,247 @@
+name: Publish Mobile Apps
+
+on:
+  push:
+    tags:
+      - 'mobile-v*'
+
+concurrency:
+  group: mobile-publish-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: 20.20.2
+
+jobs:
+  validate:
+    name: Validate Mobile
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      app-version: ${{ steps.version.outputs.app-version }}
+      build-number: ${{ steps.version.outputs.build-number }}
+
+    defaults:
+      run:
+        working-directory: mobile
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Resolve mobile version
+        id: version
+        working-directory: .
+        shell: bash
+        run: |
+          app_version="${GITHUB_REF_NAME#mobile-v}"
+          if [[ ! "$app_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Expected a tag such as mobile-v0.2.0, received: $GITHUB_REF_NAME" >&2
+            exit 1
+          fi
+          echo "app-version=$app_version" >> "$GITHUB_OUTPUT"
+          echo "build-number=$GITHUB_RUN_NUMBER" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check Expo dependencies
+        run: npx expo install --check
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Verify release configuration
+        env:
+          MANGADB_APP_VERSION: ${{ steps.version.outputs.app-version }}
+          MANGADB_BUILD_NUMBER: ${{ steps.version.outputs.build-number }}
+        shell: bash
+        run: |
+          npx expo config --type public --json > "$RUNNER_TEMP/expo-config.json"
+          node - "$RUNNER_TEMP/expo-config.json" "$MANGADB_APP_VERSION" "$MANGADB_BUILD_NUMBER" <<'NODE'
+          const fs = require('node:fs')
+          const [configPath, expectedVersion, expectedBuild] = process.argv.slice(2)
+          const config = JSON.parse(fs.readFileSync(configPath, 'utf8'))
+          const valid = config.version === expectedVersion &&
+            config.ios?.buildNumber === expectedBuild &&
+            config.android?.versionCode === Number(expectedBuild) &&
+            config.ios?.bundleIdentifier === 'top.wanghaizhou.mangadb' &&
+            config.android?.package === 'top.wanghaizhou.mangadb'
+          if (!valid) {
+            console.error('Expo release configuration does not match the tag and build number')
+            console.error(JSON.stringify(config, null, 2))
+            process.exit(1)
+          }
+          NODE
+
+  android:
+    name: Build Android APK
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      MANGADB_APP_VERSION: ${{ needs.validate.outputs.app-version }}
+      MANGADB_BUILD_NUMBER: ${{ needs.validate.outputs.build-number }}
+
+    defaults:
+      run:
+        working-directory: mobile
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android build tools
+        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0' 'ndk;27.1.12297006' 'cmake;3.22.1'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Release APK
+        run: npm run build:android:apk
+
+      - name: Prepare Android artifact
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/mobile-android"
+          cp android/app/build/outputs/apk/release/app-release.apk \
+            "$RUNNER_TEMP/mobile-android/mangadb-${MANGADB_APP_VERSION}-android.apk"
+
+      - name: Upload Android artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-android-${{ github.run_id }}
+          path: ${{ runner.temp }}/mobile-android/*.apk
+          if-no-files-found: error
+          retention-days: 7
+
+  ios:
+    name: Build iOS Simulator App
+    needs: validate
+    runs-on: macos-26
+    permissions:
+      contents: read
+    env:
+      MANGADB_APP_VERSION: ${{ needs.validate.outputs.app-version }}
+      MANGADB_BUILD_NUMBER: ${{ needs.validate.outputs.build-number }}
+
+    defaults:
+      run:
+        working-directory: mobile
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Select Xcode 26.2
+        run: sudo xcode-select --switch /Applications/Xcode_26.2.app/Contents/Developer
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate iOS project
+        run: npx expo prebuild --clean --platform ios --no-install
+
+      - name: Install CocoaPods
+        working-directory: mobile/ios
+        run: pod install
+
+      - name: Build Simulator app
+        run: |
+          xcodebuild \
+            -workspace ios/MangaDB.xcworkspace \
+            -scheme MangaDB \
+            -configuration Release \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/ios-build" \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Prepare iOS artifact
+        shell: bash
+        run: |
+          app_path="$RUNNER_TEMP/ios-build/Build/Products/Release-iphonesimulator/MangaDB.app"
+          test -d "$app_path"
+          mkdir -p "$RUNNER_TEMP/mobile-ios"
+          ditto -c -k --sequesterRsrc --keepParent "$app_path" \
+            "$RUNNER_TEMP/mobile-ios/mangadb-${MANGADB_APP_VERSION}-ios-simulator.app.zip"
+
+      - name: Upload iOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-ios-${{ github.run_id }}
+          path: ${{ runner.temp }}/mobile-ios/*.zip
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: Publish Mobile Release
+    needs:
+      - validate
+      - android
+      - ios
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download mobile artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: mobile-*-${{ github.run_id }}
+          path: release-artifacts
+          merge-multiple: true
+
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APP_VERSION: ${{ needs.validate.outputs.app-version }}
+        shell: bash
+        run: |
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" release-artifacts/* \
+              --clobber \
+              --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$GITHUB_REF_NAME" release-artifacts/* \
+              --generate-notes \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "MangaDB Mobile $APP_VERSION" \
+              --verify-tag
+          fi
