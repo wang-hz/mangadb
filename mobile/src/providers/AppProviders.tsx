@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { type PropsWithChildren, useCallback, useState } from 'react'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
+import { AppPrivacyShield } from '@/components/AppPrivacyShield'
 import { clearSessionCaches } from '@/session/cleanup'
 import { SessionProvider } from '@/session/SessionContext'
 import { ReaderPreferencesProvider } from './ReaderPreferencesContext'
@@ -27,11 +28,13 @@ export function AppProviders({ children }: PropsWithChildren) {
 
   return (
     <SafeAreaProvider>
-      <ReaderPreferencesProvider>
-        <QueryClientProvider client={queryClient}>
-          <SessionProvider onSessionCleanup={onSessionCleanup}>{children}</SessionProvider>
-        </QueryClientProvider>
-      </ReaderPreferencesProvider>
+      <AppPrivacyShield>
+        <ReaderPreferencesProvider>
+          <QueryClientProvider client={queryClient}>
+            <SessionProvider onSessionCleanup={onSessionCleanup}>{children}</SessionProvider>
+          </QueryClientProvider>
+        </ReaderPreferencesProvider>
+      </AppPrivacyShield>
     </SafeAreaProvider>
   )
 }
