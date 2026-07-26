@@ -115,10 +115,10 @@ git push origin mobile-v0.2.0
 
 The workflow validates the Expo project, builds both platforms, and creates a GitHub Release named `MangaDB Mobile 0.2.0` with:
 
-- `mangadb-0.2.0-android.apk`: an Android test APK signed with the Expo template debug key
-- `mangadb-0.2.0-ios-simulator.app.zip`: an unsigned iOS Simulator application
+- `mangadb-0.2.0.apk`: an Android test APK signed with the Expo template debug key
+- `mangadb-0.2.0.ipa`: an unsigned iOS device application
 
-The version embedded in each app is derived from the tag, while the native build number uses the GitHub Actions run number. These artifacts are intended for Android sideloading and iOS Simulator use only; they cannot be submitted to an app store or installed on a physical iPhone.
+The version embedded in each app is derived from the tag, while the native build number uses the GitHub Actions run number. The APK is intended for Android sideloading. The IPA must be re-signed with a valid Apple certificate and provisioning profile before it can be installed on a physical iPhone; it cannot be submitted directly to the App Store.
 
 ### Android test APK
 

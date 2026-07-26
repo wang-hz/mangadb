@@ -133,7 +133,7 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/mobile-android"
           cp android/app/build/outputs/apk/release/app-release.apk \
-            "$RUNNER_TEMP/mobile-android/mangadb-${MANGADB_APP_VERSION}-android.apk"
+            "$RUNNER_TEMP/mobile-android/mangadb-${MANGADB_APP_VERSION}.apk"
 
       - name: Upload Android artifact
         uses: actions/upload-artifact@v4
@@ -144,7 +144,7 @@ jobs:
           retention-days: 7
 
   ios:
-    name: Build iOS Simulator App
+    name: Build unsigned iOS IPA
     needs: validate
     runs-on: macos-26
     permissions:
@@ -181,14 +181,14 @@ jobs:
         working-directory: mobile/ios
         run: pod install
 
-      - name: Build Simulator app
+      - name: Build iOS device app
         run: |
           xcodebuild \
             -workspace ios/MangaDB.xcworkspace \
             -scheme MangaDB \
             -configuration Release \
-            -sdk iphonesimulator \
-            -destination 'generic/platform=iOS Simulator' \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
             -derivedDataPath "$RUNNER_TEMP/ios-build" \
             CODE_SIGNING_ALLOWED=NO \
             build
@@ -196,17 +196,22 @@ jobs:
       - name: Prepare iOS artifact
         shell: bash
         run: |
-          app_path="$RUNNER_TEMP/ios-build/Build/Products/Release-iphonesimulator/MangaDB.app"
+          app_path="$RUNNER_TEMP/ios-build/Build/Products/Release-iphoneos/MangaDB.app"
           test -d "$app_path"
-          mkdir -p "$RUNNER_TEMP/mobile-ios"
-          ditto -c -k --sequesterRsrc --keepParent "$app_path" \
-            "$RUNNER_TEMP/mobile-ios/mangadb-${MANGADB_APP_VERSION}-ios-simulator.app.zip"
+          payload_path="$RUNNER_TEMP/mobile-ios/Payload"
+          mkdir -p "$payload_path"
+          cp -R "$app_path" "$payload_path/MangaDB.app"
+          (
+            cd "$RUNNER_TEMP/mobile-ios"
+            COPYFILE_DISABLE=1 zip -qry "mangadb-${MANGADB_APP_VERSION}.ipa" Payload
+          )
+          unzip -tq "$RUNNER_TEMP/mobile-ios/mangadb-${MANGADB_APP_VERSION}.ipa"
 
       - name: Upload iOS artifact
         uses: actions/upload-artifact@v4
         with:
           name: mobile-ios-${{ github.run_id }}
-          path: ${{ runner.temp }}/mobile-ios/*.zip
+          path: ${{ runner.temp }}/mobile-ios/*.ipa
           if-no-files-found: error
           retention-days: 7
 

@@ -115,10 +115,10 @@ git push origin mobile-v0.2.0
 
 工作流会验证 Expo 项目、构建两个平台，并创建名为 `MangaDB Mobile 0.2.0` 的 GitHub Release，其中包含：
 
-- `mangadb-0.2.0-android.apk`：使用 Expo 模板调试密钥签名的 Android 测试 APK
-- `mangadb-0.2.0-ios-simulator.app.zip`：未签名的 iOS Simulator 应用
+- `mangadb-0.2.0.apk`：使用 Expo 模板调试密钥签名的 Android 测试 APK
+- `mangadb-0.2.0.ipa`：未签名的 iOS 真机应用
 
-应用内版本来自标签，原生构建号使用 GitHub Actions 的运行编号。这些产物仅用于 Android 侧载和 iOS Simulator，不能提交应用商店，也不能安装到 iPhone 真机。
+应用内版本来自标签，原生构建号使用 GitHub Actions 的运行编号。APK 用于 Android 侧载；IPA 必须使用有效的 Apple 证书和 provisioning profile 重新签名后才能安装到 iPhone 真机，不能直接提交 App Store。
 
 ### Android 测试 APK
 
