@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons'
 import { Image } from 'expo-image'
 import { StatusBar } from 'expo-status-bar'
-import { memo, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   FlatList,
@@ -22,6 +22,10 @@ import type { MangaDetail } from '@/api/types'
 import { PrimaryButton } from '@/components/PrimaryButton'
 import { useReaderPagePrefetch } from '@/components/reader/prefetch'
 import { ReaderTopBar } from '@/components/reader/ReaderTopBar'
+import {
+  reportReaderTelemetry,
+  reportVisiblePageLoad,
+} from '@/components/reader/telemetry'
 import { mangaPageImageSource } from '@/media/images'
 import type { ReaderPreferences } from '@/storage/readerPreferences'
 import { colors } from '@/theme/colors'
@@ -70,6 +74,9 @@ export function PagedReader({
   const previousWidthRef = useRef(width)
   const [controlsVisible, setControlsVisible] = useState(true)
   const [jumpVisible, setJumpVisible] = useState(false)
+  const firstPageReportedRef = useRef(false)
+  const visiblePageRef = useRef(pageIndex)
+  visiblePageRef.current = pageIndex
   const pageIndexes = useMemo(
     () => pageIndexesForDirection(manga.pages.length, preferences.pagedDirection),
     [manga.pages.length, preferences.pagedDirection],
@@ -77,6 +84,11 @@ export function PagedReader({
   const leftTarget = pageIndex + pageDeltaForTap(preferences.pagedDirection, 'left')
   const rightTarget = pageIndex + pageDeltaForTap(preferences.pagedDirection, 'right')
   const validPage = (target: number) => target >= 0 && target < manga.pages.length
+  const recordPageLoad = useCallback((index: number, durationMs: number) => {
+    if (index !== visiblePageRef.current) return
+    reportVisiblePageLoad('paged', index, durationMs, !firstPageReportedRef.current)
+    firstPageReportedRef.current = true
+  }, [])
   useReaderPagePrefetch({
     api,
     direction: preferences.pagedDirection,
@@ -170,6 +182,7 @@ export function PagedReader({
             height={height}
             index={index}
             manga={manga}
+            onPageLoad={recordPageLoad}
             onRefreshMetadata={onRefreshMetadata}
             onTap={handlePageTap}
             serverUrl={serverUrl}
@@ -250,6 +263,7 @@ interface ReaderPageProps {
   index: number
   width: number
   height: number
+  onPageLoad: (index: number, durationMs: number) => void
   onRefreshMetadata: () => Promise<void>
   onTap: (event: GestureResponderEvent) => void
   contentFit: 'contain' | 'cover'
@@ -263,6 +277,7 @@ const ReaderPage = memo(function ReaderPage({
   index,
   width,
   height,
+  onPageLoad,
   onRefreshMetadata,
   onTap,
   contentFit,
@@ -271,6 +286,7 @@ const ReaderPage = memo(function ReaderPage({
   const [loading, setLoading] = useState(true)
   const [attempt, setAttempt] = useState(0)
   const [refreshingMetadata, setRefreshingMetadata] = useState(false)
+  const loadStartedAtRef = useRef(Date.now())
   const source = mangaPageImageSource(
     api,
     serverUrl,
@@ -283,6 +299,7 @@ const ReaderPage = memo(function ReaderPage({
   useEffect(() => {
     setFailed(false)
     setLoading(true)
+    loadStartedAtRef.current = Date.now()
   }, [source.cacheKey, attempt])
 
   return (
@@ -296,8 +313,17 @@ const ReaderPage = memo(function ReaderPage({
               onError={() => {
                 setLoading(false)
                 setFailed(true)
+                reportReaderTelemetry({
+                  type: 'page-failure',
+                  mode: 'paged',
+                  pageIndex: index,
+                  attempt,
+                })
               }}
-              onLoad={() => setLoading(false)}
+              onLoad={() => {
+                setLoading(false)
+                onPageLoad(index, Date.now() - loadStartedAtRef.current)
+              }}
               recyclingKey={`${manga.uuid}:${index}:${manga.updateAt}`}
               source={source}
               style={StyleSheet.absoluteFill}
@@ -311,6 +337,12 @@ const ReaderPage = memo(function ReaderPage({
                 accessibilityRole="button"
                 onPress={event => {
                   event.stopPropagation()
+                  reportReaderTelemetry({
+                    type: 'page-retry',
+                    mode: 'paged',
+                    pageIndex: index,
+                    attempt: attempt + 1,
+                  })
                   setAttempt(value => value + 1)
                   setFailed(false)
                 }}

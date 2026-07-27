@@ -4,13 +4,32 @@ import { FlatList } from 'react-native'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import type { ApiClient } from '@/api/client'
 import type { MangaDetail } from '@/api/types'
+import { setReaderTelemetryReporter } from '@/components/reader/telemetry'
 import { DEFAULT_READER_PREFERENCES } from '@/storage/readerPreferences'
 import { PagedReader } from './PagedReader'
 
 jest.mock('expo-image', () => ({
-  Image: Object.assign(({ contentFit, onError }: { contentFit: string; onError: () => void }) => {
+  Image: Object.assign(({
+    contentFit,
+    onError,
+    onLoad,
+    source,
+  }: {
+    contentFit: string
+    onError: () => void
+    onLoad: () => void
+    source: { uri?: string }
+  }) => {
     const { View } = require('react-native')
-    return <View accessibilityLabel={`页面图片-${contentFit}`} onError={onError} />
+    const pageIndex = source.uri?.match(/\/pages\/(\d+)/)?.[1]
+    return (
+      <View
+        accessibilityLabel={`页面图片-${contentFit}`}
+        onError={onError}
+        onLoad={onLoad}
+        testID={`page-image-${pageIndex}`}
+      />
+    )
   }, { prefetch: jest.fn().mockResolvedValue(true) }),
 }))
 
@@ -96,6 +115,21 @@ describe('PagedReader preferences', () => {
   it('passes cover fitting to page images', () => {
     renderReader({ pagedFit: 'cover' })
     expect(screen.getAllByLabelText('页面图片-cover').length).toBeGreaterThan(0)
+  })
+
+  it('reports the first visible page display without request details', () => {
+    const reporter = jest.fn()
+    const resetReporter = setReaderTelemetryReporter(reporter)
+    renderReader()
+
+    fireEvent(screen.getByTestId('page-image-1'), 'load')
+
+    expect(reporter).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'first-page-display',
+      mode: 'paged',
+      pageIndex: 1,
+    }))
+    resetReporter()
   })
 
   it('retries a failed page locally', () => {

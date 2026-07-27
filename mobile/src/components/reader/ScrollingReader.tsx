@@ -17,6 +17,10 @@ import type { ApiClient } from '@/api/client'
 import type { MangaDetail } from '@/api/types'
 import { useReaderPagePrefetch } from '@/components/reader/prefetch'
 import { ReaderTopBar } from '@/components/reader/ReaderTopBar'
+import {
+  reportReaderTelemetry,
+  reportVisiblePageLoad,
+} from '@/components/reader/telemetry'
 import { mangaPageImageSource } from '@/media/images'
 import type { ReaderPreferences } from '@/storage/readerPreferences'
 import { colors } from '@/theme/colors'
@@ -68,6 +72,9 @@ export function ScrollingReader({
   const initializingRef = useRef(pageIndex > 0)
   const previousWidthRef = useRef(width)
   const scrollOffsetRef = useRef(0)
+  const firstPageReportedRef = useRef(false)
+  const visiblePageRef = useRef(pageIndex)
+  visiblePageRef.current = pageIndex
   const [aspectRatios, setAspectRatios] = useState<Record<number, number>>({})
   const [controlsVisible, setControlsVisible] = useState(true)
   const imageWidth = Math.min(width, 900)
@@ -86,6 +93,11 @@ export function ScrollingReader({
   ), [manga.pages, aspectRatios, imageWidth, preferences.scrollGap])
   const layoutsRef = useRef(layouts)
   layoutsRef.current = layouts
+  const recordPageLoad = useCallback((index: number, durationMs: number) => {
+    if (index !== visiblePageRef.current) return
+    reportVisiblePageLoad('scroll', index, durationMs, !firstPageReportedRef.current)
+    firstPageReportedRef.current = true
+  }, [])
 
   useEffect(() => { callbackRef.current = onPageChange }, [onPageChange])
 
@@ -196,6 +208,7 @@ export function ScrollingReader({
             index={index}
             manga={manga}
             onAspectRatio={updateAspectRatio}
+            onPageLoad={recordPageLoad}
             onRefreshMetadata={onRefreshMetadata}
             onTap={() => setControlsVisible(visible => !visible)}
             pageGap={index === manga.pages.length - 1 ? 0 : preferences.scrollGap}
@@ -240,6 +253,7 @@ interface ScrollingPageProps {
   viewportWidth: number
   onTap: () => void
   onAspectRatio: (index: number, aspectRatio: number) => void
+  onPageLoad: (index: number, durationMs: number) => void
   onRefreshMetadata: () => Promise<void>
   pageGap: number
 }
@@ -254,6 +268,7 @@ const ScrollingPage = memo(function ScrollingPage({
   viewportWidth,
   onTap,
   onAspectRatio,
+  onPageLoad,
   onRefreshMetadata,
   pageGap,
 }: ScrollingPageProps) {
@@ -261,6 +276,7 @@ const ScrollingPage = memo(function ScrollingPage({
   const [failed, setFailed] = useState(false)
   const [attempt, setAttempt] = useState(0)
   const [refreshingMetadata, setRefreshingMetadata] = useState(false)
+  const loadStartedAtRef = useRef(Date.now())
   const imageWidth = Math.min(viewportWidth, 900)
   const imageHeight = imageWidth / aspectRatio
   const source = mangaPageImageSource(
@@ -275,6 +291,7 @@ const ScrollingPage = memo(function ScrollingPage({
   useEffect(() => {
     setLoading(true)
     setFailed(false)
+    loadStartedAtRef.current = Date.now()
   }, [source.cacheKey, attempt])
 
   return (
@@ -291,6 +308,12 @@ const ScrollingPage = memo(function ScrollingPage({
               onError={() => {
                 setLoading(false)
                 setFailed(true)
+                reportReaderTelemetry({
+                  type: 'page-failure',
+                  mode: 'scroll',
+                  pageIndex: index,
+                  attempt,
+                })
               }}
               onLoad={event => {
                 const { width, height } = event.source
@@ -299,6 +322,7 @@ const ScrollingPage = memo(function ScrollingPage({
                   onAspectRatio(index, nextAspectRatio)
                 }
                 setLoading(false)
+                onPageLoad(index, Date.now() - loadStartedAtRef.current)
               }}
               recyclingKey={`${manga.uuid}:${index}:${manga.updateAt}`}
               source={source}
@@ -313,6 +337,12 @@ const ScrollingPage = memo(function ScrollingPage({
                 accessibilityRole="button"
                 onPress={event => {
                   event.stopPropagation()
+                  reportReaderTelemetry({
+                    type: 'page-retry',
+                    mode: 'scroll',
+                    pageIndex: index,
+                    attempt: attempt + 1,
+                  })
                   setAttempt(value => value + 1)
                   setFailed(false)
                 }}
