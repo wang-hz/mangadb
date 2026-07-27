@@ -34,6 +34,7 @@ const manga: MangaDetail = {
 function renderReader(
   preferencePatch: Partial<typeof DEFAULT_READER_PREFERENCES> = {},
   onPageChange = jest.fn(),
+  onRefreshMetadata = jest.fn().mockResolvedValue(undefined),
 ) {
   return {
     onPageChange,
@@ -50,6 +51,7 @@ function renderReader(
           onModeChange={jest.fn()}
           onOpenSettings={jest.fn()}
           onPageChange={onPageChange}
+          onRefreshMetadata={onRefreshMetadata}
           pageIndex={1}
           preferences={{ ...DEFAULT_READER_PREFERENCES, ...preferencePatch }}
           settingsVisible={false}
@@ -104,6 +106,19 @@ describe('PagedReader preferences', () => {
     expect(retry).toBeOnTheScreen()
     fireEvent.press(retry, { stopPropagation: jest.fn() })
     expect(screen.getAllByLabelText('页面图片-contain').length).toBeGreaterThan(0)
+  })
+
+  it('offers an explicit metadata refresh after a page failure', async () => {
+    let finishRefresh: (() => void) | undefined
+    const onRefreshMetadata = jest.fn(() => new Promise<void>(resolve => {
+      finishRefresh = resolve
+    }))
+    renderReader({}, jest.fn(), onRefreshMetadata)
+    fireEvent(screen.getAllByLabelText('页面图片-contain')[0], 'error')
+
+    fireEvent.press(screen.getByText('刷新页面信息'), { stopPropagation: jest.fn() })
+    expect(onRefreshMetadata).toHaveBeenCalledTimes(1)
+    await act(async () => { finishRefresh?.() })
   })
 
   it.each([3000, 5000] as const)('hides controls after %i ms', timeout => {

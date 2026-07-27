@@ -18,6 +18,7 @@ interface ReaderExperienceProps {
   initialMode: ReaderMode
   preferences: ReaderPreferences
   onBack: () => void
+  onRefreshMetadata: () => Promise<void>
   onReaderReady: () => void
 }
 
@@ -30,6 +31,7 @@ export function ReaderExperience({
   initialMode,
   preferences,
   onBack,
+  onRefreshMetadata,
   onReaderReady,
 }: ReaderExperienceProps) {
   const [pageIndex, setPageIndex] = useState(initialPageIndex)
@@ -75,6 +77,7 @@ export function ReaderExperience({
     manga,
     mode,
     onBack,
+    onRefreshMetadata,
     onModeChange: changeMode,
     onPageChange: changePage,
     pageIndex,

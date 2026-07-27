@@ -41,6 +41,7 @@ interface PagedReaderProps {
   pageIndex: number
   onPageChange: (pageIndex: number) => void
   onBack: () => void
+  onRefreshMetadata: () => Promise<void>
   mode: ReaderMode
   onModeChange: (mode: ReaderMode) => void
   preferences: ReaderPreferences
@@ -56,6 +57,7 @@ export function PagedReader({
   pageIndex,
   onPageChange,
   onBack,
+  onRefreshMetadata,
   mode,
   onModeChange,
   preferences,
@@ -168,6 +170,7 @@ export function PagedReader({
             height={height}
             index={index}
             manga={manga}
+            onRefreshMetadata={onRefreshMetadata}
             onTap={handlePageTap}
             serverUrl={serverUrl}
             userUuid={userUuid}
@@ -247,6 +250,7 @@ interface ReaderPageProps {
   index: number
   width: number
   height: number
+  onRefreshMetadata: () => Promise<void>
   onTap: (event: GestureResponderEvent) => void
   contentFit: 'contain' | 'cover'
 }
@@ -259,12 +263,14 @@ const ReaderPage = memo(function ReaderPage({
   index,
   width,
   height,
+  onRefreshMetadata,
   onTap,
   contentFit,
 }: ReaderPageProps) {
   const [failed, setFailed] = useState(false)
   const [loading, setLoading] = useState(true)
   const [attempt, setAttempt] = useState(0)
+  const [refreshingMetadata, setRefreshingMetadata] = useState(false)
   const source = mangaPageImageSource(
     api,
     serverUrl,
@@ -298,19 +304,33 @@ const ReaderPage = memo(function ReaderPage({
             />
           )
         : (
-            <Pressable
-              accessibilityRole="button"
-              onPress={event => {
-                event.stopPropagation()
-                setAttempt(value => value + 1)
-                setFailed(false)
-              }}
-              style={styles.pageFailure}
-            >
+            <View style={styles.pageFailure}>
               <Ionicons color="#a3a3a3" name="image-outline" size={42} />
               <Text style={styles.pageFailureTitle}>第 {index + 1} 页加载失败</Text>
-              <Text style={styles.pageFailureAction}>点击重试</Text>
-            </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                onPress={event => {
+                  event.stopPropagation()
+                  setAttempt(value => value + 1)
+                  setFailed(false)
+                }}
+              >
+                <Text style={styles.pageFailureAction}>点击重试</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                disabled={refreshingMetadata}
+                onPress={event => {
+                  event.stopPropagation()
+                  setRefreshingMetadata(true)
+                  void onRefreshMetadata().finally(() => setRefreshingMetadata(false))
+                }}
+              >
+                <Text style={styles.metadataRefreshAction}>
+                  {refreshingMetadata ? '正在刷新页面信息' : '刷新页面信息'}
+                </Text>
+              </Pressable>
+            </View>
           )}
       {loading && !failed
         ? <ActivityIndicator color="#ffffff" size="large" style={styles.pageLoading} />
@@ -427,6 +447,10 @@ const styles = StyleSheet.create({
   pageFailureAction: {
     color: '#60a5fa',
     fontSize: 13,
+  },
+  metadataRefreshAction: {
+    color: '#a3a3a3',
+    fontSize: 12,
   },
   bottomBar: {
     position: 'absolute',

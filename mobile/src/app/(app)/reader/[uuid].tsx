@@ -21,6 +21,7 @@ import {
   parsePageIndexParam,
   resolveInitialReaderMode,
 } from '@/utils/reader'
+import { createSingleFlight } from '@/utils/singleFlight'
 
 export default function ReaderScreen() {
   const params = useLocalSearchParams<{
@@ -32,11 +33,18 @@ export default function ReaderScreen() {
   const mangaUuid = firstParam(params.uuid)
   const fallbackTitle = firstParam(params.title)
   const { api, auth, serverUrl } = useSession()
+  const metadataRefresh = useRef(createSingleFlight()).current
   const query = useQuery({
     queryKey: ['manga', serverUrl, auth?.user.uuid, mangaUuid],
     queryFn: ({ signal }) => getManga(api!, mangaUuid!, signal),
     enabled: Boolean(api && auth && serverUrl && mangaUuid),
   })
+  const refreshMetadata = useCallback(
+    () => metadataRefresh.run(async () => {
+      await query.refetch({ cancelRefetch: false })
+    }),
+    [metadataRefresh, query],
+  )
 
   return (
     <View style={styles.root}>
@@ -67,6 +75,7 @@ export default function ReaderScreen() {
               ? (
                   <ReaderContent
                     manga={query.data}
+                    onRefreshMetadata={refreshMetadata}
                     requestedMode={firstParam(params.mode)}
                     requestedPage={firstParam(params.page)}
                   />
@@ -78,10 +87,12 @@ export default function ReaderScreen() {
 
 function ReaderContent({
   manga,
+  onRefreshMetadata,
   requestedPage,
   requestedMode,
 }: {
   manga: MangaDetail
+  onRefreshMetadata: () => Promise<void>
   requestedPage?: string
   requestedMode?: string
 }) {
@@ -162,6 +173,7 @@ function ReaderContent({
       ])}
       manga={manga}
       onBack={goBackOrLibrary}
+      onRefreshMetadata={onRefreshMetadata}
       onReaderReady={markOverrideConsumed}
       preferences={preferences}
       serverUrl={serverUrl!}

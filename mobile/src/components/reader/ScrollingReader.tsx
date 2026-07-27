@@ -34,6 +34,7 @@ interface ScrollingReaderProps {
   pageIndex: number
   onPageChange: (pageIndex: number) => void
   onBack: () => void
+  onRefreshMetadata: () => Promise<void>
   mode: ReaderMode
   onModeChange: (mode: ReaderMode) => void
   preferences: ReaderPreferences
@@ -49,6 +50,7 @@ export function ScrollingReader({
   pageIndex,
   onPageChange,
   onBack,
+  onRefreshMetadata,
   mode,
   onModeChange,
   preferences,
@@ -194,6 +196,7 @@ export function ScrollingReader({
             index={index}
             manga={manga}
             onAspectRatio={updateAspectRatio}
+            onRefreshMetadata={onRefreshMetadata}
             onTap={() => setControlsVisible(visible => !visible)}
             pageGap={index === manga.pages.length - 1 ? 0 : preferences.scrollGap}
             serverUrl={serverUrl}
@@ -237,6 +240,7 @@ interface ScrollingPageProps {
   viewportWidth: number
   onTap: () => void
   onAspectRatio: (index: number, aspectRatio: number) => void
+  onRefreshMetadata: () => Promise<void>
   pageGap: number
 }
 
@@ -250,11 +254,13 @@ const ScrollingPage = memo(function ScrollingPage({
   viewportWidth,
   onTap,
   onAspectRatio,
+  onRefreshMetadata,
   pageGap,
 }: ScrollingPageProps) {
   const [loading, setLoading] = useState(true)
   const [failed, setFailed] = useState(false)
   const [attempt, setAttempt] = useState(0)
+  const [refreshingMetadata, setRefreshingMetadata] = useState(false)
   const imageWidth = Math.min(viewportWidth, 900)
   const imageHeight = imageWidth / aspectRatio
   const source = mangaPageImageSource(
@@ -300,19 +306,33 @@ const ScrollingPage = memo(function ScrollingPage({
             />
           )
         : (
-            <Pressable
-              accessibilityRole="button"
-              onPress={event => {
-                event.stopPropagation()
-                setAttempt(value => value + 1)
-                setFailed(false)
-              }}
-              style={[styles.scrollFailure, { width: imageWidth, height: imageHeight }]}
-            >
+            <View style={[styles.scrollFailure, { width: imageWidth, height: imageHeight }]}>
               <Ionicons color="#a3a3a3" name="image-outline" size={38} />
               <Text style={styles.failureTitle}>第 {index + 1} 页加载失败</Text>
-              <Text style={styles.failureAction}>点击重试</Text>
-            </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                onPress={event => {
+                  event.stopPropagation()
+                  setAttempt(value => value + 1)
+                  setFailed(false)
+                }}
+              >
+                <Text style={styles.failureAction}>点击重试</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                disabled={refreshingMetadata}
+                onPress={event => {
+                  event.stopPropagation()
+                  setRefreshingMetadata(true)
+                  void onRefreshMetadata().finally(() => setRefreshingMetadata(false))
+                }}
+              >
+                <Text style={styles.metadataRefreshAction}>
+                  {refreshingMetadata ? '正在刷新页面信息' : '刷新页面信息'}
+                </Text>
+              </Pressable>
+            </View>
           )}
       {loading && !failed
         ? <ActivityIndicator color="#ffffff" size="large" style={styles.loading} />
@@ -349,6 +369,10 @@ const styles = StyleSheet.create({
   failureAction: {
     color: '#60a5fa',
     fontSize: 13,
+  },
+  metadataRefreshAction: {
+    color: '#a3a3a3',
+    fontSize: 12,
   },
   pageBadge: {
     position: 'absolute',

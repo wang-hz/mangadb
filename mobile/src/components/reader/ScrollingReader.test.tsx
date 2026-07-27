@@ -41,6 +41,7 @@ describe('ScrollingReader preferences', () => {
           onModeChange={jest.fn()}
           onOpenSettings={jest.fn()}
           onPageChange={jest.fn()}
+          onRefreshMetadata={jest.fn().mockResolvedValue(undefined)}
           pageIndex={0}
           preferences={{ ...DEFAULT_READER_PREFERENCES, scrollGap: 16 }}
           settingsVisible={false}
