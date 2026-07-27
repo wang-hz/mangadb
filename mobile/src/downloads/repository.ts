@@ -17,6 +17,11 @@ interface IdentityRecord extends DownloadIdentity {
   schemaVersion: 1
 }
 
+export interface DownloadPagePaths {
+  partialUri: string
+  completedUri: string
+}
+
 export class DownloadRepository {
   constructor(
     private readonly files: DownloadFileStore = new ExpoDownloadFileStore(),
@@ -85,6 +90,24 @@ export class DownloadRepository {
     const identity = normalizeDownloadIdentity(serverUrl, userUuid)
     const paths = await this.paths(identity, mangaUuid)
     await this.files.deleteDirectory(paths.mangaUri)
+  }
+
+  async pagePaths(
+    serverUrl: string,
+    userUuid: string,
+    mangaUuid: string,
+    pageIndex: number,
+  ): Promise<DownloadPagePaths> {
+    if (!Number.isInteger(pageIndex) || pageIndex < 0) {
+      throw new DownloadRepositoryError('页面索引无效')
+    }
+    const identity = normalizeDownloadIdentity(serverUrl, userUuid)
+    const paths = await this.paths(identity, mangaUuid)
+    const filename = String(pageIndex).padStart(6, '0')
+    return {
+      partialUri: joinUri(paths.mangaUri, 'partial', `${filename}.part`),
+      completedUri: joinUri(paths.mangaUri, 'pages', `${filename}.page`),
+    }
   }
 
   private async ensureIdentity(

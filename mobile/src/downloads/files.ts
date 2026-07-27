@@ -7,11 +7,19 @@ export interface DownloadFileStore {
   deleteDirectory: (uri: string) => Promise<void>
 }
 
+export interface DownloadPageFileStore {
+  writePageAtomic: (
+    partialUri: string,
+    completedUri: string,
+    bytes: Uint8Array,
+  ) => Promise<void>
+}
+
 export function defaultDownloadRootUri(): string {
   return new Directory(Paths.document, 'mangadb-downloads', 'v1').uri
 }
 
-export class ExpoDownloadFileStore implements DownloadFileStore {
+export class ExpoDownloadFileStore implements DownloadFileStore, DownloadPageFileStore {
   async ensureDirectory(uri: string): Promise<void> {
     new Directory(uri).create({ idempotent: true, intermediates: true })
   }
@@ -51,5 +59,24 @@ export class ExpoDownloadFileStore implements DownloadFileStore {
   async deleteDirectory(uri: string): Promise<void> {
     const directory = new Directory(uri)
     if (directory.exists) directory.delete()
+  }
+
+  async writePageAtomic(
+    partialUri: string,
+    completedUri: string,
+    bytes: Uint8Array,
+  ): Promise<void> {
+    const partial = new File(partialUri)
+    partial.parentDirectory.create({ idempotent: true, intermediates: true })
+    partial.create({ intermediates: true, overwrite: true })
+    partial.write(bytes)
+    if (partial.size !== bytes.byteLength) {
+      partial.delete()
+      throw new Error('页面临时文件长度不匹配')
+    }
+    const completed = new File(completedUri)
+    completed.parentDirectory.create({ idempotent: true, intermediates: true })
+    if (completed.exists) completed.delete()
+    partial.move(completed)
   }
 }

@@ -87,6 +87,26 @@ describe('DownloadRepository', () => {
       manga.uuid,
     )).rejects.toBeInstanceOf(DownloadRepositoryError)
   })
+
+  it('builds zero-padded private page paths and rejects invalid indices', async () => {
+    const repository = repositoryWith(new MemoryDownloadFileStore())
+
+    await expect(repository.pagePaths(
+      'https://example.com',
+      'user-1',
+      manga.uuid,
+      12,
+    )).resolves.toEqual({
+      partialUri: expect.stringMatching(/manga%2Fwith%3Apath\/partial\/000012\.part$/),
+      completedUri: expect.stringMatching(/manga%2Fwith%3Apath\/pages\/000012\.page$/),
+    })
+    await expect(repository.pagePaths(
+      'https://example.com',
+      'user-1',
+      manga.uuid,
+      -1,
+    )).rejects.toThrow('页面索引无效')
+  })
 })
 
 function repositoryWith(files: DownloadFileStore) {
