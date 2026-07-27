@@ -92,6 +92,10 @@ export class DownloadRepository {
     await this.files.deleteDirectory(paths.mangaUri)
   }
 
+  async deleteAll(): Promise<void> {
+    await this.files.deleteDirectory(this.rootUri)
+  }
+
   async list(serverUrl: string, userUuid: string): Promise<DownloadManifestV1[]> {
     const identity = normalizeDownloadIdentity(serverUrl, userUuid)
     const identityPaths = await this.identityPaths(identity)

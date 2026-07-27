@@ -133,6 +133,21 @@ describe('DownloadRepository', () => {
       manga.uuid,
     )).resolves.toMatchObject({ state: 'paused' })
   })
+
+  it('clears all offline identities from the versioned root', async () => {
+    const files = new MemoryDownloadFileStore()
+    const repository = repositoryWithIdentityDigest(files)
+    await repository.create('https://example.com', 'user-1', manga)
+    await repository.create(
+      'https://example.com',
+      'user-2',
+      { ...manga, uuid: 'other-manga' },
+    )
+
+    await repository.deleteAll()
+
+    expect(files.deletedDirectories).toContain('file:///documents/mangadb-downloads/v1')
+  })
 })
 
 function repositoryWith(files: DownloadFileStore) {
@@ -154,6 +169,7 @@ function repositoryWithIdentityDigest(files: DownloadFileStore) {
 class MemoryDownloadFileStore implements DownloadFileStore {
   readonly values = new Map<string, string>()
   readonly directories = new Set<string>()
+  readonly deletedDirectories: string[] = []
 
   async ensureDirectory(uri: string) {
     this.directories.add(uri)
@@ -168,6 +184,7 @@ class MemoryDownloadFileStore implements DownloadFileStore {
   }
 
   async deleteDirectory(uri: string) {
+    this.deletedDirectories.push(uri)
     this.directories.delete(uri)
     for (const key of [...this.values.keys()]) {
       if (key === uri || key.startsWith(`${uri}/`)) this.values.delete(key)

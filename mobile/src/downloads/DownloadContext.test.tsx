@@ -126,6 +126,8 @@ class FakeDownloadQueue implements DownloadQueueController {
   resume = jest.fn(async () => {})
   retry = jest.fn(async () => {})
   delete = jest.fn(async () => {})
+  clearCurrent = jest.fn(async () => {})
+  clearAll = jest.fn(async () => {})
   stop = jest.fn(async () => {})
 }
 

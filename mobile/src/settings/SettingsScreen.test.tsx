@@ -1,10 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { render, screen, waitFor } from '@testing-library/react-native'
 import SettingsScreen from '@/app/(app)/(tabs)/settings'
+import { useDownloads } from '@/downloads/DownloadContext'
 import { ReaderPreferencesProvider } from '@/providers/ReaderPreferencesContext'
 import { useSession } from '@/session/SessionContext'
 
 jest.mock('@/session/SessionContext', () => ({ useSession: jest.fn() }))
+jest.mock('@/downloads/DownloadContext', () => ({ useDownloads: jest.fn() }))
 
 describe('SettingsScreen reading preferences', () => {
   beforeEach(() => {
@@ -22,6 +24,26 @@ describe('SettingsScreen reading preferences', () => {
       authenticate: jest.fn(),
       signOut: jest.fn(),
       clearServer: jest.fn(),
+    })
+    jest.mocked(useDownloads).mockReturnValue({
+      status: 'ready',
+      error: null,
+      preferences: { wifiOnly: true },
+      snapshot: {
+        initialized: true,
+        eligible: true,
+        manifests: [],
+      },
+      enqueue: jest.fn(),
+      pause: jest.fn(),
+      resume: jest.fn(),
+      retry: jest.fn(),
+      deleteDownload: jest.fn(),
+      clearCurrentDownloads: jest.fn(),
+      clearAllDownloads: jest.fn(),
+      setWifiOnly: jest.fn().mockResolvedValue(undefined),
+      storageUsageBytes: 0,
+      manifestFor: jest.fn(),
     })
   })
 

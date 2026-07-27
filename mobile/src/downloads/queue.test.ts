@@ -206,6 +206,20 @@ describe('DownloadQueue', () => {
     expect(repository.deleted).toEqual(['manga-1'])
     expect(queue.getSnapshot().manifests).toHaveLength(0)
   })
+
+  it('clears every identity only after active jobs are aborted', async () => {
+    const repository = new MemoryQueueRepository()
+    const pending = abortableDownload()
+    const queue = makeQueue(repository, { download: pending.download })
+    await queue.initialize()
+    await queue.enqueue(manga('manga-1', 1))
+    await waitFor(() => expect(pending.download).toHaveBeenCalledTimes(1))
+
+    await queue.clearAll()
+
+    expect(repository.deleteAllCount).toBe(1)
+    expect(queue.getSnapshot().manifests).toHaveLength(0)
+  })
 })
 
 function makeQueue(
@@ -268,6 +282,7 @@ class MemoryQueueRepository {
   readonly stored = new Map<string, DownloadManifestV1>()
   readonly deleted: string[] = []
   createCount = 0
+  deleteAllCount = 0
 
   async reconcile() {
     return [...this.stored.values()]
@@ -292,6 +307,11 @@ class MemoryQueueRepository {
   async delete(_serverUrl: string, _userUuid: string, mangaUuid: string) {
     this.deleted.push(mangaUuid)
     this.stored.delete(mangaUuid)
+  }
+
+  async deleteAll() {
+    this.deleteAllCount += 1
+    this.stored.clear()
   }
 
   async pagePaths(

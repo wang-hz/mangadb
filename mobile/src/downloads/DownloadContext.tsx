@@ -46,13 +46,18 @@ interface DownloadContextValue {
   resume: (mangaUuid: string) => Promise<void>
   retry: (mangaUuid: string) => Promise<void>
   deleteDownload: (mangaUuid: string) => Promise<void>
+  clearCurrentDownloads: () => Promise<void>
+  clearAllDownloads: () => Promise<void>
   setWifiOnly: (wifiOnly: boolean) => Promise<void>
+  storageUsageBytes: number
   manifestFor: (mangaUuid: string) => DownloadManifestV1 | null
 }
 
 export type DownloadQueueController = Pick<
   DownloadQueue,
   | 'delete'
+  | 'clearAll'
+  | 'clearCurrent'
   | 'enqueue'
   | 'getSnapshot'
   | 'initialize'
@@ -202,7 +207,16 @@ export function DownloadProvider({
     resume: mangaUuid => requireQueue().resume(mangaUuid),
     retry: mangaUuid => requireQueue().retry(mangaUuid),
     deleteDownload: mangaUuid => requireQueue().delete(mangaUuid),
+    clearCurrentDownloads: () => requireQueue().clearCurrent(),
+    clearAllDownloads: () => requireQueue().clearAll(),
     setWifiOnly,
+    storageUsageBytes: snapshot.manifests.reduce(
+      (total, manifest) => total + manifest.pages.reduce(
+        (mangaTotal, page) => mangaTotal + page.bytesWritten,
+        0,
+      ),
+      0,
+    ),
     manifestFor: mangaUuid =>
       snapshot.manifests.find(manifest => manifest.manga.uuid === mangaUuid) ?? null,
   }), [error, preferences, requireQueue, setWifiOnly, snapshot, status])

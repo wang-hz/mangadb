@@ -14,7 +14,7 @@ import {
 
 type QueueRepository = Pick<
   DownloadRepository,
-  'create' | 'delete' | 'pagePaths' | 'reconcile' | 'save'
+  'create' | 'delete' | 'deleteAll' | 'pagePaths' | 'reconcile' | 'save'
 >
 type PageDownloader = Pick<DownloadPageDownloader, 'download'>
 type RetryWait = (delayMs: number, signal: AbortSignal) => Promise<void>
@@ -62,6 +62,7 @@ export class DownloadQueue {
   private initialized = false
   private eligible = true
   private stopped = false
+  private clearing = false
   private snapshot: DownloadQueueSnapshot = {
     initialized: false,
     eligible: true,
@@ -98,6 +99,9 @@ export class DownloadQueue {
   }
 
   enqueue(manga: MangaDetail): Promise<DownloadManifestV1> {
+    if (this.clearing || this.stopped) {
+      return Promise.reject(new Error('下载服务正在清理'))
+    }
     const existingFlight = this.enqueueFlights.get(manga.uuid)
     if (existingFlight) return existingFlight
     const operation = this.enqueueOnce(manga)
@@ -159,6 +163,40 @@ export class DownloadQueue {
     this.pump()
   }
 
+  async clearCurrent(): Promise<void> {
+    if (this.clearing) return
+    this.clearing = true
+    try {
+      await Promise.allSettled([...this.enqueueFlights.values()])
+      for (const mangaUuid of [...this.manifests.keys()]) {
+        await this.delete(mangaUuid)
+      }
+    } finally {
+      this.clearing = false
+      this.pump()
+    }
+  }
+
+  async clearAll(): Promise<void> {
+    if (this.clearing) return
+    this.clearing = true
+    try {
+      await Promise.allSettled([...this.enqueueFlights.values()])
+      const jobs = [...this.activeJobs.values()]
+      jobs.forEach(job => {
+        job.reason = 'delete'
+        job.controller.abort()
+      })
+      await Promise.all(jobs.map(job => job.promise))
+      await this.repository.deleteAll()
+      this.manifests.clear()
+      this.publish()
+    } finally {
+      this.clearing = false
+      this.pump()
+    }
+  }
+
   setEligible(eligible: boolean): void {
     if (this.eligible === eligible) return
     this.eligible = eligible
@@ -203,7 +241,7 @@ export class DownloadQueue {
   }
 
   private pump(): void {
-    if (!this.initialized || !this.eligible || this.stopped) return
+    if (!this.initialized || !this.eligible || this.stopped || this.clearing) return
     for (const manifest of this.sortedManifests()) {
       if (this.activeJobs.size >= this.concurrency) break
       if (manifest.state !== 'queued' || this.activeJobs.has(manifest.manga.uuid)) continue

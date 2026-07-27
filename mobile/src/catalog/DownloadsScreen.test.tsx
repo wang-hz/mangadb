@@ -75,7 +75,16 @@ function downloadContext(
     resume: jest.fn().mockResolvedValue(undefined),
     retry: jest.fn().mockResolvedValue(undefined),
     deleteDownload: jest.fn().mockResolvedValue(undefined),
+    clearCurrentDownloads: jest.fn().mockResolvedValue(undefined),
+    clearAllDownloads: jest.fn().mockResolvedValue(undefined),
     setWifiOnly: jest.fn().mockResolvedValue(undefined),
+    storageUsageBytes: manifests.reduce(
+      (total, manifest) => total + manifest.pages.reduce(
+        (pageTotal, page) => pageTotal + page.bytesWritten,
+        0,
+      ),
+      0,
+    ),
     manifestFor: jest.fn(),
   }
 }
