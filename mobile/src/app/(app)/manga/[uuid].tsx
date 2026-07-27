@@ -16,6 +16,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ApiError } from '@/api/client'
 import { getManga } from '@/api/mangas'
 import type { MangaDetail, MangaTagItem } from '@/api/types'
+import { DownloadControls } from '@/components/downloads/DownloadControls'
 import { PrimaryButton } from '@/components/PrimaryButton'
 import { ScreenHeader } from '@/components/ScreenHeader'
 import { mangaPageImageSource } from '@/media/images'
@@ -195,6 +196,8 @@ function MangaMetadata({ manga }: { manga: MangaDetail }) {
             )
           : <Text style={styles.readHint}>请联系管理员为此漫画添加页面。</Text>}
       </View>
+
+      <DownloadControls manga={manga} />
     </>
   )
 }

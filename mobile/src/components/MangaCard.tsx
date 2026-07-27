@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import type { MangaSummary } from '@/api/types'
 import type { ApiClient } from '@/api/client'
+import { useDownloads } from '@/downloads/DownloadContext'
 import { mangaPageImageSource } from '@/media/images'
 import { colors } from '@/theme/colors'
 
@@ -24,6 +25,7 @@ export const MangaCard = memo(function MangaCard({
   width,
   onPress,
 }: MangaCardProps) {
+  const downloads = useDownloads()
   const [imageFailed, setImageFailed] = useState(false)
   const coverIndex = manga.cover ?? 0
   const imageSource = mangaPageImageSource(
@@ -35,6 +37,18 @@ export const MangaCard = memo(function MangaCard({
     manga.updateAt,
     true,
   )
+  const download = downloads.manifestFor(manga.uuid)
+  const downloadBadge = download
+    ? download.manga.updateAt !== manga.updateAt || download.state === 'stale'
+      ? '需更新'
+      : download.state === 'completed'
+        ? '已下载'
+        : download.state === 'failed'
+          ? '下载失败'
+          : download.state === 'paused'
+            ? '已暂停'
+            : `${download.pages.filter(page => page.state === 'completed').length}/${download.pages.length}`
+    : null
 
   useEffect(() => setImageFailed(false), [imageSource.cacheKey])
 
@@ -47,6 +61,17 @@ export const MangaCard = memo(function MangaCard({
       style={({ pressed }) => [styles.card, { width }, pressed && onPress ? styles.pressed : null]}
     >
       <View style={styles.coverContainer}>
+        {downloadBadge
+          ? (
+              <View style={[
+                styles.downloadBadge,
+                download?.state === 'failed' ? styles.downloadBadgeError : null,
+              ]}>
+                <Ionicons color="#ffffff" name="download" size={12} />
+                <Text style={styles.downloadBadgeText}>{downloadBadge}</Text>
+              </View>
+            )
+          : null}
         {!imageFailed
           ? (
               <Image
@@ -98,6 +123,27 @@ const styles = StyleSheet.create({
     width: '100%',
     aspectRatio: 2 / 3,
     backgroundColor: '#e9edf3',
+  },
+  downloadBadge: {
+    position: 'absolute',
+    zIndex: 1,
+    top: 7,
+    right: 7,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: 'rgba(0,0,0,0.76)',
+  },
+  downloadBadgeError: {
+    backgroundColor: 'rgba(185,28,28,0.9)',
+  },
+  downloadBadgeText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '700',
   },
   cover: {
     width: '100%',

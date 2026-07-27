@@ -1,0 +1,51 @@
+import { render, screen } from '@testing-library/react-native'
+import type { ApiClient } from '@/api/client'
+import { MangaCard } from '@/components/MangaCard'
+import { useDownloads } from '@/downloads/DownloadContext'
+import { createDownloadManifest } from '@/downloads/types'
+
+jest.mock('expo-image', () => ({ Image: () => null }))
+jest.mock('@/downloads/DownloadContext', () => ({ useDownloads: jest.fn() }))
+
+describe('MangaCard download badge', () => {
+  it('shows completed offline state', () => {
+    const manga = {
+      uuid: 'manga-1',
+      displayTitle: 'Manga',
+      originalTitle: 'Manga',
+      publishDate: null,
+      cover: 0,
+      createAt: '2026-07-01T00:00:00.000Z',
+      updateAt: '2026-07-27T00:00:00.000Z',
+    }
+    const manifest = createDownloadManifest({
+      serverUrl: 'https://example.com',
+      userUuid: 'user-1',
+    }, {
+      ...manga,
+      fullname: 'manga',
+      pages: ['0.jpg'],
+      mangaTags: [],
+    })
+    manifest.state = 'completed'
+    manifest.pages[0].state = 'completed'
+    jest.mocked(useDownloads).mockReturnValue({
+      manifestFor: jest.fn().mockReturnValue(manifest),
+    } as never)
+
+    render(
+      <MangaCard
+        api={{
+          url: (path: string) => `https://example.com${path}`,
+          authorizationHeaders: () => ({}),
+        } as unknown as ApiClient}
+        manga={manga}
+        serverUrl="https://example.com"
+        userUuid="user-1"
+        width={160}
+      />,
+    )
+
+    expect(screen.getByText('已下载')).toBeOnTheScreen()
+  })
+})
