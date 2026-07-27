@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { render, screen, waitFor } from '@testing-library/react-native'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native'
 import SettingsScreen from '@/app/(app)/(tabs)/settings'
 import { useDownloads } from '@/downloads/DownloadContext'
 import { ReaderPreferencesProvider } from '@/providers/ReaderPreferencesContext'
@@ -58,5 +58,10 @@ describe('SettingsScreen reading preferences', () => {
     expect(screen.getByText('阅读设置')).toBeOnTheScreen()
     await waitFor(() => expect(screen.getByLabelText('翻页')).not.toBeDisabled())
     expect(screen.getByLabelText('阅读时保持屏幕常亮')).toBeOnTheScreen()
+    expect(screen.getByLabelText('仅使用 Wi-Fi 下载')).toBeOnTheScreen()
+    expect(screen.getByText('0 本 · 0 B')).toBeOnTheScreen()
+    const downloadSettings = jest.mocked(useDownloads).mock.results[0].value
+    fireEvent(screen.getByLabelText('仅使用 Wi-Fi 下载'), 'valueChange', false)
+    await waitFor(() => expect(downloadSettings.setWifiOnly).toHaveBeenCalledWith(false))
   })
 })

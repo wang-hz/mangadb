@@ -6,20 +6,26 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   View,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { logout } from '@/api/auth'
 import { ReaderPreferencesControls } from '@/components/reader/ReaderPreferencesControls'
+import { useDownloads } from '@/downloads/DownloadContext'
 import { useSession } from '@/session/SessionContext'
 import { colors } from '@/theme/colors'
 
 type PendingAction = 'signout' | 'switch-server' | null
+type PendingDownloadAction = 'clear-current' | 'clear-all' | null
 
 export default function SettingsScreen() {
   const session = useSession()
+  const downloads = useDownloads()
   const [pendingAction, setPendingAction] = useState<PendingAction>(null)
+  const [pendingDownloadAction, setPendingDownloadAction] =
+    useState<PendingDownloadAction>(null)
   const [error, setError] = useState<string | null>(null)
   const account = session.auth?.user
 
@@ -61,6 +67,30 @@ export default function SettingsScreen() {
     }
   }
 
+  const clearDownloads = async (scope: Exclude<PendingDownloadAction, null>) => {
+    if (pendingDownloadAction) return
+    const confirmed = await confirmAction(
+      scope === 'clear-current' ? '删除当前账号的下载？' : '清除全部离线内容？',
+      scope === 'clear-current'
+        ? '将删除当前服务器和账号的全部离线页面，阅读进度仍会保留。'
+        : '将删除本机上所有服务器和账号的离线页面，此操作不可撤销。',
+      scope === 'clear-current' ? '删除当前下载' : '清除全部',
+    )
+    if (!confirmed) return
+    setPendingDownloadAction(scope)
+    setError(null)
+    try {
+      if (scope === 'clear-current') await downloads.clearCurrentDownloads()
+      else await downloads.clearAllDownloads()
+    } catch {
+      setError(scope === 'clear-current'
+        ? '无法删除当前账号的本机下载，请重试。'
+        : '无法清除全部离线内容，请重试。')
+    } finally {
+      setPendingDownloadAction(null)
+    }
+  }
+
   return (
     <SafeAreaView edges={['bottom']} style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.content}>
@@ -91,10 +121,59 @@ export default function SettingsScreen() {
           <ReaderPreferencesControls />
         </View>
 
+        <Text style={styles.sectionTitle}>下载设置</Text>
+        <View style={styles.actionCard}>
+          <View style={styles.switchRow}>
+            <View style={styles.switchText}>
+              <Text style={styles.switchTitle}>仅使用 Wi-Fi 下载</Text>
+              <Text style={styles.explanation}>以太网也视为非计费连接。</Text>
+            </View>
+            <Switch
+              accessibilityLabel="仅使用 Wi-Fi 下载"
+              onValueChange={value => {
+                setError(null)
+                void downloads.setWifiOnly(value).catch(() => {
+                  setError('无法保存下载网络设置，请重试。')
+                })
+              }}
+              trackColor={{ false: '#d1d5db', true: '#91caff' }}
+              value={downloads.preferences.wifiOnly}
+            />
+          </View>
+          <View style={styles.storageSummary}>
+            <Ionicons color={colors.brand} name="phone-portrait-outline" size={22} />
+            <View style={styles.storageText}>
+              <Text style={styles.switchTitle}>当前账号离线内容</Text>
+              <Text style={styles.explanation}>
+                {downloads.snapshot.manifests.length} 本 · {formatBytes(downloads.storageUsageBytes)}
+              </Text>
+            </View>
+          </View>
+          <ActionButton
+            disabled={
+              pendingDownloadAction !== null ||
+              downloads.snapshot.manifests.length === 0
+            }
+            icon="trash-outline"
+            label="删除当前账号下载"
+            loading={pendingDownloadAction === 'clear-current'}
+            onPress={() => { void clearDownloads('clear-current') }}
+            tone="danger"
+          />
+          <ActionButton
+            disabled={pendingDownloadAction !== null}
+            icon="nuclear-outline"
+            label="清除全部离线内容"
+            loading={pendingDownloadAction === 'clear-all'}
+            onPress={() => { void clearDownloads('clear-all') }}
+            tone="danger"
+          />
+        </View>
+
         <Text style={styles.sectionTitle}>会话</Text>
         <View style={styles.actionCard}>
           <Text style={styles.explanation}>
-            退出或切换服务器会清除登录凭证、查询缓存和图片缓存，不会删除本机阅读位置。
+            退出或切换服务器会清除登录凭证、查询缓存和图片缓存，不会删除本机阅读位置或离线下载；下载只会对原服务器和账号显示。
           </Text>
           {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
           <ActionButton
@@ -159,6 +238,14 @@ function roleLabel(role: string | undefined): string {
   if (role === 'admin') return '管理员'
   if (role === 'user') return '普通用户'
   return role || '未知角色'
+}
+
+function formatBytes(bytes: number): string {
+  const normalized = Math.max(0, bytes)
+  if (normalized < 1024) return `${normalized} B`
+  if (normalized < 1024 ** 2) return `${(normalized / 1024).toFixed(1)} KiB`
+  if (normalized < 1024 ** 3) return `${(normalized / 1024 ** 2).toFixed(1)} MiB`
+  return `${(normalized / 1024 ** 3).toFixed(1)} GiB`
 }
 
 function confirmAction(title: string, message: string, confirmLabel: string): Promise<boolean> {
@@ -263,6 +350,31 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: 14,
     backgroundColor: colors.surface,
+  },
+  switchRow: {
+    minHeight: 54,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  switchText: {
+    flex: 1,
+    gap: 4,
+  },
+  switchTitle: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  storageSummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 4,
+  },
+  storageText: {
+    flex: 1,
+    gap: 4,
   },
   explanation: {
     color: colors.muted,
