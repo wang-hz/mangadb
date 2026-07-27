@@ -3,6 +3,8 @@ import { type PropsWithChildren, useCallback, useEffect, useState } from 'react'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { AppPrivacyShield } from '@/components/AppPrivacyShield'
 import { NetworkStatusBanner } from '@/components/NetworkStatusBanner'
+import { DownloadProvider } from '@/downloads/DownloadContext'
+import { stopActiveDownloadQueue } from '@/downloads/registry'
 import { createMobileQueryClient } from '@/query/client'
 import { installNativeQueryStateListeners } from '@/query/nativeState'
 import { clearSessionCaches } from '@/session/cleanup'
@@ -13,10 +15,10 @@ export function AppProviders({ children }: PropsWithChildren) {
   useEffect(() => installNativeQueryStateListeners(), [])
 
   const [queryClient] = useState(createMobileQueryClient)
-  const onSessionCleanup = useCallback(
-    () => clearSessionCaches(queryClient),
-    [queryClient],
-  )
+  const onSessionCleanup = useCallback(async () => {
+    await stopActiveDownloadQueue()
+    return clearSessionCaches(queryClient)
+  }, [queryClient])
 
   return (
     <SafeAreaProvider>
@@ -24,8 +26,10 @@ export function AppProviders({ children }: PropsWithChildren) {
         <ReaderPreferencesProvider>
           <QueryClientProvider client={queryClient}>
             <SessionProvider onSessionCleanup={onSessionCleanup}>
-              {children}
-              <NetworkStatusBanner />
+              <DownloadProvider>
+                {children}
+                <NetworkStatusBanner />
+              </DownloadProvider>
             </SessionProvider>
           </QueryClientProvider>
         </ReaderPreferencesProvider>
