@@ -1,4 +1,9 @@
-import { focusManager, onlineManager, QueryObserver } from '@tanstack/react-query'
+import {
+  focusManager,
+  InfiniteQueryObserver,
+  onlineManager,
+  QueryObserver,
+} from '@tanstack/react-query'
 import { waitFor } from '@testing-library/react-native'
 import { createMobileQueryClient, shouldRetryQuery } from '@/query/client'
 
@@ -62,4 +67,48 @@ describe('mobile query client', () => {
     client.unmount()
     client.clear()
   })
+
+  it('does not duplicate an in-flight next page after reconnecting', async () => {
+    const client = createMobileQueryClient()
+    client.mount()
+    const nextPage = deferred<{ items: number[]; nextPage?: number }>()
+    const queryFn = jest.fn(({ pageParam }: { pageParam: number }) => pageParam === 1
+      ? Promise.resolve({ items: [1], nextPage: 2 })
+      : nextPage.promise)
+    const observer = new InfiniteQueryObserver(client, {
+      queryKey: ['infinite-reconnect'],
+      queryFn,
+      initialPageParam: 1,
+      getNextPageParam: lastPage => lastPage.nextPage,
+      staleTime: 0,
+    })
+    const unsubscribe = observer.subscribe(() => {})
+
+    await waitFor(() => expect(observer.getCurrentResult().isSuccess).toBe(true))
+    const result = observer.fetchNextPage()
+    await waitFor(() => expect(queryFn).toHaveBeenCalledTimes(2))
+
+    onlineManager.setOnline(false)
+    onlineManager.setOnline(true)
+    await Promise.resolve()
+    expect(queryFn).toHaveBeenCalledTimes(2)
+
+    nextPage.resolve({ items: [2] })
+    await result
+    expect(queryFn).toHaveBeenCalledTimes(2)
+    expect(observer.getCurrentResult().data?.pages).toEqual([
+      { items: [1], nextPage: 2 },
+      { items: [2] },
+    ])
+
+    unsubscribe()
+    client.unmount()
+    client.clear()
+  })
 })
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>(nextResolve => { resolve = nextResolve })
+  return { promise, resolve }
+}
