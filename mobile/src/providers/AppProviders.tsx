@@ -1,12 +1,15 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { type PropsWithChildren, useCallback, useState } from 'react'
+import { type PropsWithChildren, useCallback, useEffect, useState } from 'react'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { AppPrivacyShield } from '@/components/AppPrivacyShield'
+import { installNativeQueryStateListeners } from '@/query/nativeState'
 import { clearSessionCaches } from '@/session/cleanup'
 import { SessionProvider } from '@/session/SessionContext'
 import { ReaderPreferencesProvider } from './ReaderPreferencesContext'
 
 export function AppProviders({ children }: PropsWithChildren) {
+  useEffect(() => installNativeQueryStateListeners(), [])
+
   const [queryClient] = useState(() => new QueryClient({
     defaultOptions: {
       queries: {
