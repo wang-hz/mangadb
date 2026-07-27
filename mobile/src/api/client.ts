@@ -42,6 +42,12 @@ export class ApiClient {
   }
 
   async request<T>(path: string, options: RequestInit = {}): Promise<T> {
+    const response = await this.requestResponse(path, options)
+    if (response.status === 204) return undefined as T
+    return await response.json() as T
+  }
+
+  async requestResponse(path: string, options: RequestInit = {}): Promise<Response> {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs)
     const externalSignal = options.signal
@@ -74,8 +80,7 @@ export class ApiClient {
         throw new ApiError(errorMessage(body, response.status), response.status, body)
       }
 
-      if (response.status === 204) return undefined as T
-      return await response.json() as T
+      return response
     } catch (error) {
       if (error instanceof ApiError) throw error
       if (controller.signal.aborted && !externalSignal?.aborted) {

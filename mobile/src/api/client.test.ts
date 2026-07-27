@@ -59,6 +59,23 @@ describe('ApiClient', () => {
     await expect(client.request('/api/logout', { method: 'POST' })).resolves.toBeUndefined()
   })
 
+  it('returns a successful raw response for binary consumers', async () => {
+    fetchMock.mockResolvedValue(new Response(new Uint8Array([1, 2, 3]), {
+      status: 200,
+      headers: { 'content-type': 'image/jpeg' },
+    }))
+    const client = new ApiClient('https://example.com', { token: 'secret' })
+
+    const response = await client.requestResponse('/api/page', {
+      headers: { Accept: 'image/*' },
+    })
+
+    expect(new Uint8Array(await response.arrayBuffer())).toEqual(new Uint8Array([1, 2, 3]))
+    const options = fetchMock.mock.calls[0][1] as RequestInit
+    expect((options.headers as Headers).get('Accept')).toBe('image/*')
+    expect((options.headers as Headers).get('Authorization')).toBe('Bearer secret')
+  })
+
   it('reports an HTTP error response as a reachable server', async () => {
     const onReachabilityChange = jest.fn()
     fetchMock.mockResolvedValue(new Response('Server error', { status: 500 }))
