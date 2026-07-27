@@ -17,6 +17,7 @@ interface ReaderExperienceProps {
   initialPageIndex: number
   initialMode: ReaderMode
   preferences: ReaderPreferences
+  localPageUris?: readonly string[]
   onBack: () => void
   onRefreshMetadata: () => Promise<void>
   onReaderReady: () => void
@@ -30,6 +31,7 @@ export function ReaderExperience({
   initialPageIndex,
   initialMode,
   preferences,
+  localPageUris,
   onBack,
   onRefreshMetadata,
   onReaderReady,
@@ -75,6 +77,7 @@ export function ReaderExperience({
   const commonProps = {
     api,
     manga,
+    localPageUris,
     mode,
     onBack,
     onRefreshMetadata,

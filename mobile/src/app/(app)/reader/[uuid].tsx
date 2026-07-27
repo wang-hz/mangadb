@@ -9,6 +9,7 @@ import { getManga } from '@/api/mangas'
 import type { MangaDetail } from '@/api/types'
 import { PrimaryButton } from '@/components/PrimaryButton'
 import { ReaderExperience } from '@/components/reader/ReaderExperience'
+import { useLocalDownload } from '@/downloads/useLocalDownload'
 import { useReaderPreferences } from '@/providers/ReaderPreferencesContext'
 import { useSession } from '@/session/SessionContext'
 import {
@@ -34,6 +35,7 @@ export default function ReaderScreen() {
   const fallbackTitle = firstParam(params.title)
   const { api, auth, serverUrl } = useSession()
   const metadataRefresh = useRef(createSingleFlight()).current
+  const localDownload = useLocalDownload(mangaUuid)
   const query = useQuery({
     queryKey: ['manga', serverUrl, auth?.user.uuid, mangaUuid],
     queryFn: ({ signal }) => getManga(api!, mangaUuid!, signal),
@@ -45,6 +47,12 @@ export default function ReaderScreen() {
     }),
     [metadataRefresh, query],
   )
+  const manga = localDownload.status === 'loading'
+    ? null
+    : query.data ?? localDownload.manga
+  const localPageUris = localDownload.status === 'available'
+    ? localDownload.pageUris
+    : null
 
   return (
     <View style={styles.root}>
@@ -58,29 +66,38 @@ export default function ReaderScreen() {
               title="无法打开阅读器"
             />
           )
-        : query.isPending
+        : manga
+          ? (
+              <ReaderContent
+                localPageUris={localPageUris ?? undefined}
+                manga={manga}
+                onRefreshMetadata={refreshMetadata}
+                requestedMode={firstParam(params.mode)}
+                requestedPage={firstParam(params.page)}
+              />
+            )
+          : (query.isPending && query.fetchStatus !== 'paused') ||
+              localDownload.status === 'loading'
           ? <ReaderState loading message="正在准备漫画页面" title={fallbackTitle || '加载阅读器'} />
-          : query.isError
+          : query.isError ||
+              query.fetchStatus === 'paused' ||
+              localDownload.status === 'error'
             ? (
                 <ReaderState
                   action={query.error instanceof ApiError && query.error.status === 404
                     ? goBackOrLibrary
                     : () => { void query.refetch() }}
                   actionLabel={query.error instanceof ApiError && query.error.status === 404 ? '返回漫画库' : '重试'}
-                  message={readerErrorMessage(query.error)}
+                  message={localDownload.error ||
+                    (query.fetchStatus === 'paused'
+                      ? '当前处于离线状态，且本机没有可用的完整下载。'
+                      : query.error
+                        ? readerErrorMessage(query.error)
+                        : '本机下载不可用，请联网后重试。')}
                   title="阅读器加载失败"
                 />
               )
-            : query.data
-              ? (
-                  <ReaderContent
-                    manga={query.data}
-                    onRefreshMetadata={refreshMetadata}
-                    requestedMode={firstParam(params.mode)}
-                    requestedPage={firstParam(params.page)}
-                  />
-                )
-              : null}
+            : null}
     </View>
   )
 }
@@ -90,11 +107,13 @@ function ReaderContent({
   onRefreshMetadata,
   requestedPage,
   requestedMode,
+  localPageUris,
 }: {
   manga: MangaDetail
   onRefreshMetadata: () => Promise<void>
   requestedPage?: string
   requestedMode?: string
+  localPageUris?: readonly string[]
 }) {
   const { api, auth, serverUrl } = useSession()
   const { preferences, status: preferencesStatus } = useReaderPreferences()
@@ -172,6 +191,7 @@ function ReaderContent({
         progress?.updatedAt ?? 'new',
       ])}
       manga={manga}
+      localPageUris={localPageUris}
       onBack={goBackOrLibrary}
       onRefreshMetadata={onRefreshMetadata}
       onReaderReady={markOverrideConsumed}

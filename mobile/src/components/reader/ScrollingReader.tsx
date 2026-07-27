@@ -21,7 +21,7 @@ import {
   reportReaderTelemetry,
   reportVisiblePageLoad,
 } from '@/components/reader/telemetry'
-import { mangaPageImageSource } from '@/media/images'
+import { localPageImageSource, mangaPageImageSource } from '@/media/images'
 import type { ReaderPreferences } from '@/storage/readerPreferences'
 import { colors } from '@/theme/colors'
 import {
@@ -44,6 +44,7 @@ interface ScrollingReaderProps {
   preferences: ReaderPreferences
   settingsVisible: boolean
   onOpenSettings: () => void
+  localPageUris?: readonly string[]
 }
 
 export function ScrollingReader({
@@ -60,6 +61,7 @@ export function ScrollingReader({
   preferences,
   settingsVisible,
   onOpenSettings,
+  localPageUris,
 }: ScrollingReaderProps) {
   const { width, height } = useWindowDimensions()
   const insets = useSafeAreaInsets()
@@ -85,6 +87,7 @@ export function ScrollingReader({
     pageIndex,
     serverUrl,
     userUuid,
+    enabled: !localPageUris,
   })
   const layouts = useMemo(() => buildScrollingPageLayouts(
     manga.pages.map((_, index) => aspectRatios[index] ?? 2 / 3),
@@ -207,6 +210,7 @@ export function ScrollingReader({
             aspectRatio={aspectRatios[index] ?? 2 / 3}
             index={index}
             manga={manga}
+            localUri={localPageUris?.[index]}
             onAspectRatio={updateAspectRatio}
             onPageLoad={recordPageLoad}
             onRefreshMetadata={onRefreshMetadata}
@@ -256,6 +260,7 @@ interface ScrollingPageProps {
   onPageLoad: (index: number, durationMs: number) => void
   onRefreshMetadata: () => Promise<void>
   pageGap: number
+  localUri?: string
 }
 
 const ScrollingPage = memo(function ScrollingPage({
@@ -271,6 +276,7 @@ const ScrollingPage = memo(function ScrollingPage({
   onPageLoad,
   onRefreshMetadata,
   pageGap,
+  localUri,
 }: ScrollingPageProps) {
   const [loading, setLoading] = useState(true)
   const [failed, setFailed] = useState(false)
@@ -279,14 +285,16 @@ const ScrollingPage = memo(function ScrollingPage({
   const loadStartedAtRef = useRef(Date.now())
   const imageWidth = Math.min(viewportWidth, 900)
   const imageHeight = imageWidth / aspectRatio
-  const source = mangaPageImageSource(
-    api,
-    serverUrl,
-    userUuid,
-    manga.uuid,
-    index,
-    manga.updateAt,
-  )
+  const source = localUri
+    ? localPageImageSource(localUri)
+    : mangaPageImageSource(
+        api,
+        serverUrl,
+        userUuid,
+        manga.uuid,
+        index,
+        manga.updateAt,
+      )
 
   useEffect(() => {
     setLoading(true)

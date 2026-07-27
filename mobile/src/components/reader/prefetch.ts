@@ -17,6 +17,7 @@ interface ReaderPrefetchOptions {
   pageIndex: number
   mode: ReaderMode
   direction?: ReaderPageDirection
+  enabled?: boolean
 }
 
 export function useReaderPagePrefetch({
@@ -27,6 +28,7 @@ export function useReaderPagePrefetch({
   pageIndex,
   mode,
   direction,
+  enabled = true,
 }: ReaderPrefetchOptions): void {
   const network = useSyncExternalStore(
     subscribeNativeNetwork,
@@ -35,6 +37,7 @@ export function useReaderPagePrefetch({
   )
 
   useEffect(() => {
+    if (!enabled) return
     const indexes = readerPrefetchIndexes(
       pageIndex,
       manga.pages.length,
@@ -54,6 +57,7 @@ export function useReaderPagePrefetch({
   }, [
     api,
     direction,
+    enabled,
     manga.pages.length,
     manga.updateAt,
     manga.uuid,

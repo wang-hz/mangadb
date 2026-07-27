@@ -26,7 +26,7 @@ import {
   reportReaderTelemetry,
   reportVisiblePageLoad,
 } from '@/components/reader/telemetry'
-import { mangaPageImageSource } from '@/media/images'
+import { localPageImageSource, mangaPageImageSource } from '@/media/images'
 import type { ReaderPreferences } from '@/storage/readerPreferences'
 import { colors } from '@/theme/colors'
 import {
@@ -51,6 +51,7 @@ interface PagedReaderProps {
   preferences: ReaderPreferences
   settingsVisible: boolean
   onOpenSettings: () => void
+  localPageUris?: readonly string[]
 }
 
 export function PagedReader({
@@ -67,6 +68,7 @@ export function PagedReader({
   preferences,
   settingsVisible,
   onOpenSettings,
+  localPageUris,
 }: PagedReaderProps) {
   const { width, height } = useWindowDimensions()
   const insets = useSafeAreaInsets()
@@ -97,6 +99,7 @@ export function PagedReader({
     pageIndex,
     serverUrl,
     userUuid,
+    enabled: !localPageUris,
   })
 
   useEffect(() => {
@@ -182,6 +185,7 @@ export function PagedReader({
             height={height}
             index={index}
             manga={manga}
+            localUri={localPageUris?.[index]}
             onPageLoad={recordPageLoad}
             onRefreshMetadata={onRefreshMetadata}
             onTap={handlePageTap}
@@ -267,6 +271,7 @@ interface ReaderPageProps {
   onRefreshMetadata: () => Promise<void>
   onTap: (event: GestureResponderEvent) => void
   contentFit: 'contain' | 'cover'
+  localUri?: string
 }
 
 const ReaderPage = memo(function ReaderPage({
@@ -281,20 +286,23 @@ const ReaderPage = memo(function ReaderPage({
   onRefreshMetadata,
   onTap,
   contentFit,
+  localUri,
 }: ReaderPageProps) {
   const [failed, setFailed] = useState(false)
   const [loading, setLoading] = useState(true)
   const [attempt, setAttempt] = useState(0)
   const [refreshingMetadata, setRefreshingMetadata] = useState(false)
   const loadStartedAtRef = useRef(Date.now())
-  const source = mangaPageImageSource(
-    api,
-    serverUrl,
-    userUuid,
-    manga.uuid,
-    index,
-    manga.updateAt,
-  )
+  const source = localUri
+    ? localPageImageSource(localUri)
+    : mangaPageImageSource(
+        api,
+        serverUrl,
+        userUuid,
+        manga.uuid,
+        index,
+        manga.updateAt,
+      )
 
   useEffect(() => {
     setFailed(false)

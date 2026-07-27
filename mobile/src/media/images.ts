@@ -1,6 +1,10 @@
 import type { ImageSource } from 'expo-image'
 import type { ApiClient } from '@/api/client'
 
+export function localPageImageSource(uri: string): ImageSource {
+  return { uri, cacheKey: uri }
+}
+
 export function mangaPageImageSource(
   client: ApiClient,
   serverUrl: string,

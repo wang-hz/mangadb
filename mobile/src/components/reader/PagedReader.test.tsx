@@ -27,7 +27,9 @@ jest.mock('expo-image', () => ({
         accessibilityLabel={`页面图片-${contentFit}`}
         onError={onError}
         onLoad={onLoad}
-        testID={`page-image-${pageIndex}`}
+        testID={source.uri?.startsWith('file:')
+          ? `local-page-${source.uri}`
+          : `page-image-${pageIndex}`}
       />
     )
   }, { prefetch: jest.fn().mockResolvedValue(true) }),
@@ -54,6 +56,7 @@ function renderReader(
   preferencePatch: Partial<typeof DEFAULT_READER_PREFERENCES> = {},
   onPageChange = jest.fn(),
   onRefreshMetadata = jest.fn().mockResolvedValue(undefined),
+  localPageUris?: readonly string[],
 ) {
   return {
     onPageChange,
@@ -65,6 +68,7 @@ function renderReader(
             url: (path: string) => `https://example.com${path}`,
           } as unknown as ApiClient}
           manga={manga}
+          localPageUris={localPageUris}
           mode="paged"
           onBack={jest.fn()}
           onModeChange={jest.fn()}
@@ -115,6 +119,18 @@ describe('PagedReader preferences', () => {
   it('passes cover fitting to page images', () => {
     renderReader({ pagedFit: 'cover' })
     expect(screen.getAllByLabelText('页面图片-cover').length).toBeGreaterThan(0)
+  })
+
+  it('uses verified local files and skips network prefetch', async () => {
+    jest.mocked(Image.prefetch).mockClear()
+    const localPageUris = manga.pages.map((_, index) =>
+      `file:///downloads/${String(index).padStart(6, '0')}.page`)
+
+    renderReader({}, jest.fn(), jest.fn().mockResolvedValue(undefined), localPageUris)
+    await act(async () => {})
+
+    expect(screen.getByTestId('local-page-file:///downloads/000001.page')).toBeOnTheScreen()
+    expect(Image.prefetch).not.toHaveBeenCalled()
   })
 
   it('reports the first visible page display without request details', () => {

@@ -17,6 +17,7 @@ import { ApiError } from '@/api/client'
 import { getManga } from '@/api/mangas'
 import type { MangaDetail, MangaTagItem } from '@/api/types'
 import { DownloadControls } from '@/components/downloads/DownloadControls'
+import { useLocalDownload } from '@/downloads/useLocalDownload'
 import { PrimaryButton } from '@/components/PrimaryButton'
 import { ScreenHeader } from '@/components/ScreenHeader'
 import { mangaPageImageSource } from '@/media/images'
@@ -30,13 +31,16 @@ export default function MangaDetailScreen() {
   const mangaUuid = firstParam(params.uuid)
   const insets = useSafeAreaInsets()
   const { api, auth, serverUrl } = useSession()
+  const localDownload = useLocalDownload(mangaUuid)
   const query = useQuery({
     queryKey: ['manga', serverUrl, auth?.user.uuid, mangaUuid],
     queryFn: ({ signal }) => getManga(api!, mangaUuid!, signal),
     enabled: Boolean(api && auth && serverUrl && mangaUuid),
   })
 
-  const manga = query.data
+  const manga = localDownload.status === 'loading'
+    ? null
+    : query.data ?? localDownload.manga
   return (
     <View style={styles.root}>
       <SafeAreaView edges={['top']} style={styles.headerSafeArea}>
@@ -48,9 +52,36 @@ export default function MangaDetailScreen() {
       </SafeAreaView>
       {!mangaUuid
         ? <DetailState message="漫画地址无效。" title="无法打开漫画" />
-        : query.isPending
+        : manga
+          ? (
+              <ScrollView
+                contentContainerStyle={[
+                  styles.content,
+                  { paddingBottom: Math.max(28, insets.bottom + 16) },
+                ]}
+                refreshControl={(
+                  <RefreshControl
+                    colors={[colors.brand]}
+                    onRefresh={() => { void query.refetch() }}
+                    refreshing={query.isRefetching}
+                    tintColor={colors.brand}
+                  />
+                )}
+              >
+                <MangaMetadata
+                  localPageUris={localDownload.status === 'available'
+                    ? localDownload.pageUris ?? undefined
+                    : undefined}
+                  manga={manga}
+                />
+              </ScrollView>
+            )
+          : (query.isPending && query.fetchStatus !== 'paused') ||
+              localDownload.status === 'loading'
           ? <DetailState loading message="正在读取漫画信息" title="加载中" />
-          : query.isError
+          : query.isError ||
+              query.fetchStatus === 'paused' ||
+              localDownload.status === 'error'
             ? (
                 <DetailState
                   action={query.error instanceof ApiError && query.error.status === 404
@@ -59,35 +90,27 @@ export default function MangaDetailScreen() {
                   actionLabel={query.error instanceof ApiError && query.error.status === 404
                     ? '返回漫画库'
                     : '重试'}
-                  message={detailErrorMessage(query.error)}
+                  message={localDownload.error ||
+                    (query.fetchStatus === 'paused'
+                      ? '当前处于离线状态，且本机没有可用的完整下载。'
+                      : query.error
+                        ? detailErrorMessage(query.error)
+                        : '本机下载不可用，请联网后重试。')}
                   title="漫画加载失败"
                 />
               )
-            : manga
-              ? (
-                  <ScrollView
-                    contentContainerStyle={[
-                      styles.content,
-                      { paddingBottom: Math.max(28, insets.bottom + 16) },
-                    ]}
-                    refreshControl={(
-                      <RefreshControl
-                        colors={[colors.brand]}
-                        onRefresh={() => { void query.refetch() }}
-                        refreshing={query.isRefetching}
-                        tintColor={colors.brand}
-                      />
-                    )}
-                  >
-                    <MangaMetadata manga={manga} />
-                  </ScrollView>
-                )
-              : null}
+            : null}
     </View>
   )
 }
 
-function MangaMetadata({ manga }: { manga: MangaDetail }) {
+function MangaMetadata({
+  manga,
+  localPageUris,
+}: {
+  manga: MangaDetail
+  localPageUris?: readonly string[]
+}) {
   const { api, auth, serverUrl } = useSession()
   const [coverFailed, setCoverFailed] = useState(false)
   const progressIdentity = [serverUrl, auth?.user.uuid, manga.uuid, manga.pages.length].join(':')
@@ -98,7 +121,9 @@ function MangaMetadata({ manga }: { manga: MangaDetail }) {
   const progress = loadedProgress?.identity === progressIdentity ? loadedProgress.value : null
   const coverIndex = validCoverIndex(manga.cover, manga.pages.length)
   const coverSource = manga.pages.length > 0
-    ? mangaPageImageSource(
+    ? localPageUris?.[coverIndex]
+      ? { uri: localPageUris[coverIndex], cacheKey: localPageUris[coverIndex] }
+      : mangaPageImageSource(
         api!,
         serverUrl!,
         auth!.user.uuid,
