@@ -18,6 +18,10 @@ import {
   saveAccessToken,
   saveServerUrl,
 } from '@/storage/session'
+import {
+  reportServerReachability,
+  setActiveServer,
+} from '@/server/reachability'
 import { userFromToken } from './token'
 
 type SessionStatus = 'loading' | 'needs-server' | 'needs-login' | 'authenticated'
@@ -62,6 +66,11 @@ export function SessionProvider({
   const sessionTransitionQueueRef = useRef<Promise<void>>(Promise.resolve())
   const signOutInFlightRef = useRef<Promise<SessionCleanupResult> | null>(null)
   const clearServerInFlightRef = useRef<Promise<SessionCleanupResult> | null>(null)
+
+  useEffect(() => {
+    setActiveServer(serverUrl)
+    return () => setActiveServer(null)
+  }, [serverUrl])
 
   const runSessionTransition = useCallback(<T,>(operation: () => Promise<T>): Promise<T> => {
     const result = sessionTransitionQueueRef.current.then(operation, operation)
@@ -190,6 +199,7 @@ export function SessionProvider({
     const sourceToken = auth?.token
     return new ApiClient(serverUrl, {
       token: sourceToken,
+      onReachabilityChange: reachable => reportServerReachability(serverUrl, reachable),
       onUnauthorized: sourceToken
         ? () => expireAuth(serverUrl, sourceToken)
         : undefined,

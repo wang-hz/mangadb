@@ -2,6 +2,10 @@ import { onlineManager } from '@tanstack/react-query'
 import { useSyncExternalStore } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import {
+  getServerReachabilitySnapshot,
+  subscribeServerReachability,
+} from '@/server/reachability'
 import { colors } from '@/theme/colors'
 
 export function NetworkStatusBanner() {
@@ -11,18 +15,32 @@ export function NetworkStatusBanner() {
     () => onlineManager.isOnline(),
     () => true,
   )
+  const serverReachability = useSyncExternalStore(
+    subscribeServerReachability,
+    getServerReachabilitySnapshot,
+    getServerReachabilitySnapshot,
+  )
 
-  if (isOnline) return null
+  const message = !isOnline
+    ? '网络已断开，恢复连接后将自动重试'
+    : serverReachability.status === 'unreachable'
+      ? '无法连接 MangaDB 服务器，将在网络请求时继续重试'
+      : null
+  if (!message) return null
 
   return (
     <View
       accessibilityLiveRegion="assertive"
       accessibilityRole="alert"
       pointerEvents="none"
-      style={[styles.banner, { paddingTop: insets.top + 6 }]}
+      style={[
+        styles.banner,
+        serverReachability.status === 'unreachable' && isOnline ? styles.serverBanner : null,
+        { paddingTop: insets.top + 6 },
+      ]}
       testID="network-status-banner"
     >
-      <Text style={styles.text}>网络已断开，恢复连接后将自动重试</Text>
+      <Text style={styles.text}>{message}</Text>
     </View>
   )
 }
@@ -38,6 +56,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 7,
     backgroundColor: colors.danger,
+  },
+  serverBanner: {
+    backgroundColor: '#b45309',
   },
   text: {
     color: '#ffffff',

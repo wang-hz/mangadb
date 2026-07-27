@@ -15,6 +15,7 @@ export interface ApiClientOptions {
   token?: string
   timeoutMs?: number
   onUnauthorized?: () => void | Promise<void>
+  onReachabilityChange?: (reachable: boolean) => void
 }
 
 export class ApiClient {
@@ -22,12 +23,14 @@ export class ApiClient {
   private readonly token?: string
   private readonly timeoutMs: number
   private readonly onUnauthorized?: () => void | Promise<void>
+  private readonly onReachabilityChange?: (reachable: boolean) => void
 
   constructor(serverUrl: string, options: ApiClientOptions = {}) {
     this.baseUrl = serverUrl.replace(/\/+$/, '')
     this.token = options.token
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
     this.onUnauthorized = options.onUnauthorized
+    this.onReachabilityChange = options.onReachabilityChange
   }
 
   url(path: string): string {
@@ -56,6 +59,7 @@ export class ApiClient {
         signal: controller.signal,
         headers,
       })
+      this.reportReachability(true)
 
       if (response.status === 401) {
         try {
@@ -75,14 +79,20 @@ export class ApiClient {
     } catch (error) {
       if (error instanceof ApiError) throw error
       if (controller.signal.aborted && !externalSignal?.aborted) {
+        this.reportReachability(false)
         throw new ApiError('请求超时，请检查服务器连接', 0)
       }
       if (externalSignal?.aborted) throw error
+      this.reportReachability(false)
       throw new ApiError('无法连接服务器，请检查地址和网络', 0, error)
     } finally {
       clearTimeout(timeout)
       externalSignal?.removeEventListener('abort', abortFromExternalSignal)
     }
+  }
+
+  private reportReachability(reachable: boolean): void {
+    try { this.onReachabilityChange?.(reachable) } catch {}
   }
 }
 

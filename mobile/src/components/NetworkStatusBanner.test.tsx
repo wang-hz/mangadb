@@ -3,9 +3,13 @@ import { act, render, screen } from '@testing-library/react-native'
 import { Text } from 'react-native'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { NetworkStatusBanner } from '@/components/NetworkStatusBanner'
+import { reportServerReachability, setActiveServer } from '@/server/reachability'
 
 describe('NetworkStatusBanner', () => {
-  afterEach(() => act(() => onlineManager.setOnline(true)))
+  afterEach(() => act(() => {
+    onlineManager.setOnline(true)
+    setActiveServer(null)
+  }))
 
   it('appears only while the device network is disconnected', () => {
     render(
@@ -26,6 +30,27 @@ describe('NetworkStatusBanner', () => {
     expect(screen.getByTestId('network-status-banner')).toHaveProp('accessibilityRole', 'alert')
 
     act(() => onlineManager.setOnline(true))
+    expect(screen.queryByTestId('network-status-banner')).not.toBeOnTheScreen()
+  })
+
+  it('distinguishes a reachable network from an unreachable server', () => {
+    render(
+      <SafeAreaProvider initialMetrics={{
+        frame: { x: 0, y: 0, width: 390, height: 844 },
+        insets: { top: 47, right: 0, bottom: 34, left: 0 },
+      }}>
+        <NetworkStatusBanner />
+      </SafeAreaProvider>,
+    )
+
+    act(() => {
+      setActiveServer('https://example.com')
+      reportServerReachability('https://example.com', false)
+    })
+    expect(screen.getByTestId('network-status-banner'))
+      .toHaveTextContent('无法连接 MangaDB 服务器，将在网络请求时继续重试')
+
+    act(() => reportServerReachability('https://example.com', true))
     expect(screen.queryByTestId('network-status-banner')).not.toBeOnTheScreen()
   })
 })

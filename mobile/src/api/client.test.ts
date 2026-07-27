@@ -58,4 +58,22 @@ describe('ApiClient', () => {
     const client = new ApiClient('https://example.com')
     await expect(client.request('/api/logout', { method: 'POST' })).resolves.toBeUndefined()
   })
+
+  it('reports an HTTP error response as a reachable server', async () => {
+    const onReachabilityChange = jest.fn()
+    fetchMock.mockResolvedValue(new Response('Server error', { status: 500 }))
+    const client = new ApiClient('https://example.com', { onReachabilityChange })
+
+    await expect(client.request('/api/test')).rejects.toMatchObject({ status: 500 })
+    expect(onReachabilityChange).toHaveBeenCalledWith(true)
+  })
+
+  it('reports a transport failure as an unreachable server', async () => {
+    const onReachabilityChange = jest.fn()
+    fetchMock.mockRejectedValue(new TypeError('Network request failed'))
+    const client = new ApiClient('https://example.com', { onReachabilityChange })
+
+    await expect(client.request('/api/test')).rejects.toMatchObject({ status: 0 })
+    expect(onReachabilityChange).toHaveBeenCalledWith(false)
+  })
 })
