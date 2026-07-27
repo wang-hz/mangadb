@@ -16,6 +16,7 @@ const config: ExpoConfig = {
   platforms: ['ios', 'android'],
   orientation: 'default',
   userInterfaceStyle: 'light',
+  backgroundColor: '#f5f7fa',
   icon: './assets/icon.png',
   ios: {
     bundleIdentifier: 'top.wanghaizhou.mangadb',
