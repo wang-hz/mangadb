@@ -5,6 +5,7 @@ export interface DownloadFileStore {
   readText: (uri: string) => Promise<string | null>
   writeTextAtomic: (uri: string, value: string) => Promise<void>
   deleteDirectory: (uri: string) => Promise<void>
+  listDirectoryNames: (uri: string) => Promise<string[]>
 }
 
 export interface DownloadPageFileStore {
@@ -59,6 +60,15 @@ export class ExpoDownloadFileStore implements DownloadFileStore, DownloadPageFil
   async deleteDirectory(uri: string): Promise<void> {
     const directory = new Directory(uri)
     if (directory.exists) directory.delete()
+  }
+
+  async listDirectoryNames(uri: string): Promise<string[]> {
+    const directory = new Directory(uri)
+    if (!directory.exists) return []
+    return directory.list()
+      .filter((entry): entry is Directory => entry instanceof Directory)
+      .map(entry => entry.name)
+      .sort()
   }
 
   async writePageAtomic(

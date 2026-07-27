@@ -107,6 +107,32 @@ describe('DownloadRepository', () => {
       -1,
     )).rejects.toThrow('页面索引无效')
   })
+
+  it('lists only the active identity and persists interrupted-state reconciliation', async () => {
+    const files = new MemoryDownloadFileStore()
+    const repository = repositoryWithIdentityDigest(files)
+    const first = await repository.create('https://example.com', 'user-1', manga)
+    first.state = 'downloading'
+    first.pages[0].state = 'downloading'
+    await repository.save(first)
+    await repository.create(
+      'https://example.com',
+      'user-2',
+      { ...manga, uuid: 'other-manga', updateAt: '2026-07-28T00:00:00.000Z' },
+    )
+
+    const reconciled = await repository.reconcile('https://example.com', 'user-1')
+
+    expect(reconciled).toHaveLength(1)
+    expect(reconciled[0].manga.uuid).toBe(manga.uuid)
+    expect(reconciled[0].state).toBe('paused')
+    expect(reconciled[0].pages[0].state).toBe('pending')
+    await expect(repository.load(
+      'https://example.com',
+      'user-1',
+      manga.uuid,
+    )).resolves.toMatchObject({ state: 'paused' })
+  })
 })
 
 function repositoryWith(files: DownloadFileStore) {
@@ -114,6 +140,14 @@ function repositoryWith(files: DownloadFileStore) {
     files,
     'file:///documents/mangadb-downloads/v1',
     async () => 'a'.repeat(64),
+  )
+}
+
+function repositoryWithIdentityDigest(files: DownloadFileStore) {
+  return new DownloadRepository(
+    files,
+    'file:///documents/mangadb-downloads/v1',
+    async identity => identity.userUuid === 'user-1' ? 'a'.repeat(64) : 'b'.repeat(64),
   )
 }
 
@@ -138,5 +172,16 @@ class MemoryDownloadFileStore implements DownloadFileStore {
     for (const key of [...this.values.keys()]) {
       if (key === uri || key.startsWith(`${uri}/`)) this.values.delete(key)
     }
+  }
+
+  async listDirectoryNames(uri: string) {
+    const prefix = `${uri.replace(/\/+$/, '')}/`
+    const names = new Set<string>()
+    for (const directory of this.directories) {
+      if (!directory.startsWith(prefix)) continue
+      const remainder = directory.slice(prefix.length)
+      if (remainder && !remainder.includes('/')) names.add(remainder)
+    }
+    return [...names].sort()
   }
 }

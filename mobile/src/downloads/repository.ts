@@ -92,6 +92,42 @@ export class DownloadRepository {
     await this.files.deleteDirectory(paths.mangaUri)
   }
 
+  async list(serverUrl: string, userUuid: string): Promise<DownloadManifestV1[]> {
+    const identity = normalizeDownloadIdentity(serverUrl, userUuid)
+    const identityPaths = await this.identityPaths(identity)
+    const identityRaw = await this.files.readText(identityPaths.identityFileUri)
+    if (identityRaw === null) return []
+    let identityRecord: unknown
+    try {
+      identityRecord = JSON.parse(identityRaw)
+    } catch {
+      throw new DownloadRepositoryError('下载身份记录损坏')
+    }
+    if (!isMatchingIdentityRecord(identityRecord, identity)) {
+      throw new DownloadRepositoryError('下载身份摘要冲突')
+    }
+
+    const names = await this.files.listDirectoryNames(identityPaths.mangasUri)
+    const manifests: DownloadManifestV1[] = []
+    for (const name of names) {
+      let mangaUuid: string
+      try {
+        mangaUuid = decodeURIComponent(name)
+      } catch {
+        throw new DownloadRepositoryError('漫画下载目录名称无效')
+      }
+      const manifest = await this.load(identity.serverUrl, identity.userUuid, mangaUuid)
+      if (manifest) manifests.push(manifest)
+    }
+    return manifests.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+  }
+
+  async reconcile(serverUrl: string, userUuid: string): Promise<DownloadManifestV1[]> {
+    const manifests = await this.list(serverUrl, userUuid)
+    await Promise.all(manifests.map(manifest => this.save(manifest)))
+    return manifests
+  }
+
   async pagePaths(
     serverUrl: string,
     userUuid: string,
@@ -135,14 +171,24 @@ export class DownloadRepository {
 
   private async paths(identity: DownloadIdentity, mangaUuid: string) {
     if (!mangaUuid.trim()) throw new DownloadRepositoryError('漫画标识不能为空')
-    const key = await this.identityKey(identity)
-    const identityUri = joinUri(this.rootUri, 'identities', key)
+    const identityPaths = await this.identityPaths(identity)
+    const identityUri = identityPaths.identityUri
     const mangaUri = joinUri(identityUri, 'mangas', encodeURIComponent(mangaUuid))
     return {
       identityUri,
-      identityFileUri: joinUri(identityUri, 'identity.json'),
+      identityFileUri: identityPaths.identityFileUri,
       mangaUri,
       manifestUri: joinUri(mangaUri, 'manifest.json'),
+    }
+  }
+
+  private async identityPaths(identity: DownloadIdentity) {
+    const key = await this.identityKey(identity)
+    const identityUri = joinUri(this.rootUri, 'identities', key)
+    return {
+      identityUri,
+      identityFileUri: joinUri(identityUri, 'identity.json'),
+      mangasUri: joinUri(identityUri, 'mangas'),
     }
   }
 }
