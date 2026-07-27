@@ -1,15 +1,20 @@
-import NetInfo, { type NetInfoState } from '@react-native-community/netinfo'
+import NetInfo, {
+  type NetInfoState,
+  NetInfoStateType,
+} from '@react-native-community/netinfo'
 import { focusManager, onlineManager } from '@tanstack/react-query'
 import { AppState, type AppStateStatus } from 'react-native'
 
 export interface NativeNetworkSnapshot {
   isConnected: boolean
   isConstrained: boolean
+  connectionType: NetInfoStateType
 }
 
 let networkSnapshot: NativeNetworkSnapshot = {
   isConnected: true,
   isConstrained: false,
+  connectionType: NetInfoStateType.unknown,
 }
 const networkListeners = new Set<() => void>()
 
@@ -21,6 +26,7 @@ export function installNativeQueryStateListeners(): () => void {
       updateNetworkSnapshot({
         isConnected,
         isConstrained: isConstrainedConnection(state),
+        connectionType: state.type,
       })
     }))
   focusManager.setEventListener(setFocused => {
@@ -60,7 +66,8 @@ export function subscribeNativeNetwork(listener: () => void): () => void {
 function updateNetworkSnapshot(nextSnapshot: NativeNetworkSnapshot): void {
   if (
     networkSnapshot.isConnected === nextSnapshot.isConnected &&
-    networkSnapshot.isConstrained === nextSnapshot.isConstrained
+    networkSnapshot.isConstrained === nextSnapshot.isConstrained &&
+    networkSnapshot.connectionType === nextSnapshot.connectionType
   ) return
   networkSnapshot = nextSnapshot
   networkListeners.forEach(listener => listener())

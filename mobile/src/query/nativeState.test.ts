@@ -14,6 +14,13 @@ jest.mock('@react-native-community/netinfo', () => ({
   default: {
     addEventListener: jest.fn(),
   },
+  NetInfoStateType: {
+    unknown: 'unknown',
+    none: 'none',
+    cellular: 'cellular',
+    wifi: 'wifi',
+    ethernet: 'ethernet',
+  },
 }))
 
 describe('native query state', () => {
@@ -73,11 +80,14 @@ describe('native query state', () => {
     networkListener?.({
       isConnected: false,
       isInternetReachable: false,
+      type: 'none',
+      details: null,
     } as NetInfoState)
     expect(onlineManager.isOnline()).toBe(false)
     expect(getNativeNetworkSnapshot()).toEqual({
       isConnected: false,
       isConstrained: true,
+      connectionType: 'none',
     })
 
     networkListener?.({
@@ -90,6 +100,7 @@ describe('native query state', () => {
     expect(getNativeNetworkSnapshot()).toEqual({
       isConnected: true,
       isConstrained: false,
+      connectionType: 'wifi',
     })
     expect(networkSnapshotListener).toHaveBeenCalledTimes(2)
 
