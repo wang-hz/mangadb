@@ -6,7 +6,9 @@ import type { MangaDetail } from '@/api/types'
 import { DEFAULT_READER_PREFERENCES } from '@/storage/readerPreferences'
 import { ScrollingReader } from './ScrollingReader'
 
-jest.mock('expo-image', () => ({ Image: () => null }))
+jest.mock('expo-image', () => ({
+  Image: Object.assign(() => null, { prefetch: jest.fn().mockResolvedValue(true) }),
+}))
 jest.mock('@/components/reader/ReaderSettingsModal', () => ({
   ReaderSettingsModal: () => null,
 }))

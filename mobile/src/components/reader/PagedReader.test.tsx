@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen } from '@testing-library/react-native'
+import { Image } from 'expo-image'
 import { FlatList } from 'react-native'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import type { ApiClient } from '@/api/client'
@@ -7,10 +8,10 @@ import { DEFAULT_READER_PREFERENCES } from '@/storage/readerPreferences'
 import { PagedReader } from './PagedReader'
 
 jest.mock('expo-image', () => ({
-  Image: ({ contentFit, onError }: { contentFit: string; onError: () => void }) => {
+  Image: Object.assign(({ contentFit, onError }: { contentFit: string; onError: () => void }) => {
     const { View } = require('react-native')
     return <View accessibilityLabel={`页面图片-${contentFit}`} onError={onError} />
-  },
+  }, { prefetch: jest.fn().mockResolvedValue(true) }),
 }))
 
 jest.mock('@/components/reader/ReaderSettingsModal', () => ({
@@ -78,6 +79,16 @@ describe('PagedReader preferences', () => {
     })
     expect(onPageChange).toHaveBeenCalledWith(2)
     expect(screen.getAllByLabelText('页面图片-contain').length).toBeGreaterThan(0)
+  })
+
+  it('prefetches logical next pages first in RTL mode', async () => {
+    renderReader({ pagedDirection: 'rtl' })
+
+    await act(async () => {})
+    const urls = jest.mocked(Image.prefetch).mock.calls.map(call => String(call[0]))
+    expect(urls[0]).toContain('/pages/2?')
+    expect(urls[1]).toContain('/pages/3?')
+    expect(urls[2]).toContain('/pages/0?')
   })
 
   it('passes cover fitting to page images', () => {

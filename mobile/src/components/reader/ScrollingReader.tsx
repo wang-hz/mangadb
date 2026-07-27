@@ -15,6 +15,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { ApiClient } from '@/api/client'
 import type { MangaDetail } from '@/api/types'
+import { useReaderPagePrefetch } from '@/components/reader/prefetch'
 import { ReaderTopBar } from '@/components/reader/ReaderTopBar'
 import { mangaPageImageSource } from '@/media/images'
 import type { ReaderPreferences } from '@/storage/readerPreferences'
@@ -68,6 +69,14 @@ export function ScrollingReader({
   const [aspectRatios, setAspectRatios] = useState<Record<number, number>>({})
   const [controlsVisible, setControlsVisible] = useState(true)
   const imageWidth = Math.min(width, 900)
+  useReaderPagePrefetch({
+    api,
+    manga,
+    mode: 'scroll',
+    pageIndex,
+    serverUrl,
+    userUuid,
+  })
   const layouts = useMemo(() => buildScrollingPageLayouts(
     manga.pages.map((_, index) => aspectRatios[index] ?? 2 / 3),
     imageWidth,

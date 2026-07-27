@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { ApiClient } from '@/api/client'
 import type { MangaDetail } from '@/api/types'
 import { PrimaryButton } from '@/components/PrimaryButton'
+import { useReaderPagePrefetch } from '@/components/reader/prefetch'
 import { ReaderTopBar } from '@/components/reader/ReaderTopBar'
 import { mangaPageImageSource } from '@/media/images'
 import type { ReaderPreferences } from '@/storage/readerPreferences'
@@ -74,6 +75,15 @@ export function PagedReader({
   const leftTarget = pageIndex + pageDeltaForTap(preferences.pagedDirection, 'left')
   const rightTarget = pageIndex + pageDeltaForTap(preferences.pagedDirection, 'right')
   const validPage = (target: number) => target >= 0 && target < manga.pages.length
+  useReaderPagePrefetch({
+    api,
+    direction: preferences.pagedDirection,
+    manga,
+    mode: 'paged',
+    pageIndex,
+    serverUrl,
+    userUuid,
+  })
 
   useEffect(() => {
     if (!controlsVisible || jumpVisible || settingsVisible) return
