@@ -39,7 +39,6 @@ interface PagedReaderProps {
   userUuid: string
   pageIndex: number
   onPageChange: (pageIndex: number) => void
-  onImageError: () => void
   onBack: () => void
   mode: ReaderMode
   onModeChange: (mode: ReaderMode) => void
@@ -55,7 +54,6 @@ export function PagedReader({
   userUuid,
   pageIndex,
   onPageChange,
-  onImageError,
   onBack,
   mode,
   onModeChange,
@@ -160,7 +158,6 @@ export function PagedReader({
             height={height}
             index={index}
             manga={manga}
-            onImageError={onImageError}
             onTap={handlePageTap}
             serverUrl={serverUrl}
             userUuid={userUuid}
@@ -240,7 +237,6 @@ interface ReaderPageProps {
   index: number
   width: number
   height: number
-  onImageError: () => void
   onTap: (event: GestureResponderEvent) => void
   contentFit: 'contain' | 'cover'
 }
@@ -253,7 +249,6 @@ const ReaderPage = memo(function ReaderPage({
   index,
   width,
   height,
-  onImageError,
   onTap,
   contentFit,
 }: ReaderPageProps) {
@@ -285,7 +280,6 @@ const ReaderPage = memo(function ReaderPage({
               onError={() => {
                 setLoading(false)
                 setFailed(true)
-                onImageError()
               }}
               onLoad={() => setLoading(false)}
               recyclingKey={`${manga.uuid}:${index}:${manga.updateAt}`}

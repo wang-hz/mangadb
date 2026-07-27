@@ -32,7 +32,6 @@ interface ScrollingReaderProps {
   userUuid: string
   pageIndex: number
   onPageChange: (pageIndex: number) => void
-  onImageError: () => void
   onBack: () => void
   mode: ReaderMode
   onModeChange: (mode: ReaderMode) => void
@@ -48,7 +47,6 @@ export function ScrollingReader({
   userUuid,
   pageIndex,
   onPageChange,
-  onImageError,
   onBack,
   mode,
   onModeChange,
@@ -187,7 +185,6 @@ export function ScrollingReader({
             index={index}
             manga={manga}
             onAspectRatio={updateAspectRatio}
-            onImageError={onImageError}
             onTap={() => setControlsVisible(visible => !visible)}
             pageGap={index === manga.pages.length - 1 ? 0 : preferences.scrollGap}
             serverUrl={serverUrl}
@@ -230,7 +227,6 @@ interface ScrollingPageProps {
   index: number
   viewportWidth: number
   onTap: () => void
-  onImageError: () => void
   onAspectRatio: (index: number, aspectRatio: number) => void
   pageGap: number
 }
@@ -244,7 +240,6 @@ const ScrollingPage = memo(function ScrollingPage({
   index,
   viewportWidth,
   onTap,
-  onImageError,
   onAspectRatio,
   pageGap,
 }: ScrollingPageProps) {
@@ -281,7 +276,6 @@ const ScrollingPage = memo(function ScrollingPage({
               onError={() => {
                 setLoading(false)
                 setFailed(true)
-                onImageError()
               }}
               onLoad={event => {
                 const { width, height } = event.source

@@ -67,7 +67,6 @@ export default function ReaderScreen() {
               ? (
                   <ReaderContent
                     manga={query.data}
-                    onImageError={() => { void query.refetch() }}
                     requestedMode={firstParam(params.mode)}
                     requestedPage={firstParam(params.page)}
                   />
@@ -79,12 +78,10 @@ export default function ReaderScreen() {
 
 function ReaderContent({
   manga,
-  onImageError,
   requestedPage,
   requestedMode,
 }: {
   manga: MangaDetail
-  onImageError: () => void
   requestedPage?: string
   requestedMode?: string
 }) {
@@ -165,7 +162,6 @@ function ReaderContent({
       ])}
       manga={manga}
       onBack={goBackOrLibrary}
-      onImageError={onImageError}
       onReaderReady={markOverrideConsumed}
       preferences={preferences}
       serverUrl={serverUrl!}

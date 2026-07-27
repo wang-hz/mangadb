@@ -36,7 +36,6 @@ describe('ScrollingReader preferences', () => {
           manga={manga}
           mode="scroll"
           onBack={jest.fn()}
-          onImageError={jest.fn()}
           onModeChange={jest.fn()}
           onOpenSettings={jest.fn()}
           onPageChange={jest.fn()}

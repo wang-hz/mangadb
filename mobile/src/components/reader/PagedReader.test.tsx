@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react-native'
+import { act, fireEvent, render, screen } from '@testing-library/react-native'
 import { FlatList } from 'react-native'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import type { ApiClient } from '@/api/client'
@@ -7,9 +7,9 @@ import { DEFAULT_READER_PREFERENCES } from '@/storage/readerPreferences'
 import { PagedReader } from './PagedReader'
 
 jest.mock('expo-image', () => ({
-  Image: ({ contentFit }: { contentFit: string }) => {
+  Image: ({ contentFit, onError }: { contentFit: string; onError: () => void }) => {
     const { View } = require('react-native')
-    return <View accessibilityLabel={`页面图片-${contentFit}`} />
+    return <View accessibilityLabel={`页面图片-${contentFit}`} onError={onError} />
   },
 }))
 
@@ -46,7 +46,6 @@ function renderReader(
           manga={manga}
           mode="paged"
           onBack={jest.fn()}
-          onImageError={jest.fn()}
           onModeChange={jest.fn()}
           onOpenSettings={jest.fn()}
           onPageChange={onPageChange}
@@ -84,6 +83,16 @@ describe('PagedReader preferences', () => {
   it('passes cover fitting to page images', () => {
     renderReader({ pagedFit: 'cover' })
     expect(screen.getAllByLabelText('页面图片-cover').length).toBeGreaterThan(0)
+  })
+
+  it('retries a failed page locally', () => {
+    renderReader()
+    fireEvent(screen.getAllByLabelText('页面图片-contain')[0], 'error')
+
+    const retry = screen.getByText('点击重试')
+    expect(retry).toBeOnTheScreen()
+    fireEvent.press(retry, { stopPropagation: jest.fn() })
+    expect(screen.getAllByLabelText('页面图片-contain').length).toBeGreaterThan(0)
   })
 
   it.each([3000, 5000] as const)('hides controls after %i ms', timeout => {
