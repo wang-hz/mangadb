@@ -84,6 +84,7 @@ function downloadContext(manifest: ReturnType<typeof createDownloadManifest> | n
     clearAllDownloads: jest.fn().mockResolvedValue(undefined),
     setWifiOnly: jest.fn().mockResolvedValue(undefined),
     storageUsageBytes: 0,
+    localPagesFor: jest.fn().mockResolvedValue(null),
     manifestFor: jest.fn().mockReturnValue(manifest),
   }
 }

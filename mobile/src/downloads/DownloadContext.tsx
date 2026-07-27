@@ -50,6 +50,7 @@ interface DownloadContextValue {
   clearAllDownloads: () => Promise<void>
   setWifiOnly: (wifiOnly: boolean) => Promise<void>
   storageUsageBytes: number
+  localPagesFor: (mangaUuid: string) => Promise<string[] | null>
   manifestFor: (mangaUuid: string) => DownloadManifestV1 | null
 }
 
@@ -61,6 +62,7 @@ export type DownloadQueueController = Pick<
   | 'enqueue'
   | 'getSnapshot'
   | 'initialize'
+  | 'localPageUris'
   | 'pause'
   | 'resume'
   | 'retry'
@@ -217,6 +219,7 @@ export function DownloadProvider({
       ),
       0,
     ),
+    localPagesFor: mangaUuid => requireQueue().localPageUris(mangaUuid),
     manifestFor: mangaUuid =>
       snapshot.manifests.find(manifest => manifest.manga.uuid === mangaUuid) ?? null,
   }), [error, preferences, requireQueue, setWifiOnly, snapshot, status])

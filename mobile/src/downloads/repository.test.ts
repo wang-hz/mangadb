@@ -148,6 +148,49 @@ describe('DownloadRepository', () => {
 
     expect(files.deletedDirectories).toContain('file:///documents/mangadb-downloads/v1')
   })
+
+  it('returns only complete, size-verified local page URIs', async () => {
+    const files = new MemoryDownloadFileStore()
+    const repository = repositoryWith(files)
+    const manifest = await repository.create('https://example.com', 'user-1', manga)
+    manifest.state = 'completed'
+    manifest.pages.forEach(page => {
+      page.state = 'completed'
+      page.bytesWritten = page.index + 3
+    })
+    await repository.save(manifest)
+    for (const page of manifest.pages) {
+      const paths = await repository.pagePaths(
+        'https://example.com',
+        'user-1',
+        manga.uuid,
+        page.index,
+      )
+      files.sizes.set(paths.completedUri, page.bytesWritten)
+    }
+
+    await expect(repository.localPageUris(
+      'https://example.com',
+      'user-1',
+      manga.uuid,
+    )).resolves.toEqual([
+      expect.stringMatching(/000000\.page$/),
+      expect.stringMatching(/000001\.page$/),
+    ])
+
+    const secondPage = await repository.pagePaths(
+      'https://example.com',
+      'user-1',
+      manga.uuid,
+      1,
+    )
+    files.sizes.delete(secondPage.completedUri)
+    await expect(repository.localPageUris(
+      'https://example.com',
+      'user-1',
+      manga.uuid,
+    )).rejects.toThrow('第 2 页损坏或缺失')
+  })
 })
 
 function repositoryWith(files: DownloadFileStore) {
@@ -170,6 +213,7 @@ class MemoryDownloadFileStore implements DownloadFileStore {
   readonly values = new Map<string, string>()
   readonly directories = new Set<string>()
   readonly deletedDirectories: string[] = []
+  readonly sizes = new Map<string, number>()
 
   async ensureDirectory(uri: string) {
     this.directories.add(uri)
@@ -200,5 +244,9 @@ class MemoryDownloadFileStore implements DownloadFileStore {
       if (remainder && !remainder.includes('/')) names.add(remainder)
     }
     return [...names].sort()
+  }
+
+  async fileSize(uri: string) {
+    return this.sizes.get(uri) ?? null
   }
 }

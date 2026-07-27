@@ -14,7 +14,13 @@ import {
 
 type QueueRepository = Pick<
   DownloadRepository,
-  'create' | 'delete' | 'deleteAll' | 'pagePaths' | 'reconcile' | 'save'
+  | 'create'
+  | 'delete'
+  | 'deleteAll'
+  | 'localPageUris'
+  | 'pagePaths'
+  | 'reconcile'
+  | 'save'
 >
 type PageDownloader = Pick<DownloadPageDownloader, 'download'>
 type RetryWait = (delayMs: number, signal: AbortSignal) => Promise<void>
@@ -223,6 +229,10 @@ export class DownloadQueue {
     })
     await Promise.all(jobs.map(job => job.promise))
     this.listeners.clear()
+  }
+
+  async localPageUris(mangaUuid: string): Promise<string[] | null> {
+    return this.repository.localPageUris(this.serverUrl, this.userUuid, mangaUuid)
   }
 
   private async enqueueOnce(manga: MangaDetail): Promise<DownloadManifestV1> {

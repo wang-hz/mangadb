@@ -325,4 +325,8 @@ class MemoryQueueRepository {
       completedUri: `file:///${mangaUuid}/${pageIndex}.page`,
     }
   }
+
+  async localPageUris() {
+    return null
+  }
 }

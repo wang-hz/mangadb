@@ -85,6 +85,7 @@ function downloadContext(
       ),
       0,
     ),
+    localPagesFor: jest.fn().mockResolvedValue(null),
     manifestFor: jest.fn(),
   }
 }

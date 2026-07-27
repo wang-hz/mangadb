@@ -43,6 +43,7 @@ describe('SettingsScreen reading preferences', () => {
       clearAllDownloads: jest.fn(),
       setWifiOnly: jest.fn().mockResolvedValue(undefined),
       storageUsageBytes: 0,
+      localPagesFor: jest.fn().mockResolvedValue(null),
       manifestFor: jest.fn(),
     })
   })

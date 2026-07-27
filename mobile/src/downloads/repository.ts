@@ -150,6 +150,31 @@ export class DownloadRepository {
     }
   }
 
+  async localPageUris(
+    serverUrl: string,
+    userUuid: string,
+    mangaUuid: string,
+  ): Promise<string[] | null> {
+    const manifest = await this.load(serverUrl, userUuid, mangaUuid)
+    if (
+      !manifest ||
+      (manifest.state !== 'completed' && manifest.state !== 'stale') ||
+      manifest.pages.some(page => page.state !== 'completed')
+    ) return null
+
+    const uris: string[] = []
+    for (const page of manifest.pages) {
+      const paths = await this.pagePaths(serverUrl, userUuid, mangaUuid, page.index)
+      const size = await this.files.fileSize(paths.completedUri)
+      const expected = page.expectedBytes ?? page.bytesWritten
+      if (size === null || size <= 0 || expected <= 0 || size !== expected) {
+        throw new DownloadRepositoryError(`本机下载的第 ${page.index + 1} 页损坏或缺失`)
+      }
+      uris.push(paths.completedUri)
+    }
+    return uris
+  }
+
   private async ensureIdentity(
     identityUri: string,
     identityFileUri: string,
