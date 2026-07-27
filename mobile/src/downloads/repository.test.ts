@@ -127,6 +127,9 @@ describe('DownloadRepository', () => {
     expect(reconciled[0].manga.uuid).toBe(manga.uuid)
     expect(reconciled[0].state).toBe('paused')
     expect(reconciled[0].pages[0].state).toBe('pending')
+    expect(files.deletedDirectories).toContainEqual(expect.stringMatching(
+      /manga%2Fwith%3Apath\/partial$/,
+    ))
     await expect(repository.load(
       'https://example.com',
       'user-1',

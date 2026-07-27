@@ -128,7 +128,15 @@ export class DownloadRepository {
 
   async reconcile(serverUrl: string, userUuid: string): Promise<DownloadManifestV1[]> {
     const manifests = await this.list(serverUrl, userUuid)
-    await Promise.all(manifests.map(manifest => this.save(manifest)))
+    await Promise.all(manifests.map(async manifest => {
+      const identity = normalizeDownloadIdentity(
+        manifest.identity.serverUrl,
+        manifest.identity.userUuid,
+      )
+      const paths = await this.paths(identity, manifest.manga.uuid)
+      await this.files.deleteDirectory(joinUri(paths.mangaUri, 'partial'))
+      await this.save(manifest)
+    }))
     return manifests
   }
 
