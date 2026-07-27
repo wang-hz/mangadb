@@ -207,6 +207,24 @@ describe('DownloadQueue', () => {
     expect(queue.getSnapshot().manifests).toHaveLength(0)
   })
 
+  it.each(['paused', 'failed', 'completed'] as const)(
+    'deletes a %s download and removes its durable snapshot',
+    async state => {
+      const repository = new MemoryQueueRepository()
+      const stored = createDownloadManifest(identity, manga('manga-1', 1))
+      stored.state = state
+      stored.pages[0].state = state === 'completed' ? 'completed' : 'pending'
+      repository.stored.set('manga-1', stored)
+      const queue = makeQueue(repository, { download: jest.fn() })
+      await queue.initialize()
+
+      await queue.delete('manga-1')
+
+      expect(repository.deleted).toEqual(['manga-1'])
+      expect(queue.getSnapshot().manifests).toHaveLength(0)
+    },
+  )
+
   it('clears every identity only after active jobs are aborted', async () => {
     const repository = new MemoryQueueRepository()
     const pending = abortableDownload()
