@@ -122,6 +122,10 @@ class FakeDownloadQueue implements DownloadQueueController {
     serverUrl: 'https://example.com',
     userUuid: 'user-1',
   }, item))
+  update = jest.fn(async (item: MangaDetail) => createDownloadManifest({
+    serverUrl: 'https://example.com',
+    userUuid: 'user-1',
+  }, item))
   pause = jest.fn(async () => {})
   resume = jest.fn(async () => {})
   retry = jest.fn(async () => {})

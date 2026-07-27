@@ -7,7 +7,7 @@ import { useDownloads } from '@/downloads/DownloadContext'
 import type { DownloadManifestV1 } from '@/downloads/types'
 import { colors } from '@/theme/colors'
 
-type PendingAction = 'enqueue' | 'pause' | 'resume' | 'retry' | 'delete' | null
+type PendingAction = 'enqueue' | 'update' | 'pause' | 'resume' | 'retry' | 'delete' | null
 
 export function DownloadControls({ manga }: { manga: MangaDetail }) {
   const downloads = useDownloads()
@@ -50,14 +50,16 @@ export function DownloadControls({ manga }: { manga: MangaDetail }) {
         ? (
             <>
               <Text style={styles.warning}>
-                服务器内容已有更新。旧版本会继续保留，安全更新功能完成前请先删除再重新下载。
+                服务器内容已有更新。新版本完整下载并校验前，旧版本会继续保留。
               </Text>
               <PrimaryButton
-                loading={pending === 'delete'}
-                onPress={() => { void remove() }}
+                loading={pending === 'update'}
+                onPress={() => {
+                  void run('update', () => downloads.update(manga))
+                }}
                 variant="secondary"
               >
-                删除旧版本
+                更新本机下载
               </PrimaryButton>
             </>
           )

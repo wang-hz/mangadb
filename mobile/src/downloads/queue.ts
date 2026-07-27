@@ -15,12 +15,17 @@ import {
 type QueueRepository = Pick<
   DownloadRepository,
   | 'create'
+  | 'createReplacement'
+  | 'commitReplacement'
   | 'delete'
   | 'deleteAll'
+  | 'discardReplacement'
   | 'localPageUris'
   | 'pagePaths'
   | 'reconcile'
+  | 'replacementPagePaths'
   | 'save'
+  | 'saveReplacement'
 >
 type PageDownloader = Pick<DownloadPageDownloader, 'download'>
 type RetryWait = (delayMs: number, signal: AbortSignal) => Promise<void>
@@ -64,6 +69,8 @@ export class DownloadQueue {
   private readonly manifests = new Map<string, DownloadManifestV1>()
   private readonly activeJobs = new Map<string, ActiveJob>()
   private readonly enqueueFlights = new Map<string, Promise<DownloadManifestV1>>()
+  private readonly updateFlights = new Map<string, Promise<DownloadManifestV1>>()
+  private readonly updateControllers = new Map<string, AbortController>()
   private readonly listeners = new Set<() => void>()
   private initialized = false
   private eligible = true
@@ -120,6 +127,22 @@ export class DownloadQueue {
     return operation
   }
 
+  update(manga: MangaDetail): Promise<DownloadManifestV1> {
+    if (this.clearing || this.stopped) {
+      return Promise.reject(new Error('下载服务正在清理'))
+    }
+    const existingFlight = this.updateFlights.get(manga.uuid)
+    if (existingFlight) return existingFlight
+    const operation = this.updateOnce(manga)
+    this.updateFlights.set(manga.uuid, operation)
+    void operation.finally(() => {
+      if (this.updateFlights.get(manga.uuid) === operation) {
+        this.updateFlights.delete(manga.uuid)
+      }
+    }).catch(() => {})
+    return operation
+  }
+
   async pause(mangaUuid: string): Promise<void> {
     const active = this.activeJobs.get(mangaUuid)
     if (active) {
@@ -157,6 +180,11 @@ export class DownloadQueue {
   }
 
   async delete(mangaUuid: string): Promise<void> {
+    const updateController = this.updateControllers.get(mangaUuid)
+    if (updateController) {
+      updateController.abort()
+      await this.updateFlights.get(mangaUuid)?.catch(() => {})
+    }
     const active = this.activeJobs.get(mangaUuid)
     if (active) {
       active.reason = 'delete'
@@ -174,6 +202,8 @@ export class DownloadQueue {
     this.clearing = true
     try {
       await Promise.allSettled([...this.enqueueFlights.values()])
+      this.updateControllers.forEach(controller => controller.abort())
+      await Promise.allSettled([...this.updateFlights.values()])
       for (const mangaUuid of [...this.manifests.keys()]) {
         await this.delete(mangaUuid)
       }
@@ -188,6 +218,8 @@ export class DownloadQueue {
     this.clearing = true
     try {
       await Promise.allSettled([...this.enqueueFlights.values()])
+      this.updateControllers.forEach(controller => controller.abort())
+      await Promise.allSettled([...this.updateFlights.values()])
       const jobs = [...this.activeJobs.values()]
       jobs.forEach(job => {
         job.reason = 'delete'
@@ -208,6 +240,7 @@ export class DownloadQueue {
     this.eligible = eligible
     this.publish()
     if (!eligible) {
+      this.updateControllers.forEach(controller => controller.abort())
       for (const active of this.activeJobs.values()) {
         active.reason = 'network'
         active.controller.abort()
@@ -222,12 +255,14 @@ export class DownloadQueue {
     this.stopped = true
     this.eligible = false
     this.publish()
+    this.updateControllers.forEach(controller => controller.abort())
     const jobs = [...this.activeJobs.values()]
     jobs.forEach(job => {
       job.reason = 'session'
       job.controller.abort()
     })
     await Promise.all(jobs.map(job => job.promise))
+    await Promise.allSettled([...this.updateFlights.values()])
     this.listeners.clear()
   }
 
@@ -250,10 +285,123 @@ export class DownloadQueue {
     return manifest
   }
 
+  private async updateOnce(manga: MangaDetail): Promise<DownloadManifestV1> {
+    const existing = this.manifests.get(manga.uuid)
+    if (
+      !existing ||
+      (existing.state !== 'completed' && existing.state !== 'stale')
+    ) throw new Error('只有完整下载可以更新')
+    if (existing.manga.updateAt === manga.updateAt) return existing
+    if (!this.initialized || !this.eligible) throw new Error('当前网络不允许更新下载')
+    if (
+      this.activeJobs.has(manga.uuid) ||
+      this.updateControllers.has(manga.uuid) ||
+      this.activeJobs.size + this.updateControllers.size >= this.concurrency
+    ) throw new Error('下载队列繁忙，请稍后重试')
+
+    const stale = {
+      ...existing,
+      state: 'stale' as const,
+      updatedAt: this.timestamp(),
+      failure: null,
+    }
+    await this.persist(stale)
+    let replacement = await this.repository.createReplacement(
+      this.serverUrl,
+      this.userUuid,
+      manga,
+      this.now(),
+    )
+    const controller = new AbortController()
+    this.updateControllers.set(manga.uuid, controller)
+    this.publish()
+    try {
+      for (const page of replacement.pages) {
+        let lastFailure: DownloadPageError | null = null
+        for (let attempt = 1; attempt <= this.maxAttempts; attempt += 1) {
+          if (controller.signal.aborted) throw new DownloadPageCancelledError()
+          replacement = replacePage(replacement, {
+            ...replacement.pages[page.index],
+            state: 'downloading',
+            attempts: attempt,
+          }, {
+            state: 'downloading',
+            updatedAt: this.timestamp(),
+            failure: null,
+          })
+          await this.repository.saveReplacement(replacement)
+          try {
+            const paths = await this.repository.replacementPagePaths(
+              this.serverUrl,
+              this.userUuid,
+              manga.uuid,
+              page.index,
+            )
+            const result = await this.downloader.download({
+              api: this.api,
+              mangaUuid: manga.uuid,
+              pageIndex: page.index,
+              paths,
+              signal: controller.signal,
+            })
+            replacement = replacePage(replacement, {
+              ...replacement.pages[page.index],
+              state: 'completed',
+              bytesWritten: result.bytesWritten,
+              expectedBytes: result.expectedBytes,
+              etag: result.etag,
+              lastModified: result.lastModified,
+            }, {
+              state: 'downloading',
+              updatedAt: this.timestamp(),
+              failure: null,
+            })
+            await this.repository.saveReplacement(replacement)
+            lastFailure = null
+            break
+          } catch (error) {
+            if (error instanceof DownloadPageCancelledError || controller.signal.aborted) throw error
+            lastFailure = error instanceof DownloadPageError
+              ? error
+              : new DownloadPageError('页面更新失败', 'unknown', false, error)
+            if (!lastFailure.retryable || attempt >= this.maxAttempts) break
+            await this.waitForRetry(retryDelayMs(attempt), controller.signal)
+          }
+        }
+        if (lastFailure) throw lastFailure
+      }
+      replacement = {
+        ...replacement,
+        state: 'completed',
+        updatedAt: this.timestamp(),
+        completedAt: this.timestamp(),
+        failure: null,
+      }
+      await this.repository.commitReplacement(replacement)
+      this.manifests.set(manga.uuid, replacement)
+      this.publish()
+      return replacement
+    } catch (error) {
+      await this.repository.discardReplacement(
+        this.serverUrl,
+        this.userUuid,
+        manga.uuid,
+      ).catch(() => {})
+      if (error instanceof DownloadPageCancelledError || controller.signal.aborted) {
+        throw new Error('下载更新已暂停，旧版本仍可阅读')
+      }
+      throw error
+    } finally {
+      this.updateControllers.delete(manga.uuid)
+      this.publish()
+      this.pump()
+    }
+  }
+
   private pump(): void {
     if (!this.initialized || !this.eligible || this.stopped || this.clearing) return
     for (const manifest of this.sortedManifests()) {
-      if (this.activeJobs.size >= this.concurrency) break
+      if (this.activeJobs.size + this.updateControllers.size >= this.concurrency) break
       if (manifest.state !== 'queued' || this.activeJobs.has(manifest.manga.uuid)) continue
       this.startJob(manifest.manga.uuid)
     }

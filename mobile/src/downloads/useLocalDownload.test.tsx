@@ -102,6 +102,7 @@ function mockDownloads({
     preferences: { wifiOnly: true },
     snapshot: { initialized: true, eligible: true, manifests: [manifest] },
     enqueue: jest.fn(),
+    update: jest.fn(),
     pause: jest.fn(),
     resume: jest.fn(),
     retry: jest.fn(),

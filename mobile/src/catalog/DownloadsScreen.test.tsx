@@ -71,6 +71,7 @@ function downloadContext(
       manifests,
     },
     enqueue: jest.fn(),
+    update: jest.fn(),
     pause: patch.pause ?? jest.fn().mockResolvedValue(undefined),
     resume: jest.fn().mockResolvedValue(undefined),
     retry: jest.fn().mockResolvedValue(undefined),

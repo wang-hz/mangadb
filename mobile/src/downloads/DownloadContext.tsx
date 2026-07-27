@@ -42,6 +42,7 @@ interface DownloadContextValue {
   preferences: DownloadPreferences
   snapshot: DownloadQueueSnapshot
   enqueue: (manga: MangaDetail) => Promise<DownloadManifestV1>
+  update: (manga: MangaDetail) => Promise<DownloadManifestV1>
   pause: (mangaUuid: string) => Promise<void>
   resume: (mangaUuid: string) => Promise<void>
   retry: (mangaUuid: string) => Promise<void>
@@ -69,6 +70,7 @@ export type DownloadQueueController = Pick<
   | 'setEligible'
   | 'stop'
   | 'subscribe'
+  | 'update'
 >
 
 interface DownloadProviderProps extends PropsWithChildren {
@@ -205,6 +207,7 @@ export function DownloadProvider({
     preferences: preferences ?? DEFAULT_DOWNLOAD_PREFERENCES,
     snapshot,
     enqueue: manga => requireQueue().enqueue(manga),
+    update: manga => requireQueue().update(manga),
     pause: mangaUuid => requireQueue().pause(mangaUuid),
     resume: mangaUuid => requireQueue().resume(mangaUuid),
     retry: mangaUuid => requireQueue().retry(mangaUuid),

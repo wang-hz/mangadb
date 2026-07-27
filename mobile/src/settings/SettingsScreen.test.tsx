@@ -35,6 +35,7 @@ describe('SettingsScreen reading preferences', () => {
         manifests: [],
       },
       enqueue: jest.fn(),
+      update: jest.fn(),
       pause: jest.fn(),
       resume: jest.fn(),
       retry: jest.fn(),

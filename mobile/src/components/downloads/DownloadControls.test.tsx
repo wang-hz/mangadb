@@ -48,20 +48,23 @@ describe('DownloadControls', () => {
     await waitFor(() => expect(downloads.pause).toHaveBeenCalledWith('manga-1'))
   })
 
-  it('does not overwrite a stale completed download', () => {
+  it('offers a safe update while retaining a stale completed download', async () => {
     const manifest = createDownloadManifest({
       serverUrl: 'https://example.com',
       userUuid: 'user-1',
     }, { ...manga, updateAt: '2026-07-01T00:00:00.000Z' })
     manifest.state = 'completed'
     manifest.pages.forEach(page => { page.state = 'completed' })
-    jest.mocked(useDownloads).mockReturnValue(downloadContext(manifest))
+    const downloads = downloadContext(manifest)
+    jest.mocked(useDownloads).mockReturnValue(downloads)
 
     render(<DownloadControls manga={manga} />)
 
     expect(screen.getByText('已下载版本需要更新')).toBeOnTheScreen()
     expect(screen.getByText(/旧版本会继续保留/)).toBeOnTheScreen()
     expect(screen.queryByText('下载到本机')).not.toBeOnTheScreen()
+    fireEvent.press(screen.getByText('更新本机下载'))
+    await waitFor(() => expect(downloads.update).toHaveBeenCalledWith(manga))
   })
 })
 
@@ -76,6 +79,7 @@ function downloadContext(manifest: ReturnType<typeof createDownloadManifest> | n
       manifests: manifest ? [manifest] : [],
     },
     enqueue: jest.fn().mockResolvedValue(manifest),
+    update: jest.fn().mockResolvedValue(manifest),
     pause: jest.fn().mockResolvedValue(undefined),
     resume: jest.fn().mockResolvedValue(undefined),
     retry: jest.fn().mockResolvedValue(undefined),

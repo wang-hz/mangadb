@@ -220,6 +220,69 @@ describe('DownloadQueue', () => {
     expect(repository.deleteAllCount).toBe(1)
     expect(queue.getSnapshot().manifests).toHaveLength(0)
   })
+
+  it('keeps the old completed revision readable until its replacement commits', async () => {
+    const repository = new MemoryQueueRepository()
+    const originalManga = manga('manga-1', 1)
+    const original = createDownloadManifest(identity, originalManga)
+    original.state = 'completed'
+    original.pages[0] = {
+      ...original.pages[0],
+      state: 'completed',
+      bytesWritten: 3,
+      expectedBytes: 3,
+    }
+    repository.stored.set(originalManga.uuid, original)
+    const pending = deferred<DownloadedPage>()
+    const downloader = { download: jest.fn().mockReturnValue(pending.promise) }
+    const queue = makeQueue(repository, downloader)
+    await queue.initialize()
+    const updatedManga = {
+      ...originalManga,
+      updateAt: '2026-07-28T00:00:00.000Z',
+    }
+
+    const update = queue.update(updatedManga)
+    await waitFor(() => expect(downloader.download).toHaveBeenCalledTimes(1))
+    expect(repository.stored.get('manga-1')).toMatchObject({
+      state: 'stale',
+      manga: { updateAt: originalManga.updateAt },
+    })
+
+    pending.resolve(downloadedPage)
+    await expect(update).resolves.toMatchObject({
+      state: 'completed',
+      manga: { updateAt: updatedManga.updateAt },
+    })
+    expect(repository.stored.get('manga-1')?.manga.updateAt).toBe(updatedManga.updateAt)
+    expect(repository.replacements.size).toBe(0)
+  })
+
+  it('discards a failed replacement without deleting the readable old revision', async () => {
+    const repository = new MemoryQueueRepository()
+    const originalManga = manga('manga-1', 1)
+    const original = createDownloadManifest(identity, originalManga)
+    original.state = 'completed'
+    original.pages[0].state = 'completed'
+    repository.stored.set(originalManga.uuid, original)
+    const queue = makeQueue(repository, {
+      download: jest.fn().mockRejectedValue(
+        new DownloadPageError('内容无效', 'invalid-content', false),
+      ),
+    })
+    await queue.initialize()
+
+    await expect(queue.update({
+      ...originalManga,
+      updateAt: '2026-07-28T00:00:00.000Z',
+    })).rejects.toThrow('内容无效')
+
+    expect(repository.stored.get('manga-1')).toMatchObject({
+      state: 'stale',
+      manga: { updateAt: originalManga.updateAt },
+    })
+    expect(repository.replacements.size).toBe(0)
+  })
 })
 
 function makeQueue(
@@ -280,6 +343,7 @@ function deferred<T>() {
 
 class MemoryQueueRepository {
   readonly stored = new Map<string, DownloadManifestV1>()
+  readonly replacements = new Map<string, DownloadManifestV1>()
   readonly deleted: string[] = []
   createCount = 0
   deleteAllCount = 0
@@ -304,6 +368,34 @@ class MemoryQueueRepository {
     this.stored.set(manifest.manga.uuid, manifest)
   }
 
+  async createReplacement(
+    serverUrl: string,
+    userUuid: string,
+    value: MangaDetail,
+    now: Date,
+  ) {
+    const manifest = createDownloadManifest({ serverUrl, userUuid }, value, now)
+    this.replacements.set(value.uuid, manifest)
+    return manifest
+  }
+
+  async saveReplacement(manifest: DownloadManifestV1) {
+    this.replacements.set(manifest.manga.uuid, manifest)
+  }
+
+  async commitReplacement(manifest: DownloadManifestV1) {
+    this.stored.set(manifest.manga.uuid, manifest)
+    this.replacements.delete(manifest.manga.uuid)
+  }
+
+  async discardReplacement(
+    _serverUrl: string,
+    _userUuid: string,
+    mangaUuid: string,
+  ) {
+    this.replacements.delete(mangaUuid)
+  }
+
   async delete(_serverUrl: string, _userUuid: string, mangaUuid: string) {
     this.deleted.push(mangaUuid)
     this.stored.delete(mangaUuid)
@@ -323,6 +415,18 @@ class MemoryQueueRepository {
     return {
       partialUri: `file:///${mangaUuid}/${pageIndex}.part`,
       completedUri: `file:///${mangaUuid}/${pageIndex}.page`,
+    }
+  }
+
+  async replacementPagePaths(
+    _serverUrl: string,
+    _userUuid: string,
+    mangaUuid: string,
+    pageIndex: number,
+  ): Promise<DownloadPagePaths> {
+    return {
+      partialUri: `file:///updates/${mangaUuid}/${pageIndex}.part`,
+      completedUri: `file:///updates/${mangaUuid}/${pageIndex}.page`,
     }
   }
 
