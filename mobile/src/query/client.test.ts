@@ -105,6 +105,36 @@ describe('mobile query client', () => {
     client.unmount()
     client.clear()
   })
+
+  it('keeps cached data visible while an offline refresh is paused', async () => {
+    const client = createMobileQueryClient()
+    client.mount()
+    const queryFn = jest.fn()
+      .mockResolvedValueOnce('cached')
+      .mockResolvedValueOnce('updated')
+    const observer = new QueryObserver(client, {
+      queryKey: ['offline-cache'],
+      queryFn,
+      staleTime: 0,
+    })
+    const unsubscribe = observer.subscribe(() => {})
+
+    await waitFor(() => expect(observer.getCurrentResult().data).toBe('cached'))
+    onlineManager.setOnline(false)
+    const refresh = observer.refetch()
+    await waitFor(() => expect(observer.getCurrentResult().fetchStatus).toBe('paused'))
+    expect(observer.getCurrentResult().data).toBe('cached')
+    expect(queryFn).toHaveBeenCalledTimes(1)
+
+    onlineManager.setOnline(true)
+    await refresh
+    expect(observer.getCurrentResult().data).toBe('updated')
+    expect(queryFn).toHaveBeenCalledTimes(2)
+
+    unsubscribe()
+    client.unmount()
+    client.clear()
+  })
 })
 
 function deferred<T>() {
