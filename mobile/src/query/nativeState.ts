@@ -19,5 +19,6 @@ export function installNativeQueryStateListeners(): () => void {
 }
 
 export function isNetworkAvailable(state: NetInfoState): boolean {
-  return state.isConnected !== false && state.isInternetReachable !== false
+  // A MangaDB server may be reachable over LAN even when the public internet is not.
+  return state.isConnected !== false
 }

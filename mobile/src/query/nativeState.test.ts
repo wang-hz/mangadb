@@ -21,7 +21,7 @@ describe('native query state', () => {
 
   it.each([
     [{ isConnected: false, isInternetReachable: null }, false],
-    [{ isConnected: true, isInternetReachable: false }, false],
+    [{ isConnected: true, isInternetReachable: false }, true],
     [{ isConnected: true, isInternetReachable: true }, true],
     [{ isConnected: true, isInternetReachable: null }, true],
     [{ isConnected: null, isInternetReachable: null }, true],
