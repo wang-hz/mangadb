@@ -86,6 +86,72 @@ export class DownloadRepository {
     await this.files.writeTextAtomic(paths.manifestUri, JSON.stringify(manifest))
   }
 
+  async createReplacement(
+    serverUrl: string,
+    userUuid: string,
+    manga: MangaDetail,
+    now = new Date(),
+  ): Promise<DownloadManifestV1> {
+    const identity = normalizeDownloadIdentity(serverUrl, userUuid)
+    const paths = await this.paths(identity, manga.uuid)
+    await this.ensureIdentity(paths.identityUri, paths.identityFileUri, identity)
+    await this.files.deleteDirectory(paths.replacementMangaUri)
+    await this.files.ensureDirectory(paths.replacementMangaUri)
+    const manifest = createDownloadManifest(identity, manga, now)
+    await this.files.writeTextAtomic(
+      paths.replacementManifestUri,
+      JSON.stringify(manifest),
+    )
+    return manifest
+  }
+
+  async saveReplacement(manifest: DownloadManifestV1): Promise<void> {
+    if (!isDownloadManifestV1(manifest)) {
+      throw new DownloadRepositoryError('拒绝保存无效的更新清单')
+    }
+    const identity = normalizeDownloadIdentity(
+      manifest.identity.serverUrl,
+      manifest.identity.userUuid,
+    )
+    const paths = await this.paths(identity, manifest.manga.uuid)
+    await this.ensureIdentity(paths.identityUri, paths.identityFileUri, identity)
+    await this.files.ensureDirectory(paths.replacementMangaUri)
+    await this.files.writeTextAtomic(
+      paths.replacementManifestUri,
+      JSON.stringify(manifest),
+    )
+  }
+
+  async commitReplacement(manifest: DownloadManifestV1): Promise<void> {
+    if (
+      manifest.state !== 'completed' ||
+      manifest.pages.some(page => page.state !== 'completed')
+    ) {
+      throw new DownloadRepositoryError('更新下载尚未完成')
+    }
+    await this.saveReplacement(manifest)
+    const identity = normalizeDownloadIdentity(
+      manifest.identity.serverUrl,
+      manifest.identity.userUuid,
+    )
+    const paths = await this.paths(identity, manifest.manga.uuid)
+    await this.files.replaceDirectoryAtomic(
+      paths.replacementMangaUri,
+      paths.mangaUri,
+      paths.backupMangaUri,
+    )
+  }
+
+  async discardReplacement(
+    serverUrl: string,
+    userUuid: string,
+    mangaUuid: string,
+  ): Promise<void> {
+    const identity = normalizeDownloadIdentity(serverUrl, userUuid)
+    const paths = await this.paths(identity, mangaUuid)
+    await this.files.deleteDirectory(paths.replacementMangaUri)
+  }
+
   async delete(serverUrl: string, userUuid: string, mangaUuid: string): Promise<void> {
     const identity = normalizeDownloadIdentity(serverUrl, userUuid)
     const paths = await this.paths(identity, mangaUuid)
@@ -137,6 +203,9 @@ export class DownloadRepository {
       await this.files.deleteDirectory(joinUri(paths.mangaUri, 'partial'))
       await this.save(manifest)
     }))
+    const identity = normalizeDownloadIdentity(serverUrl, userUuid)
+    const identityPaths = await this.identityPaths(identity)
+    await this.files.deleteDirectory(identityPaths.updatesUri)
     return manifests
   }
 
@@ -155,6 +224,24 @@ export class DownloadRepository {
     return {
       partialUri: joinUri(paths.mangaUri, 'partial', `${filename}.part`),
       completedUri: joinUri(paths.mangaUri, 'pages', `${filename}.page`),
+    }
+  }
+
+  async replacementPagePaths(
+    serverUrl: string,
+    userUuid: string,
+    mangaUuid: string,
+    pageIndex: number,
+  ): Promise<DownloadPagePaths> {
+    if (!Number.isInteger(pageIndex) || pageIndex < 0) {
+      throw new DownloadRepositoryError('页面索引无效')
+    }
+    const identity = normalizeDownloadIdentity(serverUrl, userUuid)
+    const paths = await this.paths(identity, mangaUuid)
+    const filename = String(pageIndex).padStart(6, '0')
+    return {
+      partialUri: joinUri(paths.replacementMangaUri, 'partial', `${filename}.part`),
+      completedUri: joinUri(paths.replacementMangaUri, 'pages', `${filename}.page`),
     }
   }
 
@@ -216,6 +303,16 @@ export class DownloadRepository {
       identityFileUri: identityPaths.identityFileUri,
       mangaUri,
       manifestUri: joinUri(mangaUri, 'manifest.json'),
+      replacementMangaUri: joinUri(identityPaths.updatesUri, encodeURIComponent(mangaUuid)),
+      replacementManifestUri: joinUri(
+        identityPaths.updatesUri,
+        encodeURIComponent(mangaUuid),
+        'manifest.json',
+      ),
+      backupMangaUri: joinUri(
+        identityPaths.mangasUri,
+        `${encodeURIComponent(mangaUuid)}.backup`,
+      ),
     }
   }
 
@@ -226,6 +323,7 @@ export class DownloadRepository {
       identityUri,
       identityFileUri: joinUri(identityUri, 'identity.json'),
       mangasUri: joinUri(identityUri, 'mangas'),
+      updatesUri: joinUri(identityUri, 'updates'),
     }
   }
 }

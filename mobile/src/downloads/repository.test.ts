@@ -194,6 +194,34 @@ describe('DownloadRepository', () => {
       manga.uuid,
     )).rejects.toThrow('第 2 页损坏或缺失')
   })
+
+  it('stages a replacement outside the readable manga and commits it atomically', async () => {
+    const files = new MemoryDownloadFileStore()
+    const repository = repositoryWith(files)
+    const original = await repository.create('https://example.com', 'user-1', manga)
+    const replacement = await repository.createReplacement(
+      'https://example.com',
+      'user-1',
+      { ...manga, updateAt: '2026-07-28T00:00:00.000Z' },
+    )
+    replacement.state = 'completed'
+    replacement.pages = replacement.pages.map(page => ({
+      ...page,
+      state: 'completed',
+      bytesWritten: 4,
+      expectedBytes: 4,
+    }))
+
+    await repository.commitReplacement(replacement)
+
+    expect(files.replacements).toHaveLength(1)
+    expect(files.replacements[0]).toMatchObject({
+      sourceUri: expect.stringMatching(/\/updates\/manga%2Fwith%3Apath$/),
+      destinationUri: expect.stringMatching(/\/mangas\/manga%2Fwith%3Apath$/),
+      backupUri: expect.stringMatching(/manga%2Fwith%3Apath\.backup$/),
+    })
+    expect(original.manga.updateAt).not.toBe(replacement.manga.updateAt)
+  })
 })
 
 function repositoryWith(files: DownloadFileStore) {
@@ -217,6 +245,11 @@ class MemoryDownloadFileStore implements DownloadFileStore {
   readonly directories = new Set<string>()
   readonly deletedDirectories: string[] = []
   readonly sizes = new Map<string, number>()
+  readonly replacements: Array<{
+    sourceUri: string
+    destinationUri: string
+    backupUri: string
+  }> = []
 
   async ensureDirectory(uri: string) {
     this.directories.add(uri)
@@ -251,5 +284,13 @@ class MemoryDownloadFileStore implements DownloadFileStore {
 
   async fileSize(uri: string) {
     return this.sizes.get(uri) ?? null
+  }
+
+  async replaceDirectoryAtomic(
+    sourceUri: string,
+    destinationUri: string,
+    backupUri: string,
+  ) {
+    this.replacements.push({ sourceUri, destinationUri, backupUri })
   }
 }

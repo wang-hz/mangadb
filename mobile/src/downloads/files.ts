@@ -7,6 +7,11 @@ export interface DownloadFileStore {
   deleteDirectory: (uri: string) => Promise<void>
   listDirectoryNames: (uri: string) => Promise<string[]>
   fileSize: (uri: string) => Promise<number | null>
+  replaceDirectoryAtomic: (
+    sourceUri: string,
+    destinationUri: string,
+    backupUri: string,
+  ) => Promise<void>
 }
 
 export interface DownloadPageFileStore {
@@ -75,6 +80,26 @@ export class ExpoDownloadFileStore implements DownloadFileStore, DownloadPageFil
   async fileSize(uri: string): Promise<number | null> {
     const file = new File(uri)
     return file.exists ? file.size : null
+  }
+
+  async replaceDirectoryAtomic(
+    sourceUri: string,
+    destinationUri: string,
+    backupUri: string,
+  ): Promise<void> {
+    const source = new Directory(sourceUri)
+    const destination = new Directory(destinationUri)
+    const backup = new Directory(backupUri)
+    if (!source.exists) throw new Error('替换下载目录不存在')
+    if (backup.exists) backup.delete()
+    if (destination.exists) destination.move(backup)
+    try {
+      source.move(destination)
+      if (backup.exists) backup.delete()
+    } catch (error) {
+      if (!destination.exists && backup.exists) backup.move(destination)
+      throw error
+    }
   }
 
   async writePageAtomic(
