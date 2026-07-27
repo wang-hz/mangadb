@@ -10,18 +10,17 @@ export function mangaPageImageSource(
   revision: string,
   thumbnail = false,
 ): ImageSource {
-  const suffix = thumbnail ? '?thumb=1' : ''
+  const query = new URLSearchParams({
+    cacheRevision: revision,
+    cacheUser: userUuid,
+  })
+  if (thumbnail) query.set('thumb', '1')
+  const uri = client.url(
+    `/api/file/mangas/${encodeURIComponent(mangaUuid)}/pages/${pageIndex}?${query.toString()}`,
+  )
   return {
-    uri: client.url(`/api/file/mangas/${encodeURIComponent(mangaUuid)}/pages/${pageIndex}${suffix}`),
+    uri,
     headers: client.authorizationHeaders(),
-    cacheKey: [
-      'mangadb',
-      encodeURIComponent(serverUrl),
-      encodeURIComponent(userUuid),
-      encodeURIComponent(mangaUuid),
-      pageIndex,
-      thumbnail ? 'thumbnail' : 'page',
-      encodeURIComponent(revision),
-    ].join(':'),
+    cacheKey: uri,
   }
 }

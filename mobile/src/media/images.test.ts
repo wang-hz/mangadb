@@ -15,11 +15,14 @@ describe('mangaPageImageSource', () => {
     )
 
     expect(source).toMatchObject({
-      uri: 'https://library.example.com/base/api/file/mangas/manga-1/pages/3?thumb=1',
       headers: { Authorization: 'Bearer secret' },
     })
+    expect(source.uri).toContain('https://library.example.com/base/api/file/mangas/manga-1/pages/3?')
+    expect(source.uri).toContain('cacheRevision=2026-07-19T12%3A00%3A00.000Z')
+    expect(source.uri).toContain('cacheUser=user-1')
+    expect(source.uri).toContain('thumb=1')
+    expect(source.cacheKey).toBe(source.uri)
     expect(source.cacheKey).toContain('user-1')
-    expect(source.cacheKey).toContain('thumbnail')
     expect(source.cacheKey).not.toContain('secret')
   })
 })
