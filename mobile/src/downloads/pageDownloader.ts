@@ -4,6 +4,11 @@ import {
   ExpoDownloadFileStore,
 } from '@/downloads/files'
 import type { DownloadPagePaths } from '@/downloads/repository'
+import {
+  type DownloadStorageMonitor,
+  DownloadLowStorageError,
+  ExpoDownloadStorageMonitor,
+} from '@/downloads/storage'
 import type { DownloadFailureCode } from '@/downloads/types'
 
 export interface DownloadPageRequest {
@@ -44,6 +49,7 @@ export class DownloadPageCancelledError extends Error {
 export class DownloadPageDownloader {
   constructor(
     private readonly files: DownloadPageFileStore = new ExpoDownloadFileStore(),
+    private readonly storage: DownloadStorageMonitor = new ExpoDownloadStorageMonitor(),
   ) {}
 
   async download(request: DownloadPageRequest): Promise<DownloadedPage> {
@@ -52,6 +58,7 @@ export class DownloadPageDownloader {
       throw new DownloadPageError('页面下载参数无效', 'unknown', false)
     }
     if (signal?.aborted) throw new DownloadPageCancelledError()
+    this.assertStorage(0)
 
     let response: Response
     try {
@@ -84,6 +91,7 @@ export class DownloadPageDownloader {
         true,
       )
     }
+    this.assertStorage(bytes.byteLength)
 
     try {
       await this.files.writePageAtomic(paths.partialUri, paths.completedUri, bytes)
@@ -97,6 +105,17 @@ export class DownloadPageDownloader {
       etag: response.headers.get('etag'),
       lastModified: response.headers.get('last-modified'),
       contentType: response.headers.get('content-type'),
+    }
+  }
+
+  private assertStorage(requiredBytes: number): void {
+    try {
+      this.storage.assertCanWrite(requiredBytes)
+    } catch (error) {
+      if (error instanceof DownloadLowStorageError) {
+        throw new DownloadPageError(error.message, 'low-storage', false, error)
+      }
+      throw error
     }
   }
 }

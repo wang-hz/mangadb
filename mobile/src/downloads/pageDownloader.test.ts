@@ -5,6 +5,10 @@ import {
   DownloadPageDownloader,
   DownloadPageError,
 } from '@/downloads/pageDownloader'
+import {
+  DownloadLowStorageError,
+  type DownloadStorageMonitor,
+} from '@/downloads/storage'
 
 const paths = {
   partialUri: 'file:///downloads/partial/000001.part',
@@ -24,7 +28,7 @@ describe('DownloadPageDownloader', () => {
     })
     const api = apiWithResponse(response)
     const files = new MemoryPageFileStore()
-    const downloader = new DownloadPageDownloader(files)
+    const downloader = downloaderWith(files)
 
     await expect(downloader.download({
       api,
@@ -53,7 +57,7 @@ describe('DownloadPageDownloader', () => {
     [new Uint8Array([1, 2]), '3', '页面长度不匹配'],
   ])('rejects invalid response bytes %#', async (bytes, contentLength, message) => {
     const files = new MemoryPageFileStore()
-    const downloader = new DownloadPageDownloader(files)
+    const downloader = downloaderWith(files)
     const headers = contentLength === null ? undefined : { 'content-length': contentLength }
 
     await expect(downloader.download({
@@ -80,7 +84,7 @@ describe('DownloadPageDownloader', () => {
       requestResponse: jest.fn().mockRejectedValue(apiError),
     } as unknown as ApiClient
 
-    await expect(new DownloadPageDownloader(new MemoryPageFileStore()).download({
+    await expect(downloaderWith(new MemoryPageFileStore()).download({
       api,
       mangaUuid: 'manga-1',
       pageIndex: 0,
@@ -93,7 +97,7 @@ describe('DownloadPageDownloader', () => {
     controller.abort()
     const api = apiWithResponse(new Response(new Uint8Array([1])))
 
-    await expect(new DownloadPageDownloader(new MemoryPageFileStore()).download({
+    await expect(downloaderWith(new MemoryPageFileStore()).download({
       api,
       mangaUuid: 'manga-1',
       pageIndex: 0,
@@ -108,7 +112,7 @@ describe('DownloadPageDownloader', () => {
       writePageAtomic: jest.fn().mockRejectedValue(new Error('file:///private/path')),
     }
 
-    const operation = new DownloadPageDownloader(files).download({
+    const operation = downloaderWith(files).download({
       api: apiWithResponse(new Response(new Uint8Array([1]))),
       mangaUuid: 'manga-1',
       pageIndex: 0,
@@ -121,12 +125,50 @@ describe('DownloadPageDownloader', () => {
       message: '无法保存下载页面',
     })
   })
+
+  it('checks free space before requesting and again before writing bytes', async () => {
+    const storage: DownloadStorageMonitor = {
+      snapshot: unlimitedStorageSnapshot,
+      assertCanWrite: jest.fn()
+        .mockImplementationOnce(() => {})
+        .mockImplementationOnce(() => {
+          throw new DownloadLowStorageError(3, 10, 8)
+        }),
+    }
+    const files = new MemoryPageFileStore()
+
+    await expect(new DownloadPageDownloader(files, storage).download({
+      api: apiWithResponse(new Response(new Uint8Array([1, 2, 3]))),
+      mangaUuid: 'manga-1',
+      pageIndex: 0,
+      paths,
+    })).rejects.toMatchObject({ code: 'low-storage', retryable: false })
+    expect(storage.assertCanWrite).toHaveBeenNthCalledWith(1, 0)
+    expect(storage.assertCanWrite).toHaveBeenNthCalledWith(2, 3)
+    expect(files.commits).toHaveLength(0)
+  })
 })
 
 function apiWithResponse(response: Response) {
   return {
     requestResponse: jest.fn().mockResolvedValue(response),
   } as unknown as ApiClient
+}
+
+function downloaderWith(files: DownloadPageFileStore) {
+  const storage: DownloadStorageMonitor = {
+    snapshot: unlimitedStorageSnapshot,
+    assertCanWrite: jest.fn(),
+  }
+  return new DownloadPageDownloader(files, storage)
+}
+
+function unlimitedStorageSnapshot() {
+  return {
+    availableBytes: Number.MAX_SAFE_INTEGER,
+    totalBytes: Number.MAX_SAFE_INTEGER,
+    reserveBytes: 0,
+  }
 }
 
 class MemoryPageFileStore implements DownloadPageFileStore {
