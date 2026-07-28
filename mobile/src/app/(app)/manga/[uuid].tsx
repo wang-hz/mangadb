@@ -19,6 +19,7 @@ import type { MangaDetail, MangaTagItem } from '@/api/types'
 import { DownloadControls } from '@/components/downloads/DownloadControls'
 import { useLocalDownload } from '@/downloads/useLocalDownload'
 import { PrimaryButton } from '@/components/PrimaryButton'
+import { ReadingProgressControls } from '@/components/ReadingProgressControls'
 import { ScreenHeader } from '@/components/ScreenHeader'
 import { mangaPageImageSource } from '@/media/images'
 import { useSession } from '@/session/SessionContext'
@@ -151,7 +152,11 @@ function MangaMetadata({
   const openReader = () => {
     router.push({
       pathname: '/(app)/reader/[uuid]',
-      params: { uuid: manga.uuid, title: manga.displayTitle },
+      params: {
+        uuid: manga.uuid,
+        title: manga.displayTitle,
+        ...(progress?.state === 'completed' ? { page: '0' } : {}),
+      },
     })
   }
 
@@ -207,6 +212,8 @@ function MangaMetadata({
         <PrimaryButton disabled={manga.pages.length === 0} onPress={openReader}>
           {manga.pages.length === 0
             ? '暂无可阅读页面'
+            : progress?.state === 'completed'
+              ? '重新阅读 · 从第 1 页'
             : progress
               ? `继续阅读 · 第 ${progress.pageIndex + 1} 页`
               : '开始阅读'}
@@ -221,6 +228,17 @@ function MangaMetadata({
             )
           : <Text style={styles.readHint}>请联系管理员为此漫画添加页面。</Text>}
       </View>
+
+      <ReadingProgressControls
+        manga={manga}
+        onChange={value => {
+          setLoadedProgress({ identity: progressIdentity, value })
+        }}
+        pageCount={manga.pages.length}
+        progress={progress}
+        serverUrl={serverUrl!}
+        userUuid={auth!.user.uuid}
+      />
 
       <DownloadControls manga={manga} />
     </>
