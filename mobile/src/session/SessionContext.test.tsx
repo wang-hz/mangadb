@@ -84,6 +84,30 @@ describe('SessionProvider', () => {
     expect(onSessionCleanup).toHaveBeenCalledTimes(cleanupsBeforeStaleResponse)
   })
 
+  it('removes a stored LAN HTTP session from an HTTPS-only build', async () => {
+    jest.mocked(AsyncStorage.getItem).mockResolvedValue('http://192.168.1.20:3000')
+    jest.mocked(SecureStore.getItemAsync).mockResolvedValue(token('reader', 'user-1'))
+
+    render(
+      <SessionProvider allowLanHttp={false} onSessionCleanup={onSessionCleanup}>
+        <SessionProbe />
+      </SessionProvider>,
+    )
+
+    await waitFor(() => expect(session.status).toBe('needs-server'))
+    expect(AsyncStorage.removeItem).toHaveBeenCalledWith('mangadb.serverUrl.v1')
+    expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('mangadb.accessToken.v1')
+    expect(onSessionCleanup).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects configuring LAN HTTP when the build is HTTPS-only', async () => {
+    await renderSession()
+
+    await expect(session.configureServer('http://192.168.1.20:3000'))
+      .rejects.toThrow('此应用构建仅支持 HTTPS 服务器')
+    expect(AsyncStorage.setItem).not.toHaveBeenCalled()
+  })
+
   it('signs out while retaining the active server', async () => {
     await renderSession()
     await authenticateSession()

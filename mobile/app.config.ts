@@ -3,6 +3,7 @@ import type { ExpoConfig } from 'expo/config'
 const appVersion = process.env.MANGADB_APP_VERSION?.trim() || '0.1.0'
 const buildNumber = process.env.MANGADB_BUILD_NUMBER?.trim() || '1'
 const androidVersionCode = Number(buildNumber)
+const allowLanHttp = process.env.MANGADB_ALLOW_LAN_HTTP?.trim().toLowerCase() === 'true'
 
 if (!Number.isSafeInteger(androidVersionCode) || androidVersionCode < 1) {
   throw new Error('MANGADB_BUILD_NUMBER must be a positive integer')
@@ -17,6 +18,9 @@ const config: ExpoConfig = {
   orientation: 'default',
   userInterfaceStyle: 'light',
   backgroundColor: '#f5f7fa',
+  extra: {
+    allowLanHttp,
+  },
   icon: './assets/icon.png',
   ios: {
     bundleIdentifier: 'top.wanghaizhou.mangadb',
@@ -56,7 +60,7 @@ const config: ExpoConfig = {
       'expo-build-properties',
       {
         android: {
-          usesCleartextTraffic: true,
+          usesCleartextTraffic: allowLanHttp,
         },
       },
     ],

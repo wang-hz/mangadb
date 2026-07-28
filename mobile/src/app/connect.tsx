@@ -15,12 +15,14 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { checkServer } from '@/api/auth'
 import { ApiClient, ApiError } from '@/api/client'
 import { PrimaryButton } from '@/components/PrimaryButton'
+import { isLanHttpEnabled } from '@/server/connectionPolicy'
 import { useSession } from '@/session/SessionContext'
 import { validateServerUrl } from '@/server/serverUrl'
 import { colors } from '@/theme/colors'
 
 export default function ConnectScreen() {
   const { serverUrl, configureServer } = useSession()
+  const lanHttpEnabled = isLanHttpEnabled()
   const [address, setAddress] = useState(serverUrl ?? '')
   const [error, setError] = useState<string | null>(null)
   const [checking, setChecking] = useState(false)
@@ -33,7 +35,9 @@ export default function ConnectScreen() {
     setError(null)
     let candidate
     try {
-      candidate = validateServerUrl(address)
+      candidate = validateServerUrl(address, {
+        allowLanHttp: lanHttpEnabled,
+      })
     } catch (validationError) {
       setError(validationError instanceof Error ? validationError.message : '服务器地址无效')
       return
@@ -92,7 +96,9 @@ export default function ConnectScreen() {
               value={address}
             />
             <Text style={styles.help}>
-              公网服务器必须使用可信 HTTPS；局域网 HTTP 连接会在确认风险后启用。
+              {lanHttpEnabled
+                ? '公网服务器必须使用可信 HTTPS；局域网 HTTP 连接会在确认风险后启用。'
+                : '此构建仅支持可信 HTTPS 服务器。'}
             </Text>
             {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
             <PrimaryButton

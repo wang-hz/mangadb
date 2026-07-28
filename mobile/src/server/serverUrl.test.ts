@@ -42,4 +42,20 @@ describe('validateServerUrl', () => {
   ])('rejects unsafe or malformed server address %s', value => {
     expect(() => validateServerUrl(value)).toThrow()
   })
+
+  it.each([
+    'http://localhost:3000',
+    'http://192.168.1.20:3000',
+    'http://library.local:3000',
+  ])('rejects cleartext server %s in an HTTPS-only build', value => {
+    expect(() => validateServerUrl(value, { allowLanHttp: false }))
+      .toThrow('此应用构建仅支持 HTTPS 服务器')
+  })
+
+  it('keeps trusted HTTPS enabled in an HTTPS-only build', () => {
+    expect(validateServerUrl(
+      'https://manga.example.com',
+      { allowLanHttp: false },
+    ).url).toBe('https://manga.example.com')
+  })
 })

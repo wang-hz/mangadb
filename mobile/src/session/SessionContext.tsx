@@ -22,6 +22,8 @@ import {
   reportServerReachability,
   setActiveServer,
 } from '@/server/reachability'
+import { isLanHttpEnabled } from '@/server/connectionPolicy'
+import { validateServerUrl } from '@/server/serverUrl'
 import { userFromToken } from './token'
 
 type SessionStatus = 'loading' | 'needs-server' | 'needs-login' | 'authenticated'
@@ -51,11 +53,13 @@ const noopSessionCleanup = async () => true
 
 interface SessionProviderProps extends PropsWithChildren {
   onSessionCleanup?: () => Promise<boolean>
+  allowLanHttp?: boolean
 }
 
 export function SessionProvider({
   children,
   onSessionCleanup = noopSessionCleanup,
+  allowLanHttp = isLanHttpEnabled(),
 }: SessionProviderProps) {
   const [loading, setLoading] = useState(true)
   const [serverUrl, setServerUrl] = useState<string | null>(null)
@@ -103,9 +107,17 @@ export function SessionProvider({
     Promise.all([loadServerUrl(), loadAccessToken()])
       .then(async ([storedServerUrl, token]) => {
         if (!active) return
-        serverUrlRef.current = storedServerUrl
-        setServerUrl(storedServerUrl)
-        if (storedServerUrl && token) {
+        let acceptedServerUrl: string | null = null
+        if (storedServerUrl) {
+          try {
+            acceptedServerUrl = validateServerUrl(storedServerUrl, { allowLanHttp }).url
+          } catch {
+            try { await removeServerUrl() } catch {}
+          }
+        }
+        serverUrlRef.current = acceptedServerUrl
+        setServerUrl(acceptedServerUrl)
+        if (acceptedServerUrl && token) {
           const user = userFromToken(token)
           if (user) {
             const storedAuth = { token, user }
@@ -130,14 +142,15 @@ export function SessionProvider({
       })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [cleanupCaches])
+  }, [allowLanHttp, cleanupCaches])
 
   const configureServer = useCallback(async (nextServerUrl: string) => {
-    if (nextServerUrl !== serverUrlRef.current) await signOut()
-    await saveServerUrl(nextServerUrl)
-    serverUrlRef.current = nextServerUrl
-    setServerUrl(nextServerUrl)
-  }, [signOut])
+    const validated = validateServerUrl(nextServerUrl, { allowLanHttp })
+    if (validated.url !== serverUrlRef.current) await signOut()
+    await saveServerUrl(validated.url)
+    serverUrlRef.current = validated.url
+    setServerUrl(validated.url)
+  }, [allowLanHttp, signOut])
 
   const authenticate = useCallback(async (token: string) => {
     const user = userFromToken(token)

@@ -59,9 +59,9 @@ The server runs at `http://localhost:3000` by default. On first launch you will 
 
 ## Expo Mobile App
 
-The independent client under `mobile/` targets Android and iPhone with the application identifier `top.wanghaizhou.mangadb`. Its UI is Simplified Chinese and supports server setup, login, manga and tag browsing, manga details, paged and continuous-scroll readers, per-account local reading positions, settings, and logout.
+The independent client under `mobile/` targets Android and iPhone with the application identifier `top.wanghaizhou.mangadb`. Its UI is Simplified Chinese and supports server setup, login, manga and tag browsing, manga details, paged and continuous-scroll readers, identity-isolated offline downloads, per-account local reading positions, settings, and logout.
 
-The client is online-only. It does not include administration, offline downloads, favorites, a history list, or cross-device progress synchronization.
+The client does not include administration, favorites, a history list, or cross-device progress synchronization.
 
 ### Mobile toolchain
 
@@ -92,7 +92,16 @@ Use `npm run mobile:android` or `npm run mobile:ios` to generate and run a local
 - iOS Simulator: `http://localhost:3000`
 - Physical phone on the same Wi-Fi: `http://<computer-LAN-IP>:3000` or a `.local` hostname
 
-Public servers must use trusted HTTPS. The app rejects public HTTP, permits loopback HTTP directly, asks for confirmation before saving private-network or `.local` HTTP, and does not bypass self-signed HTTPS certificate errors. iOS asks for local-network access the first time it connects to a LAN server. Android cleartext support is enabled at the native layer for local development; the app-level URL validation enforces the public-HTTP restriction.
+Public servers must use trusted HTTPS, and release artifacts are HTTPS-only by default. The app rejects public HTTP and does not bypass self-signed HTTPS certificate errors. iOS still includes the local-network usage description and the narrow ATS local-network exception needed by opted-in self-hosted builds.
+
+To build a client for a trusted LAN server that has no TLS endpoint, opt in explicitly before native generation:
+
+```bash
+MANGADB_ALLOW_LAN_HTTP=true npm run mobile:build:android
+MANGADB_ALLOW_LAN_HTTP=true npm run mobile:build:ios
+```
+
+An opted-in build permits loopback HTTP directly and asks for confirmation before saving a private-network IP or `.local` HTTP address. Public HTTP remains rejected by application-level validation. Android cannot express arbitrary RFC1918 addresses in Network Security Config, so its opt-in native capability is necessarily process-wide; the URL validator is the narrower enforcement boundary. Do not enable this option for public distribution.
 
 ### Validation
 
@@ -113,7 +122,7 @@ git tag mobile-v0.2.0
 git push origin mobile-v0.2.0
 ```
 
-The workflow validates the Expo project, builds both platforms, and creates a GitHub Release named `MangaDB Mobile 0.2.0` with:
+The workflow validates the Expo project, builds both platforms in the default HTTPS-only mode, and creates a GitHub Release named `MangaDB Mobile 0.2.0` with:
 
 - `mangadb-0.2.0.apk`: an Android test APK signed with the Expo template debug key
 - `mangadb-0.2.0.ipa`: an unsigned iOS device application
@@ -131,6 +140,8 @@ npm run mobile:build:android
 ```
 
 The APK is written to `mobile/android/app/build/outputs/apk/release/app-release.apk` and can be installed with `adb install -r mobile/android/app/build/outputs/apk/release/app-release.apk`. It is signed with the Expo template's debug key for local testing and is not a store-distribution artifact.
+
+Set `MANGADB_ALLOW_LAN_HTTP=true` on the same command only for a private sideloaded build that must connect to a trusted LAN HTTP server.
 
 ### iOS Simulator Release
 

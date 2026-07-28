@@ -11,7 +11,10 @@ export class ServerUrlError extends Error {
   }
 }
 
-export function validateServerUrl(input: string): ValidatedServerUrl {
+export function validateServerUrl(
+  input: string,
+  options: { allowLanHttp?: boolean } = {},
+): ValidatedServerUrl {
   const value = input.trim()
   if (!/^https?:\/\//i.test(value)) {
     throw new ServerUrlError('服务器地址必须以 http:// 或 https:// 开头')
@@ -39,6 +42,9 @@ export function validateServerUrl(input: string): ValidatedServerUrl {
   const hostType = classifyLocalHost(parsed.hostname)
   if (isCleartext && hostType === 'public') {
     throw new ServerUrlError('公共网络服务器必须使用 HTTPS')
+  }
+  if (isCleartext && options.allowLanHttp === false) {
+    throw new ServerUrlError('此应用构建仅支持 HTTPS 服务器')
   }
 
   parsed.pathname = parsed.pathname.replace(/\/+$/, '')
