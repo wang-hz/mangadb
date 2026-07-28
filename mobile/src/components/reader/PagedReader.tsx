@@ -1,11 +1,9 @@
 import { Ionicons } from '@expo/vector-icons'
-import { Image } from 'expo-image'
 import { StatusBar } from 'expo-status-bar'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   FlatList,
-  type GestureResponderEvent,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -23,6 +21,7 @@ import { PrimaryButton } from '@/components/PrimaryButton'
 import { useReaderPagePrefetch } from '@/components/reader/prefetch'
 import { ReaderCompletionPanel } from '@/components/reader/ReaderCompletionPanel'
 import { ReaderTopBar } from '@/components/reader/ReaderTopBar'
+import { ZoomableReaderImage } from '@/components/reader/ZoomableReaderImage'
 import {
   reportReaderTelemetry,
   reportVisiblePageLoad,
@@ -83,6 +82,7 @@ export function PagedReader({
   const previousWidthRef = useRef(width)
   const [controlsVisible, setControlsVisible] = useState(true)
   const [jumpVisible, setJumpVisible] = useState(false)
+  const [pageZoomed, setPageZoomed] = useState(false)
   const firstPageReportedRef = useRef(false)
   const visiblePageRef = useRef(pageIndex)
   visiblePageRef.current = pageIndex
@@ -140,8 +140,7 @@ export function PagedReader({
     })
   }
 
-  const handlePageTap = (event: GestureResponderEvent) => {
-    const x = event.nativeEvent.locationX
+  const handlePageTap = (x: number) => {
     if (x < width * 0.32) {
       if (validPage(leftTarget)) scrollToPage(leftTarget)
       else setControlsVisible(true)
@@ -196,11 +195,15 @@ export function PagedReader({
             onPageLoad={recordPageLoad}
             onRefreshMetadata={onRefreshMetadata}
             onTap={handlePageTap}
+            onZoomChange={zoomed => {
+              if (index === visiblePageRef.current) setPageZoomed(zoomed)
+            }}
             serverUrl={serverUrl}
             userUuid={userUuid}
             width={width}
           />
         )}
+        scrollEnabled={!pageZoomed}
         showsHorizontalScrollIndicator={false}
         windowSize={3}
       />
@@ -294,7 +297,8 @@ interface ReaderPageProps {
   height: number
   onPageLoad: (index: number, durationMs: number) => void
   onRefreshMetadata: () => Promise<void>
-  onTap: (event: GestureResponderEvent) => void
+  onTap: (x: number) => void
+  onZoomChange: (zoomed: boolean) => void
   contentFit: 'contain' | 'cover'
   localUri?: string
 }
@@ -310,6 +314,7 @@ const ReaderPage = memo(function ReaderPage({
   onPageLoad,
   onRefreshMetadata,
   onTap,
+  onZoomChange,
   contentFit,
   localUri,
 }: ReaderPageProps) {
@@ -336,12 +341,14 @@ const ReaderPage = memo(function ReaderPage({
   }, [source.cacheKey, attempt])
 
   return (
-    <Pressable onPress={onTap} style={[styles.page, { width, height }]}>
+    <View style={[styles.page, { width, height }]}>
       {!failed
         ? (
-            <Image
+            <ZoomableReaderImage
+              accessibilityLabel={`第 ${index + 1} 页图片`}
               cachePolicy="memory-disk"
               contentFit={contentFit}
+              height={height}
               key={attempt}
               onError={() => {
                 setLoading(false)
@@ -359,11 +366,16 @@ const ReaderPage = memo(function ReaderPage({
               }}
               recyclingKey={`${manga.uuid}:${index}:${manga.updateAt}`}
               source={source}
-              style={StyleSheet.absoluteFill}
+              onTap={onTap}
+              onZoomChange={onZoomChange}
+              width={width}
             />
           )
         : (
-            <View style={styles.pageFailure}>
+            <Pressable
+              onPress={event => onTap(event.nativeEvent.locationX)}
+              style={styles.pageFailure}
+            >
               <Ionicons color="#a3a3a3" name="image-outline" size={42} />
               <Text style={styles.pageFailureTitle}>第 {index + 1} 页加载失败</Text>
               <Pressable
@@ -395,12 +407,12 @@ const ReaderPage = memo(function ReaderPage({
                   {refreshingMetadata ? '正在刷新页面信息' : '刷新页面信息'}
                 </Text>
               </Pressable>
-            </View>
+            </Pressable>
           )}
       {loading && !failed
         ? <ActivityIndicator color="#ffffff" size="large" style={styles.pageLoading} />
         : null}
-    </Pressable>
+    </View>
   )
 })
 

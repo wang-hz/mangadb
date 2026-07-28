@@ -124,6 +124,21 @@ describe('PagedReader preferences', () => {
     expect(screen.getAllByLabelText('页面图片-cover').length).toBeGreaterThan(0)
   })
 
+  it('locks paging while the visible page is zoomed and exposes reset', () => {
+    const { view } = renderReader()
+    fireEvent(
+      screen.getByLabelText('第 2 页图片'),
+      'accessibilityAction',
+      { nativeEvent: { actionName: 'increment' } },
+    )
+
+    expect(view.UNSAFE_getByType(FlatList).props.scrollEnabled).toBe(false)
+    expect(screen.getByLabelText('重置缩放')).toBeOnTheScreen()
+
+    fireEvent.press(screen.getByLabelText('重置缩放'))
+    expect(view.UNSAFE_getByType(FlatList).props.scrollEnabled).toBe(true)
+  })
+
   it('uses verified local files and skips network prefetch', async () => {
     jest.mocked(Image.prefetch).mockClear()
     const localPageUris = manga.pages.map((_, index) =>

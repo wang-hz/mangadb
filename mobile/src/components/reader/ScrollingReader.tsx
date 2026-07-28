@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons'
-import { Image } from 'expo-image'
 import { StatusBar } from 'expo-status-bar'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -18,6 +17,7 @@ import type { MangaDetail } from '@/api/types'
 import { useReaderPagePrefetch } from '@/components/reader/prefetch'
 import { ReaderCompletionPanel } from '@/components/reader/ReaderCompletionPanel'
 import { ReaderTopBar } from '@/components/reader/ReaderTopBar'
+import { ZoomableReaderImage } from '@/components/reader/ZoomableReaderImage'
 import {
   reportReaderTelemetry,
   reportVisiblePageLoad,
@@ -86,6 +86,7 @@ export function ScrollingReader({
   visiblePageRef.current = pageIndex
   const [aspectRatios, setAspectRatios] = useState<Record<number, number>>({})
   const [controlsVisible, setControlsVisible] = useState(true)
+  const [zoomedPageIndex, setZoomedPageIndex] = useState<number | null>(null)
   const imageWidth = Math.min(width, 900)
   useReaderPagePrefetch({
     api,
@@ -237,6 +238,10 @@ export function ScrollingReader({
             onPageLoad={recordPageLoad}
             onRefreshMetadata={onRefreshMetadata}
             onTap={() => setControlsVisible(visible => !visible)}
+            onZoomChange={zoomed => setZoomedPageIndex(current => {
+              if (zoomed) return index
+              return current === index ? null : current
+            })}
             pageGap={index === manga.pages.length - 1 ? 0 : preferences.scrollGap}
             serverUrl={serverUrl}
             userUuid={userUuid}
@@ -244,6 +249,7 @@ export function ScrollingReader({
           />
         )}
         scrollEventThrottle={16}
+        scrollEnabled={zoomedPageIndex === null}
         showsVerticalScrollIndicator={false}
         windowSize={5}
       />
@@ -278,6 +284,7 @@ interface ScrollingPageProps {
   index: number
   viewportWidth: number
   onTap: () => void
+  onZoomChange: (zoomed: boolean) => void
   onAspectRatio: (index: number, aspectRatio: number) => void
   onPageLoad: (index: number, durationMs: number) => void
   onRefreshMetadata: () => Promise<void>
@@ -294,6 +301,7 @@ const ScrollingPage = memo(function ScrollingPage({
   index,
   viewportWidth,
   onTap,
+  onZoomChange,
   onAspectRatio,
   onPageLoad,
   onRefreshMetadata,
@@ -325,15 +333,14 @@ const ScrollingPage = memo(function ScrollingPage({
   }, [source.cacheKey, attempt])
 
   return (
-    <Pressable
-      onPress={onTap}
-      style={[styles.scrollPage, { width: viewportWidth, paddingBottom: pageGap }]}
-    >
+    <View style={[styles.scrollPage, { width: viewportWidth, paddingBottom: pageGap }]}>
       {!failed
         ? (
-            <Image
+            <ZoomableReaderImage
+              accessibilityLabel={`第 ${index + 1} 页图片`}
               cachePolicy="memory-disk"
               contentFit="contain"
+              height={imageHeight}
               key={attempt}
               onError={() => {
                 setLoading(false)
@@ -356,11 +363,16 @@ const ScrollingPage = memo(function ScrollingPage({
               }}
               recyclingKey={`${manga.uuid}:${index}:${manga.updateAt}`}
               source={source}
-              style={{ width: imageWidth, height: imageHeight }}
+              onTap={() => onTap()}
+              onZoomChange={onZoomChange}
+              width={imageWidth}
             />
           )
         : (
-            <View style={[styles.scrollFailure, { width: imageWidth, height: imageHeight }]}>
+            <Pressable
+              onPress={onTap}
+              style={[styles.scrollFailure, { width: imageWidth, height: imageHeight }]}
+            >
               <Ionicons color="#a3a3a3" name="image-outline" size={38} />
               <Text style={styles.failureTitle}>第 {index + 1} 页加载失败</Text>
               <Pressable
@@ -392,12 +404,12 @@ const ScrollingPage = memo(function ScrollingPage({
                   {refreshingMetadata ? '正在刷新页面信息' : '刷新页面信息'}
                 </Text>
               </Pressable>
-            </View>
+            </Pressable>
           )}
       {loading && !failed
         ? <ActivityIndicator color="#ffffff" size="large" style={styles.loading} />
         : null}
-    </Pressable>
+    </View>
   )
 })
 

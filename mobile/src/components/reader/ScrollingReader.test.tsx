@@ -1,4 +1,4 @@
-import { render } from '@testing-library/react-native'
+import { fireEvent, render, screen } from '@testing-library/react-native'
 import { FlatList } from 'react-native'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import type { ApiClient } from '@/api/client'
@@ -62,9 +62,50 @@ describe('ScrollingReader preferences', () => {
     expect(list.props.renderItem({ item: '0.jpg', index: 0 }).props.pageGap).toBe(16)
     expect(list.props.renderItem({ item: '2.jpg', index: 2 }).props.pageGap).toBe(0)
   })
+
+  it('locks vertical scrolling while an image is zoomed', () => {
+    const view = renderReader()
+    fireEvent(
+      screen.getByLabelText('第 1 页图片'),
+      'accessibilityAction',
+      { nativeEvent: { actionName: 'increment' } },
+    )
+
+    expect(view.UNSAFE_getByType(FlatList).props.scrollEnabled).toBe(false)
+    fireEvent.press(screen.getByLabelText('重置缩放'))
+    expect(view.UNSAFE_getByType(FlatList).props.scrollEnabled).toBe(true)
+  })
 })
 
 const safeAreaMetrics = {
   frame: { x: 0, y: 0, width: 390, height: 844 },
   insets: { top: 0, left: 0, right: 0, bottom: 0 },
+}
+
+function renderReader() {
+  return render(
+    <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+      <ScrollingReader
+        api={{
+          authorizationHeaders: () => ({ Authorization: 'Bearer token' }),
+          url: (path: string) => `https://example.com${path}`,
+        } as unknown as ApiClient}
+        completed={false}
+        manga={manga}
+        mode="scroll"
+        onBack={jest.fn()}
+        onModeChange={jest.fn()}
+        onMarkCompleted={jest.fn().mockResolvedValue(undefined)}
+        onOpenSettings={jest.fn()}
+        onPageChange={jest.fn()}
+        onRefreshMetadata={jest.fn().mockResolvedValue(undefined)}
+        onReturnToDetail={jest.fn()}
+        pageIndex={0}
+        preferences={DEFAULT_READER_PREFERENCES}
+        settingsVisible={false}
+        serverUrl="https://example.com"
+        userUuid="user-1"
+      />
+    </SafeAreaProvider>,
+  )
 }
