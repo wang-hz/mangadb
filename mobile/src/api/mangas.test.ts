@@ -40,6 +40,24 @@ describe('manga API', () => {
     expect(request).toHaveBeenCalledWith('/api/mangadb/mangas/manga%2Fid', { signal: undefined })
   })
 
+  it('encodes combined server-side tag and publication-year filters', async () => {
+    const request = jest.fn().mockResolvedValue({ items: [], total: 0, page: 1, limit: 24 })
+    const client = { request } as unknown as ApiClient
+
+    await getMangas(client, {
+      page: 1,
+      sortBy: 'publishDate',
+      sortOrder: 'asc',
+      tagUuids: ['tag-one', 'tag-two'],
+      publishYearFrom: 1990,
+      publishYearTo: 2026,
+    })
+
+    expect(request.mock.calls[0][0]).toContain('tagUuids=tag-one%2Ctag-two')
+    expect(request.mock.calls[0][0]).toContain('publishYearFrom=1990')
+    expect(request.mock.calls[0][0]).toContain('publishYearTo=2026')
+  })
+
   it('treats an invalid pages JSON array as empty without shifting indices', async () => {
     const request = jest.fn().mockResolvedValue({
       uuid: 'manga-1',

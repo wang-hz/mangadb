@@ -14,6 +14,9 @@ export interface MangaListParams {
   page: number
   limit?: number
   search?: string
+  tagUuids?: readonly string[]
+  publishYearFrom?: number
+  publishYearTo?: number
   sortBy: MangaSortBy
   sortOrder: SortOrder
 }
@@ -32,6 +35,13 @@ export function getMangas(
   })
   const search = params.search?.trim()
   if (search) query.set('search', search)
+  if (params.tagUuids?.length) query.set('tagUuids', params.tagUuids.join(','))
+  if (params.publishYearFrom !== undefined) {
+    query.set('publishYearFrom', String(params.publishYearFrom))
+  }
+  if (params.publishYearTo !== undefined) {
+    query.set('publishYearTo', String(params.publishYearTo))
+  }
   return client.request<PageResult<MangaSummary>>(`/api/mangadb/mangas?${query}`, { signal })
 }
 

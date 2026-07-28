@@ -40,10 +40,21 @@ export class MangadbController {
   async getMangasByPage(req: Request, res: Response) {
     const parsed = mangaListQuerySchema.safeParse(req.query);
     if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
-    const { page, limit, search, sortBy, sortOrder, view } = parsed.data;
+    const {
+      page,
+      limit,
+      search,
+      sortBy,
+      sortOrder,
+      view,
+      tagUuids,
+      publishYearFrom,
+      publishYearTo,
+    } = parsed.data;
+    const filters = { tagUuids, publishYearFrom, publishYearTo };
     const [items, total] = view === 'summary'
-      ? await mangaService.getMangasByPage(page - 1, limit, sortBy, sortOrder, search, 'summary')
-      : await mangaService.getMangasByPage(page - 1, limit, sortBy, sortOrder, search, 'full');
+      ? await mangaService.getMangasByPage(page - 1, limit, sortBy, sortOrder, search, 'summary', filters)
+      : await mangaService.getMangasByPage(page - 1, limit, sortBy, sortOrder, search, 'full', filters);
     res.json({ items, total, page, limit });
   }
 

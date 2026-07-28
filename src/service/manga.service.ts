@@ -46,16 +46,36 @@ const mangaSummarySelect = {
 type MangaDetail = Prisma.MangaGetPayload<{ select: typeof mangaSelect }>;
 type MangaSummary = Prisma.MangaGetPayload<{ select: typeof mangaSummarySelect }>;
 
-function buildWhere(search?: string) {
-  if (!search) {
-    return {};
-  }
-  return {
-    OR: [
+interface MangaFilters {
+  tagUuids?: string[];
+  publishYearFrom?: number;
+  publishYearTo?: number;
+}
+
+function buildWhere(search?: string, filters: MangaFilters = {}): Prisma.MangaWhereInput {
+  const AND: Prisma.MangaWhereInput[] = [];
+  if (search) {
+    AND.push({ OR: [
       { displayTitle: { contains: search, mode: 'insensitive' as const } },
       { originalTitle: { contains: search, mode: 'insensitive' as const } },
-    ],
-  };
+    ] });
+  }
+  for (const tagUuid of new Set(filters.tagUuids ?? [])) {
+    AND.push({ mangaTags: { some: { tagUuid } } });
+  }
+  if (filters.publishYearFrom !== undefined || filters.publishYearTo !== undefined) {
+    AND.push({
+      publishDate: {
+        ...(filters.publishYearFrom !== undefined
+          ? { gte: new Date(Date.UTC(filters.publishYearFrom, 0, 1)) }
+          : {}),
+        ...(filters.publishYearTo !== undefined
+          ? { lt: new Date(Date.UTC(filters.publishYearTo + 1, 0, 1)) }
+          : {}),
+      },
+    });
+  }
+  return AND.length > 0 ? { AND } : {};
 }
 
 function buildOrderBy(
@@ -94,6 +114,7 @@ export class MangaService {
     sortOrder: SortOrder,
     search: string | undefined,
     view: 'summary',
+    filters?: MangaFilters,
   ): Promise<[MangaSummary[], number]>;
   async getMangasByPage(
     page: number,
@@ -102,6 +123,7 @@ export class MangaService {
     sortOrder: SortOrder,
     search?: string,
     view?: 'full',
+    filters?: MangaFilters,
   ): Promise<[MangaDetail[], number]>;
   async getMangasByPage(
     page: number,
@@ -110,8 +132,9 @@ export class MangaService {
     sortOrder: SortOrder,
     search?: string,
     view: MangaListView = 'full',
+    filters: MangaFilters = {},
   ) {
-    const where = buildWhere(search);
+    const where = buildWhere(search, filters);
     const orderBy = buildOrderBy(sortBy, sortOrder);
     if (view === 'summary') {
       return prisma.$transaction([
