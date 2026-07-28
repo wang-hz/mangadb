@@ -1,5 +1,6 @@
 import { QueryClientProvider } from '@tanstack/react-query'
 import { type PropsWithChildren, useCallback, useEffect, useState } from 'react'
+import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { AppPrivacyShield } from '@/components/AppPrivacyShield'
 import { NetworkStatusBanner } from '@/components/NetworkStatusBanner'
@@ -21,19 +22,21 @@ export function AppProviders({ children }: PropsWithChildren) {
   }, [queryClient])
 
   return (
-    <SafeAreaProvider>
-      <AppPrivacyShield>
-        <ReaderPreferencesProvider>
-          <QueryClientProvider client={queryClient}>
-            <SessionProvider onSessionCleanup={onSessionCleanup}>
-              <DownloadProvider>
-                {children}
-                <NetworkStatusBanner />
-              </DownloadProvider>
-            </SessionProvider>
-          </QueryClientProvider>
-        </ReaderPreferencesProvider>
-      </AppPrivacyShield>
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <AppPrivacyShield>
+          <ReaderPreferencesProvider>
+            <QueryClientProvider client={queryClient}>
+              <SessionProvider onSessionCleanup={onSessionCleanup}>
+                <DownloadProvider>
+                  {children}
+                  <NetworkStatusBanner />
+                </DownloadProvider>
+              </SessionProvider>
+            </QueryClientProvider>
+          </ReaderPreferencesProvider>
+        </AppPrivacyShield>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   )
 }
