@@ -18,12 +18,16 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ApiError } from '@/api/client'
 import { nextMangaPage, uniqueMangas } from '@/api/mangas'
 import { getMangasByTag, getTag } from '@/api/tags'
+import type { MangaSummary } from '@/api/types'
 import { MangaCard } from '@/components/MangaCard'
 import { PrimaryButton } from '@/components/PrimaryButton'
 import { ScreenHeader } from '@/components/ScreenHeader'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
+import { useAdaptiveGridAnchor } from '@/hooks/useAdaptiveGridAnchor'
+import { useRecentReading } from '@/hooks/useRecentReading'
 import { useSession } from '@/session/SessionContext'
 import { colors } from '@/theme/colors'
+import { adaptiveGridLayout } from '@/utils/grid'
 
 const GRID_PADDING = 12
 const GRID_GAP = 12
@@ -37,6 +41,11 @@ export default function TagMangasScreen() {
   const { api, auth, serverUrl } = useSession()
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebouncedValue(search.trim(), 350)
+  const recentReading = useRecentReading(serverUrl, auth?.user.uuid)
+  const grid = useMemo(() => adaptiveGridLayout(width, {
+    horizontalPadding: GRID_PADDING,
+    gap: GRID_GAP,
+  }), [width])
   const enabled = Boolean(api && auth && serverUrl && tagUuid)
 
   const tagQuery = useQuery({
@@ -58,7 +67,12 @@ export default function TagMangasScreen() {
 
   const mangas = useMemo(() => uniqueMangas(mangasQuery.data?.pages ?? []), [mangasQuery.data])
   const total = mangasQuery.data?.pages[0]?.total ?? 0
-  const cardWidth = (width - GRID_PADDING * 2 - GRID_GAP) / 2
+  const cardWidth = grid.cardWidth
+  const progressByManga = useMemo(
+    () => new Map(recentReading.allEntries.map(entry => [entry.manga.uuid, entry])),
+    [recentReading.allEntries],
+  )
+  const gridAnchor = useAdaptiveGridAnchor<MangaSummary>(grid.columns, mangas.length)
   const title = tagQuery.data?.name ?? fallbackName ?? '标签漫画'
   const subtitle = tagQuery.data?.tagType.name
   const openManga = useCallback((uuid: string) => {
@@ -92,6 +106,7 @@ export default function TagMangasScreen() {
                 ]}
                 data={mangas}
                 initialNumToRender={8}
+                key={gridAnchor.key}
                 keyboardDismissMode="on-drag"
                 keyExtractor={item => item.uuid}
                 ListEmptyComponent={(
@@ -136,13 +151,16 @@ export default function TagMangasScreen() {
                   </View>
                 )}
                 maxToRenderPerBatch={8}
-                numColumns={2}
+                numColumns={grid.columns}
                 onEndReached={() => {
                   if (mangasQuery.hasNextPage && !mangasQuery.isFetchingNextPage) {
                     void mangasQuery.fetchNextPage()
                   }
                 }}
                 onEndReachedThreshold={0.45}
+                onScrollToIndexFailed={gridAnchor.onScrollToIndexFailed}
+                onViewableItemsChanged={gridAnchor.onViewableItemsChanged}
+                ref={gridAnchor.listRef}
                 refreshControl={(
                   <RefreshControl
                     colors={[colors.brand]}
@@ -157,6 +175,7 @@ export default function TagMangasScreen() {
                     api={api!}
                     manga={item}
                     onPress={openManga}
+                    progress={progressByManga.get(item.uuid)}
                     serverUrl={serverUrl!}
                     userUuid={auth!.user.uuid}
                     width={cardWidth}
