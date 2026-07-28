@@ -35,13 +35,16 @@ describe('ScrollingReader preferences', () => {
             authorizationHeaders: () => ({ Authorization: 'Bearer token' }),
             url: (path: string) => `https://example.com${path}`,
           } as unknown as ApiClient}
+          completed={false}
           manga={manga}
           mode="scroll"
           onBack={jest.fn()}
           onModeChange={jest.fn()}
+          onMarkCompleted={jest.fn().mockResolvedValue(undefined)}
           onOpenSettings={jest.fn()}
           onPageChange={jest.fn()}
           onRefreshMetadata={jest.fn().mockResolvedValue(undefined)}
+          onReturnToDetail={jest.fn()}
           pageIndex={0}
           preferences={{ ...DEFAULT_READER_PREFERENCES, scrollGap: 16 }}
           settingsVisible={false}

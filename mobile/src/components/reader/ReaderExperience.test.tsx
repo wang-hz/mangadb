@@ -6,8 +6,10 @@ import { DEFAULT_READER_PREFERENCES } from '@/storage/readerPreferences'
 import { ReaderExperience } from './ReaderExperience'
 
 const mockSaveReadingProgress = jest.fn()
+const mockMarkMangaCompleted = jest.fn()
 
 jest.mock('@/storage/progress', () => ({
+  markMangaCompleted: (...args: unknown[]) => mockMarkMangaCompleted(...args),
   saveReadingProgress: (...args: unknown[]) => mockSaveReadingProgress(...args),
 }))
 
@@ -19,10 +21,11 @@ jest.mock('@/components/reader/PagedReader', () => {
   const React = require('react')
   const { Pressable, Text, View } = require('react-native')
   return {
-    PagedReader: ({ pageIndex, onPageChange, onModeChange }: {
+    PagedReader: ({ pageIndex, onPageChange, onModeChange, onMarkCompleted }: {
       pageIndex: number
       onPageChange: (pageIndex: number) => void
       onModeChange: (mode: 'scroll') => void
+      onMarkCompleted: () => Promise<void>
     }) => React.createElement(
       View,
       null,
@@ -34,6 +37,10 @@ jest.mock('@/components/reader/PagedReader', () => {
       React.createElement(Pressable, {
         accessibilityLabel: '切换到滚动模式',
         onPress: () => onModeChange('scroll'),
+      }),
+      React.createElement(Pressable, {
+        accessibilityLabel: '保存完成状态',
+        onPress: () => { void onMarkCompleted() },
       }),
     ),
   }
@@ -83,6 +90,7 @@ describe('ReaderExperience', () => {
       mode: 'paged',
       updatedAt: '2026-07-19T00:00:00.000Z',
     })
+    mockMarkMangaCompleted.mockResolvedValue({})
   })
 
   it('keeps the same position while switching between reader modes', async () => {
@@ -96,6 +104,7 @@ describe('ReaderExperience', () => {
         onBack={jest.fn()}
         onRefreshMetadata={jest.fn().mockResolvedValue(undefined)}
         onReaderReady={onReaderReady}
+        onReturnToDetail={jest.fn()}
         preferences={DEFAULT_READER_PREFERENCES}
         serverUrl="https://example.com"
         userUuid="user-1"
@@ -173,6 +182,7 @@ describe('ReaderExperience', () => {
         onBack={jest.fn()}
         onRefreshMetadata={jest.fn().mockResolvedValue(undefined)}
         onReaderReady={jest.fn()}
+        onReturnToDetail={jest.fn()}
         preferences={{ ...DEFAULT_READER_PREFERENCES, keepAwake: true }}
         serverUrl="https://example.com"
         userUuid="user-1"
@@ -190,11 +200,40 @@ describe('ReaderExperience', () => {
         onBack={jest.fn()}
         onRefreshMetadata={jest.fn().mockResolvedValue(undefined)}
         onReaderReady={jest.fn()}
+        onReturnToDetail={jest.fn()}
         preferences={DEFAULT_READER_PREFERENCES}
         serverUrl="https://example.com"
         userUuid="user-1"
       />,
     )
     expect(useKeepAwake).not.toHaveBeenCalled()
+  })
+
+  it('persists an explicit completion action with the current reader mode', async () => {
+    render(
+      <ReaderExperience
+        api={{} as ApiClient}
+        initialMode="paged"
+        initialPageIndex={9}
+        manga={manga}
+        onBack={jest.fn()}
+        onRefreshMetadata={jest.fn().mockResolvedValue(undefined)}
+        onReaderReady={jest.fn()}
+        onReturnToDetail={jest.fn()}
+        preferences={DEFAULT_READER_PREFERENCES}
+        serverUrl="https://example.com"
+        userUuid="user-1"
+      />,
+    )
+
+    fireEvent.press(screen.getByLabelText('保存完成状态'))
+
+    await waitFor(() => expect(mockMarkMangaCompleted).toHaveBeenCalledWith(
+      'https://example.com',
+      'user-1',
+      manga,
+      10,
+      'paged',
+    ))
   })
 })

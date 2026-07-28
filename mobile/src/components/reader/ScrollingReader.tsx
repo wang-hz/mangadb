@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { ApiClient } from '@/api/client'
 import type { MangaDetail } from '@/api/types'
 import { useReaderPagePrefetch } from '@/components/reader/prefetch'
+import { ReaderCompletionPanel } from '@/components/reader/ReaderCompletionPanel'
 import { ReaderTopBar } from '@/components/reader/ReaderTopBar'
 import {
   reportReaderTelemetry,
@@ -45,6 +46,9 @@ interface ScrollingReaderProps {
   settingsVisible: boolean
   onOpenSettings: () => void
   localPageUris?: readonly string[]
+  completed: boolean
+  onMarkCompleted: () => Promise<void>
+  onReturnToDetail: () => void
 }
 
 export function ScrollingReader({
@@ -62,6 +66,9 @@ export function ScrollingReader({
   settingsVisible,
   onOpenSettings,
   localPageUris,
+  completed,
+  onMarkCompleted,
+  onReturnToDetail,
 }: ScrollingReaderProps) {
   const { width, height } = useWindowDimensions()
   const insets = useSafeAreaInsets()
@@ -173,7 +180,22 @@ export function ScrollingReader({
         initialNumToRender={3}
         initialScrollIndex={pageIndex}
         keyExtractor={(_, index) => String(index)}
-        ListFooterComponent={<View style={{ height: Math.max(24, insets.bottom + 12) }} />}
+        ListFooterComponent={(
+          <View style={[
+            styles.completionFooter,
+            { paddingBottom: Math.max(24, insets.bottom + 12) },
+          ]}>
+            <ReaderCompletionPanel
+              completed={completed}
+              onMarkCompleted={onMarkCompleted}
+              onReread={() => {
+                onPageChange(0)
+                listRef.current?.scrollToIndex({ index: 0, animated: true })
+              }}
+              onReturnToDetail={onReturnToDetail}
+            />
+          </View>
+        )}
         maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
         maxToRenderPerBatch={3}
         onScrollBeginDrag={() => {
@@ -392,6 +414,10 @@ const styles = StyleSheet.create({
   loading: {
     position: 'absolute',
     alignSelf: 'center',
+  },
+  completionFooter: {
+    padding: 14,
+    backgroundColor: colors.reader,
   },
   scrollFailure: {
     alignItems: 'center',

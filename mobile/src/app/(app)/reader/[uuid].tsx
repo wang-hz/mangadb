@@ -71,6 +71,12 @@ export default function ReaderScreen() {
               <ReaderContent
                 localPageUris={localPageUris ?? undefined}
                 manga={manga}
+                onReturnToDetail={() => {
+                  router.replace({
+                    pathname: '/(app)/manga/[uuid]',
+                    params: { uuid: manga.uuid },
+                  })
+                }}
                 onRefreshMetadata={refreshMetadata}
                 requestedMode={firstParam(params.mode)}
                 requestedPage={firstParam(params.page)}
@@ -108,12 +114,14 @@ function ReaderContent({
   requestedPage,
   requestedMode,
   localPageUris,
+  onReturnToDetail,
 }: {
   manga: MangaDetail
   onRefreshMetadata: () => Promise<void>
   requestedPage?: string
   requestedMode?: string
   localPageUris?: readonly string[]
+  onReturnToDetail: () => void
 }) {
   const { api, auth, serverUrl } = useSession()
   const { preferences, status: preferencesStatus } = useReaderPreferences()
@@ -182,6 +190,7 @@ function ReaderContent({
     <ReaderExperience
       api={api!}
       initialMode={initialMode}
+      initialCompleted={progress?.state === 'completed'}
       initialPageIndex={clampPageIndex(initialPageIndex, manga.pages.length)}
       key={JSON.stringify([
         serverUrl,
@@ -195,6 +204,7 @@ function ReaderContent({
       onBack={goBackOrLibrary}
       onRefreshMetadata={onRefreshMetadata}
       onReaderReady={markOverrideConsumed}
+      onReturnToDetail={onReturnToDetail}
       preferences={preferences}
       serverUrl={serverUrl!}
       userUuid={auth!.user.uuid}

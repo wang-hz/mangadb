@@ -21,6 +21,7 @@ import type { ApiClient } from '@/api/client'
 import type { MangaDetail } from '@/api/types'
 import { PrimaryButton } from '@/components/PrimaryButton'
 import { useReaderPagePrefetch } from '@/components/reader/prefetch'
+import { ReaderCompletionPanel } from '@/components/reader/ReaderCompletionPanel'
 import { ReaderTopBar } from '@/components/reader/ReaderTopBar'
 import {
   reportReaderTelemetry,
@@ -52,6 +53,9 @@ interface PagedReaderProps {
   settingsVisible: boolean
   onOpenSettings: () => void
   localPageUris?: readonly string[]
+  completed: boolean
+  onMarkCompleted: () => Promise<void>
+  onReturnToDetail: () => void
 }
 
 export function PagedReader({
@@ -69,6 +73,9 @@ export function PagedReader({
   settingsVisible,
   onOpenSettings,
   localPageUris,
+  completed,
+  onMarkCompleted,
+  onReturnToDetail,
 }: PagedReaderProps) {
   const { width, height } = useWindowDimensions()
   const insets = useSafeAreaInsets()
@@ -240,6 +247,24 @@ export function PagedReader({
                   <Ionicons color="#ffffff" name="chevron-forward" size={25} />
                 </Pressable>
               </View>
+              {pageIndex === manga.pages.length - 1
+                ? (
+                    <View style={[
+                      styles.completionPanel,
+                      { bottom: Math.max(insets.bottom, 10) + 70 },
+                    ]}>
+                      <ReaderCompletionPanel
+                        completed={completed}
+                        onMarkCompleted={onMarkCompleted}
+                        onReread={() => {
+                          onPageChange(0)
+                          scrollToPage(0)
+                        }}
+                        onReturnToDetail={onReturnToDetail}
+                      />
+                    </View>
+                  )
+                : null}
             </>
           )
         : null}
@@ -472,6 +497,11 @@ const styles = StyleSheet.create({
   pageLoading: {
     position: 'absolute',
     alignSelf: 'center',
+  },
+  completionPanel: {
+    position: 'absolute',
+    right: 14,
+    left: 14,
   },
   pageFailure: {
     alignItems: 'center',
