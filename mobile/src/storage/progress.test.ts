@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import type { MangaSummary } from '@/api/types'
 import {
   listRecentReading,
+  listReadingProgress,
   loadReadingProgress,
   markMangaCompleted,
   markMangaUnread,
@@ -196,6 +197,9 @@ describe('reading progress storage', () => {
     await removeFromRecentReading('server', 'user', manga.uuid)
 
     await expect(listRecentReading('server', 'user')).resolves.toEqual([])
+    await expect(listReadingProgress('server', 'user')).resolves.toMatchObject([
+      { manga: { uuid: manga.uuid }, pageIndex: 3, hiddenFromRecent: true },
+    ])
     await expect(loadReadingProgress('server', 'user', manga.uuid, 10))
       .resolves.toMatchObject({ pageIndex: 3, mode: 'scroll' })
   })

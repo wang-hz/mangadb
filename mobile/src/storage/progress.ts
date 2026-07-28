@@ -18,6 +18,7 @@ export interface ReadingProgress {
 export interface RecentReadingEntry extends ReadingProgress {
   manga: MangaSummary
   pageCount: number
+  hiddenFromRecent: boolean
 }
 
 interface ProgressIndexV1 {
@@ -83,6 +84,7 @@ export async function saveReadingProgress(
         ...progress,
         manga: cloneMangaSummary(manga),
         pageCount: Math.max(0, Math.trunc(pageCount)),
+        hiddenFromRecent: false,
       }
       await saveProgressIndex(serverUrl, userUuid, index)
     }
@@ -91,6 +93,22 @@ export async function saveReadingProgress(
 }
 
 export async function listRecentReading(
+  serverUrl: string,
+  userUuid: string,
+): Promise<RecentReadingEntry[]> {
+  const identity = progressIdentity(serverUrl, userUuid)
+  await identityWriteQueues.get(identity)?.catch(() => {})
+  const index = await loadProgressIndex(serverUrl, userUuid)
+  return Object.values(index.entries)
+    .filter(entry => !entry.hiddenFromRecent)
+    .map(entry => ({
+      ...entry,
+      manga: cloneMangaSummary(entry.manga),
+    }))
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+}
+
+export async function listReadingProgress(
   serverUrl: string,
   userUuid: string,
 ): Promise<RecentReadingEntry[]> {
@@ -123,6 +141,7 @@ export async function markMangaCompleted(
       mode,
       state: 'completed',
       updatedAt: now,
+      hiddenFromRecent: false,
     }
     await AsyncStorage.setItem(
       progressKey(serverUrl, userUuid, manga.uuid),
@@ -156,7 +175,9 @@ export async function removeFromRecentReading(
   const identity = progressIdentity(serverUrl, userUuid)
   await enqueueIdentityWrite(identity, async () => {
     const index = await loadProgressIndex(serverUrl, userUuid)
-    delete index.entries[mangaUuid]
+    const entry = index.entries[mangaUuid]
+    if (!entry) return
+    index.entries[mangaUuid] = { ...entry, hiddenFromRecent: true }
     await saveProgressIndex(serverUrl, userUuid, index)
   })
 }
@@ -212,7 +233,10 @@ function normalizeProgressIndex(value: unknown): ProgressIndexV1 {
   const entries: Record<string, RecentReadingEntry> = {}
   for (const [mangaUuid, entry] of Object.entries(value.entries)) {
     if (isRecentReadingEntry(entry) && entry.manga.uuid === mangaUuid) {
-      entries[mangaUuid] = entry
+      entries[mangaUuid] = {
+        ...entry,
+        hiddenFromRecent: entry.hiddenFromRecent ?? false,
+      }
     }
   }
   return { schemaVersion: 1, entries }
@@ -250,6 +274,9 @@ function parseReadingProgress(stored: string | null): ReadingProgress | null {
 function isRecentReadingEntry(value: unknown): value is RecentReadingEntry {
   if (!isRecord(value) || !isMangaSummary(value.manga)) return false
   if (!Number.isInteger(value.pageCount) || Number(value.pageCount) < 0) return false
+  if (value.hiddenFromRecent !== undefined && typeof value.hiddenFromRecent !== 'boolean') {
+    return false
+  }
   return parseReadingProgress(JSON.stringify(value)) !== null
 }
 

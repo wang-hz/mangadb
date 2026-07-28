@@ -19,6 +19,7 @@ const entry: RecentReadingEntry = {
   pageIndex: 3,
   mode: 'paged',
   state: 'reading',
+  hiddenFromRecent: false,
   updatedAt: '2026-07-28T12:00:00.000Z',
 }
 
