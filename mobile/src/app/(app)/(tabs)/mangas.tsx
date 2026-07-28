@@ -19,8 +19,11 @@ import { getMangas, nextMangaPage, uniqueMangas } from '@/api/mangas'
 import type { MangaSortBy, MangaSummary, SortOrder } from '@/api/types'
 import { MangaCard } from '@/components/MangaCard'
 import { PrimaryButton } from '@/components/PrimaryButton'
+import { RecentReadingSection } from '@/components/RecentReadingSection'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
+import { useRecentReading } from '@/hooks/useRecentReading'
 import { useSession } from '@/session/SessionContext'
+import type { RecentReadingEntry } from '@/storage/progress'
 import { colors } from '@/theme/colors'
 
 const GRID_PADDING = 12
@@ -39,6 +42,7 @@ export default function MangasScreen() {
   const [sortBy, setSortBy] = useState<MangaSortBy>('updateAt')
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
   const debouncedSearch = useDebouncedValue(search.trim(), 350)
+  const recentReading = useRecentReading(serverUrl, auth?.user.uuid)
 
   const query = useInfiniteQuery({
     queryKey: [
@@ -66,6 +70,17 @@ export default function MangasScreen() {
   const cardWidth = (width - GRID_PADDING * 2 - GRID_GAP) / 2
   const openManga = useCallback((uuid: string) => {
     router.push({ pathname: '/(app)/manga/[uuid]', params: { uuid } })
+  }, [])
+  const continueReading = useCallback((entry: RecentReadingEntry) => {
+    router.push({
+      pathname: '/(app)/reader/[uuid]',
+      params: {
+        uuid: entry.manga.uuid,
+        title: entry.manga.displayTitle || entry.manga.originalTitle,
+        page: String(entry.pageIndex),
+        mode: entry.mode,
+      },
+    })
   }, [])
 
   const loadMore = () => {
@@ -109,13 +124,18 @@ export default function MangasScreen() {
             : null}
       ListHeaderComponent={(
         <LibraryHeader
+          api={api!}
           onChangeSearch={setSearch}
           onChangeSort={setSortBy}
           onToggleOrder={() => setSortOrder(order => order === 'desc' ? 'asc' : 'desc')}
+          onContinueReading={continueReading}
+          recentEntries={recentReading.entries}
           search={search}
           sortBy={sortBy}
           sortOrder={sortOrder}
           total={total}
+          serverUrl={serverUrl!}
+          userUuid={auth!.user.uuid}
         />
       )}
       maxToRenderPerBatch={8}
@@ -148,26 +168,43 @@ export default function MangasScreen() {
 }
 
 interface LibraryHeaderProps {
+  api: Parameters<typeof RecentReadingSection>[0]['api']
   search: string
   sortBy: MangaSortBy
   sortOrder: SortOrder
   total: number
+  recentEntries: readonly RecentReadingEntry[]
+  serverUrl: string
+  userUuid: string
   onChangeSearch: (value: string) => void
   onChangeSort: (value: MangaSortBy) => void
   onToggleOrder: () => void
+  onContinueReading: (entry: RecentReadingEntry) => void
 }
 
 function LibraryHeader({
+  api,
   search,
   sortBy,
   sortOrder,
   total,
+  recentEntries,
+  serverUrl,
+  userUuid,
   onChangeSearch,
   onChangeSort,
   onToggleOrder,
+  onContinueReading,
 }: LibraryHeaderProps) {
   return (
     <View style={styles.header}>
+      <RecentReadingSection
+        api={api}
+        entries={recentEntries}
+        onContinue={onContinueReading}
+        serverUrl={serverUrl}
+        userUuid={userUuid}
+      />
       <View style={styles.searchBox}>
         <Ionicons color={colors.muted} name="search" size={20} />
         <TextInput

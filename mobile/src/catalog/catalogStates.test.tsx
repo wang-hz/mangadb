@@ -22,6 +22,15 @@ jest.mock('@/hooks/useDebouncedValue', () => ({
   useDebouncedValue: (value: unknown) => value,
 }))
 
+jest.mock('@/hooks/useRecentReading', () => ({
+  useRecentReading: () => ({
+    entries: [],
+    status: 'ready',
+    error: null,
+    refresh: jest.fn(),
+  }),
+}))
+
 jest.mock('@/session/SessionContext', () => ({
   useSession: () => ({
     api: {},
