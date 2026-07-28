@@ -52,6 +52,39 @@ describe('CatalogFilterSheet', () => {
       publishYearTo: 2028,
     }))
   })
+
+  it('clears filters while retaining search and sort continuity', () => {
+    const onApply = jest.fn()
+    render(
+      <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+        <CatalogFilterSheet
+          filters={{
+            ...DEFAULT_CATALOG_FILTERS,
+            search: '保留的搜索',
+            sortBy: 'publishDate',
+            sortOrder: 'asc',
+            tagUuids: ['tag-1'],
+            favoriteOnly: true,
+          }}
+          onApply={onApply}
+          onClose={jest.fn()}
+          tags={[tag]}
+          tagsLoading={false}
+          visible
+        />
+      </SafeAreaProvider>,
+    )
+
+    fireEvent.press(screen.getByText('清除筛选'))
+    fireEvent.press(screen.getByText('应用筛选'))
+    expect(onApply).toHaveBeenCalledWith({
+      ...DEFAULT_CATALOG_FILTERS,
+      search: '保留的搜索',
+      sortBy: 'publishDate',
+      sortOrder: 'asc',
+      tagUuids: [],
+    })
+  })
 })
 
 const safeAreaMetrics = {
