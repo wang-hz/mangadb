@@ -85,6 +85,7 @@ describe('ReaderScreen offline launch', () => {
         scrollGap: 0,
         keepAwake: false,
         controlsAutoHideMs: 3000,
+        readerDimLevel: 0,
       },
       updatePreferences: jest.fn(),
     })

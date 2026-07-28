@@ -23,6 +23,7 @@ describe('reader preferences storage', () => {
       scrollGap: 16 as const,
       controlsAutoHideMs: null,
       keepAwake: true,
+      readerDimLevel: 0.4 as const,
     }
     jest.mocked(AsyncStorage.getItem).mockResolvedValue(JSON.stringify(preferences))
 

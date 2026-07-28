@@ -114,6 +114,23 @@ export function ReaderPreferencesControls({
         />
       </PreferenceRow>
 
+      <PreferenceRow label="阅读画面亮度" palette={palette}>
+        <SegmentedControl
+          disabled={disabled}
+          onChange={value => { void update('readerDimLevel', value) }}
+          options={[
+            { label: '跟随系统', value: 0 },
+            { label: '柔和', value: 0.2 },
+            { label: '夜间', value: 0.4 },
+          ]}
+          palette={palette}
+          value={preferences.readerDimLevel}
+        />
+        <Text style={[styles.help, { color: palette.muted }]}>
+          仅调暗阅读画面，不修改设备系统亮度
+        </Text>
+      </PreferenceRow>
+
       <View style={styles.switchRow}>
         <View style={styles.switchCopy}>
           <Text style={[styles.label, { color: palette.text }]}>阅读时保持屏幕常亮</Text>

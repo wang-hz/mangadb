@@ -20,6 +20,7 @@ import type { MangaDetail } from '@/api/types'
 import { PrimaryButton } from '@/components/PrimaryButton'
 import { useReaderPagePrefetch } from '@/components/reader/prefetch'
 import { ReaderCompletionPanel } from '@/components/reader/ReaderCompletionPanel'
+import { ReaderDimmer } from '@/components/reader/ReaderDimmer'
 import { ReaderTopBar } from '@/components/reader/ReaderTopBar'
 import { ZoomableReaderImage } from '@/components/reader/ZoomableReaderImage'
 import {
@@ -207,6 +208,7 @@ export function PagedReader({
         showsHorizontalScrollIndicator={false}
         windowSize={3}
       />
+      <ReaderDimmer level={preferences.readerDimLevel} />
 
       {controlsVisible
         ? (

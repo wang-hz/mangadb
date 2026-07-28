@@ -16,6 +16,7 @@ import type { ApiClient } from '@/api/client'
 import type { MangaDetail } from '@/api/types'
 import { useReaderPagePrefetch } from '@/components/reader/prefetch'
 import { ReaderCompletionPanel } from '@/components/reader/ReaderCompletionPanel'
+import { ReaderDimmer } from '@/components/reader/ReaderDimmer'
 import { ReaderTopBar } from '@/components/reader/ReaderTopBar'
 import { ZoomableReaderImage } from '@/components/reader/ZoomableReaderImage'
 import {
@@ -253,6 +254,7 @@ export function ScrollingReader({
         showsVerticalScrollIndicator={false}
         windowSize={5}
       />
+      <ReaderDimmer level={preferences.readerDimLevel} />
 
       {controlsVisible
         ? (

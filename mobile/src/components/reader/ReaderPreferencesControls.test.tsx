@@ -38,8 +38,11 @@ describe('ReaderPreferencesControls', () => {
     fireEvent.press(screen.getByLabelText('5 秒'))
     await waitFor(() => expect(screen.getByLabelText('5 秒').props.accessibilityState.checked).toBe(true))
     await waitFor(() => expect(AsyncStorage.setItem).toHaveBeenCalledTimes(5))
-    fireEvent(screen.getByLabelText('阅读时保持屏幕常亮'), 'valueChange', true)
+    fireEvent.press(screen.getByLabelText('夜间'))
+    await waitFor(() => expect(screen.getByLabelText('夜间').props.accessibilityState.checked).toBe(true))
     await waitFor(() => expect(AsyncStorage.setItem).toHaveBeenCalledTimes(6))
+    fireEvent(screen.getByLabelText('阅读时保持屏幕常亮'), 'valueChange', true)
+    await waitFor(() => expect(AsyncStorage.setItem).toHaveBeenCalledTimes(7))
 
     const saved = JSON.parse(jest.mocked(AsyncStorage.setItem).mock.calls.at(-1)![1])
     expect(saved).toMatchObject({
@@ -48,6 +51,7 @@ describe('ReaderPreferencesControls', () => {
       pagedFit: 'cover',
       scrollGap: 16,
       controlsAutoHideMs: 5000,
+      readerDimLevel: 0.4,
       keepAwake: true,
     })
   })
