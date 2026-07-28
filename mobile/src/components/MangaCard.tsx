@@ -17,6 +17,7 @@ interface MangaCardProps {
   width: number
   onPress?: (uuid: string) => void
   progress?: RecentReadingEntry | null
+  favorite?: boolean
 }
 
 export const MangaCard = memo(function MangaCard({
@@ -27,6 +28,7 @@ export const MangaCard = memo(function MangaCard({
   width,
   onPress,
   progress,
+  favorite = false,
 }: MangaCardProps) {
   const downloads = useDownloads()
   const [imageFailed, setImageFailed] = useState(false)
@@ -67,6 +69,13 @@ export const MangaCard = memo(function MangaCard({
       style={({ pressed }) => [styles.card, { width }, pressed && onPress ? styles.pressed : null]}
     >
       <View style={styles.coverContainer}>
+        {favorite
+          ? (
+              <View accessibilityLabel="已收藏" style={styles.favoriteBadge}>
+                <Ionicons color="#ffffff" name="heart" size={14} />
+              </View>
+            )
+          : null}
         {downloadBadge
           ? (
               <View style={[
@@ -163,6 +172,18 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 999,
     backgroundColor: 'rgba(0,0,0,0.76)',
+  },
+  favoriteBadge: {
+    position: 'absolute',
+    zIndex: 1,
+    top: 7,
+    left: 7,
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 14,
+    backgroundColor: 'rgba(190,24,93,0.9)',
   },
   downloadBadgeError: {
     backgroundColor: 'rgba(185,28,28,0.9)',

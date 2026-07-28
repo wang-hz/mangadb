@@ -5,6 +5,7 @@ import { router, useFocusEffect, useLocalSearchParams } from 'expo-router'
 import { useCallback, useEffect, useState } from 'react'
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -24,6 +25,7 @@ import { ReadingProgressControls } from '@/components/ReadingProgressControls'
 import { ScreenHeader } from '@/components/ScreenHeader'
 import { mangaPageImageSource } from '@/media/images'
 import { useSession } from '@/session/SessionContext'
+import { useFavorites } from '@/hooks/useFavorites'
 import { loadReadingProgress, type ReadingProgress } from '@/storage/progress'
 import { colors } from '@/theme/colors'
 import { validCoverIndex } from '@/utils/manga'
@@ -118,6 +120,7 @@ function MangaMetadata({
   wide: boolean
 }) {
   const { api, auth, serverUrl } = useSession()
+  const favorites = useFavorites(serverUrl, auth?.user.uuid)
   const [coverFailed, setCoverFailed] = useState(false)
   const progressIdentity = [serverUrl, auth?.user.uuid, manga.uuid, manga.pages.length].join(':')
   const [loadedProgress, setLoadedProgress] = useState<{
@@ -197,6 +200,32 @@ function MangaMetadata({
           <MetadataLine icon="documents-outline" label="页数" value={`${manga.pages.length} 页`} />
           <MetadataLine icon="refresh-outline" label="更新" value={displayDate(manga.updateAt)} />
         </View>
+      </View>
+
+      <View style={styles.section}>
+        <Pressable
+          accessibilityLabel={favorites.uuids.has(manga.uuid) ? '取消收藏' : '添加收藏'}
+          accessibilityRole="button"
+          onPress={() => {
+            const favorite = !favorites.uuids.has(manga.uuid)
+            void favorites.setFavorite(manga.uuid, favorite).catch(() => {
+              Alert.alert('无法更新收藏', '请检查本机存储后重试。')
+            })
+          }}
+          style={styles.favoriteButton}
+        >
+          <Ionicons
+            color={favorites.uuids.has(manga.uuid) ? '#be185d' : colors.muted}
+            name={favorites.uuids.has(manga.uuid) ? 'heart' : 'heart-outline'}
+            size={20}
+          />
+          <Text style={[
+            styles.favoriteButtonText,
+            favorites.uuids.has(manga.uuid) ? styles.favoriteButtonTextActive : null,
+          ]}>
+            {favorites.uuids.has(manga.uuid) ? '已收藏' : '收藏'}
+          </Text>
+        </Pressable>
       </View>
 
       <View style={styles.section}>
@@ -403,6 +432,25 @@ const styles = StyleSheet.create({
     padding: 15,
     borderRadius: 14,
     backgroundColor: colors.surface,
+  },
+  favoriteButton: {
+    minHeight: 46,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    backgroundColor: colors.surface,
+  },
+  favoriteButtonText: {
+    color: colors.muted,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  favoriteButtonTextActive: {
+    color: '#be185d',
   },
   sectionTitle: {
     color: colors.text,

@@ -21,6 +21,7 @@ import { MangaCard } from '@/components/MangaCard'
 import { PrimaryButton } from '@/components/PrimaryButton'
 import { RecentReadingSection } from '@/components/RecentReadingSection'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
+import { useFavorites } from '@/hooks/useFavorites'
 import { useAdaptiveGridAnchor } from '@/hooks/useAdaptiveGridAnchor'
 import { useRecentReading } from '@/hooks/useRecentReading'
 import { useSession } from '@/session/SessionContext'
@@ -45,6 +46,7 @@ export default function MangasScreen() {
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
   const debouncedSearch = useDebouncedValue(search.trim(), 350)
   const recentReading = useRecentReading(serverUrl, auth?.user.uuid)
+  const favorites = useFavorites(serverUrl, auth?.user.uuid)
   const grid = useMemo(() => adaptiveGridLayout(width, {
     horizontalPadding: GRID_PADDING,
     gap: GRID_GAP,
@@ -168,6 +170,7 @@ export default function MangasScreen() {
       renderItem={({ item }) => (
         <MangaCard
           api={api!}
+          favorite={favorites.uuids.has(item.uuid)}
           manga={item}
           onPress={openManga}
           progress={progressByManga.get(item.uuid)}

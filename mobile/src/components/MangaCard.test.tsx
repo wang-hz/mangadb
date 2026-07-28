@@ -80,13 +80,21 @@ describe('MangaCard states', () => {
     }))
     expect(screen.getByText('已完成')).toBeOnTheScreen()
   })
+
+  it('shows local favorite state', () => {
+    render(renderCardElement(undefined, true))
+    expect(screen.getByLabelText('已收藏')).toBeOnTheScreen()
+  })
 })
 
 function renderCard(progress?: Parameters<typeof MangaCard>[0]['progress']) {
   return render(renderCardElement(progress))
 }
 
-function renderCardElement(progress?: Parameters<typeof MangaCard>[0]['progress']) {
+function renderCardElement(
+  progress?: Parameters<typeof MangaCard>[0]['progress'],
+  favorite = false,
+) {
   return (
     <MangaCard
       api={{
@@ -94,6 +102,7 @@ function renderCardElement(progress?: Parameters<typeof MangaCard>[0]['progress'
         authorizationHeaders: () => ({}),
       } as unknown as ApiClient}
       manga={manga}
+      favorite={favorite}
       progress={progress}
       serverUrl="https://example.com"
       userUuid="user-1"
