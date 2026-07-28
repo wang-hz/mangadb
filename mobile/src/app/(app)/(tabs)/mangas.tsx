@@ -352,6 +352,7 @@ const styles = StyleSheet.create({
   sortOptions: {
     flex: 1,
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 6,
   },
   sortChip: {

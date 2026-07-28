@@ -59,7 +59,7 @@ The server runs at `http://localhost:3000` by default. On first launch you will 
 
 ## Expo Mobile App
 
-The independent client under `mobile/` targets Android and iPhone with the application identifier `top.wanghaizhou.mangadb`. Its UI is Simplified Chinese and supports server setup, login, manga and tag browsing, manga details, paged and continuous-scroll readers, identity-isolated offline downloads, per-account local reading positions, settings, and logout.
+The independent client under `mobile/` targets Android phones/tablets and iPhone/iPad with the application identifier `top.wanghaizhou.mangadb`. Its UI is Simplified Chinese and supports server setup, login, manga and tag browsing, manga details, paged and continuous-scroll readers, identity-isolated offline downloads, per-account local reading positions, settings, and logout.
 
 The client does not include administration, favorites, a history list, or cross-device progress synchronization.
 

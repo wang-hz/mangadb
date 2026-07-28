@@ -241,6 +241,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   content: {
+    width: '100%',
+    maxWidth: 760,
+    alignSelf: 'center',
     flexGrow: 1,
     gap: 10,
     padding: 12,
@@ -266,6 +269,7 @@ const styles = StyleSheet.create({
   },
   filters: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 7,
   },
   filter: {

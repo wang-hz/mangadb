@@ -10,6 +10,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -31,6 +32,7 @@ export default function MangaDetailScreen() {
   const params = useLocalSearchParams<{ uuid?: string | string[] }>()
   const mangaUuid = firstParam(params.uuid)
   const insets = useSafeAreaInsets()
+  const { width } = useWindowDimensions()
   const { api, auth, serverUrl } = useSession()
   const localDownload = useLocalDownload(mangaUuid)
   const query = useQuery({
@@ -74,6 +76,7 @@ export default function MangaDetailScreen() {
                     ? localDownload.pageUris ?? undefined
                     : undefined}
                   manga={manga}
+                  wide={width >= 700}
                 />
               </ScrollView>
             )
@@ -108,9 +111,11 @@ export default function MangaDetailScreen() {
 function MangaMetadata({
   manga,
   localPageUris,
+  wide,
 }: {
   manga: MangaDetail
   localPageUris?: readonly string[]
+  wide: boolean
 }) {
   const { api, auth, serverUrl } = useSession()
   const [coverFailed, setCoverFailed] = useState(false)
@@ -163,7 +168,7 @@ function MangaMetadata({
   return (
     <>
       <View style={styles.hero}>
-        <View style={styles.coverFrame}>
+        <View style={[styles.coverFrame, wide ? styles.coverFrameWide : null]}>
           {coverSource && !coverFailed
             ? (
                 <Image
@@ -328,6 +333,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.header,
   },
   content: {
+    width: '100%',
+    maxWidth: 920,
+    alignSelf: 'center',
     gap: 18,
     padding: 16,
   },
@@ -342,6 +350,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderRadius: 12,
     backgroundColor: '#e9edf3',
+  },
+  coverFrameWide: {
+    width: 180,
   },
   cover: {
     width: '100%',

@@ -25,7 +25,7 @@ const config: ExpoConfig = {
   ios: {
     bundleIdentifier: 'top.wanghaizhou.mangadb',
     buildNumber,
-    supportsTablet: false,
+    supportsTablet: true,
     config: {
       usesNonExemptEncryption: false,
     },

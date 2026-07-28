@@ -274,6 +274,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   content: {
+    width: '100%',
+    maxWidth: 720,
+    alignSelf: 'center',
     gap: 10,
     padding: 16,
     paddingBottom: 32,
