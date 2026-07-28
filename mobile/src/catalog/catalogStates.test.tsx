@@ -16,6 +16,7 @@ jest.mock('@tanstack/react-query', () => ({
 
 jest.mock('expo-router', () => ({
   router: { push: jest.fn() },
+  useFocusEffect: (callback: () => void) => callback(),
 }))
 
 jest.mock('@/hooks/useDebouncedValue', () => ({
@@ -30,6 +31,42 @@ jest.mock('@/hooks/useRecentReading', () => ({
     error: null,
     refresh: jest.fn(),
   }),
+}))
+
+jest.mock('@/hooks/useFavorites', () => ({
+  useFavorites: () => ({
+    uuids: new Set(),
+    refresh: jest.fn(),
+    setFavorite: jest.fn(),
+  }),
+}))
+
+jest.mock('@/hooks/useCatalogFilters', () => ({
+  useCatalogFilters: () => {
+    const React = require('react')
+    const [filters, updateFilters] = React.useState({
+      search: '',
+      sortBy: 'updateAt',
+      sortOrder: 'desc',
+      tagUuids: [],
+      publishYearFrom: null,
+      publishYearTo: null,
+      readingState: 'all',
+      favoriteOnly: false,
+      downloadedOnly: false,
+    })
+    return { filters, loaded: true, updateFilters }
+  },
+}))
+
+jest.mock('@/downloads/DownloadContext', () => ({
+  useDownloads: () => ({
+    snapshot: { manifests: [] },
+  }),
+}))
+
+jest.mock('@/components/catalog/CatalogFilterSheet', () => ({
+  CatalogFilterSheet: () => null,
 }))
 
 jest.mock('@/session/SessionContext', () => ({

@@ -1,10 +1,37 @@
 import type { ApiClient } from './client'
-import { getAllTagTypes, getMangasByTag, getTags, nextTagPage, uniqueTags } from './tags'
+import {
+  getAllTags,
+  getAllTagTypes,
+  getMangasByTag,
+  getTags,
+  nextTagPage,
+  uniqueTags,
+} from './tags'
 import type { PageResult, Tag } from './types'
 
 describe('tag API', () => {
   const request = jest.fn()
   const client = { request } as unknown as ApiClient
+
+  it('loads all tag pages without duplicates', async () => {
+    request
+      .mockResolvedValueOnce({
+        items: [{ uuid: 'tag-1' }, { uuid: 'tag-2' }],
+        total: 3,
+        page: 1,
+        limit: 2,
+      })
+      .mockResolvedValueOnce({
+        items: [{ uuid: 'tag-2' }, { uuid: 'tag-3' }],
+        total: 3,
+        page: 2,
+        limit: 2,
+      })
+
+    const tags = await getAllTags(client)
+    expect(tags.map(tag => tag.uuid)).toEqual(['tag-1', 'tag-2', 'tag-3'])
+    expect(request).toHaveBeenCalledTimes(2)
+  })
 
   it('encodes tag search and type filters', async () => {
     request.mockResolvedValue({ items: [], total: 0, page: 1, limit: 30 })

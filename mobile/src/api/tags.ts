@@ -37,6 +37,23 @@ export function getTags(
   return client.request<PageResult<Tag>>(`/api/mangadb/tags?${query}`, { signal })
 }
 
+export async function getAllTags(client: ApiClient, signal?: AbortSignal): Promise<Tag[]> {
+  const tags: Tag[] = []
+  const seen = new Set<string>()
+  let page = 1
+  while (true) {
+    const response = await getTags(client, { page, sortBy: 'updateAt', sortOrder: 'desc' }, signal)
+    for (const tag of response.items) {
+      if (!seen.has(tag.uuid)) {
+        seen.add(tag.uuid)
+        tags.push(tag)
+      }
+    }
+    if (response.items.length < response.limit || seen.size >= response.total) return tags
+    page += 1
+  }
+}
+
 export async function getAllTagTypes(client: ApiClient, signal?: AbortSignal): Promise<TagType[]> {
   const tagTypes: TagType[] = []
   const seen = new Set<string>()
