@@ -7,6 +7,7 @@ import type { ApiClient } from '@/api/client'
 import { useDownloads } from '@/downloads/DownloadContext'
 import { mangaPageImageSource } from '@/media/images'
 import { colors } from '@/theme/colors'
+import type { RecentReadingEntry } from '@/storage/progress'
 
 interface MangaCardProps {
   manga: MangaSummary
@@ -15,6 +16,7 @@ interface MangaCardProps {
   userUuid: string
   width: number
   onPress?: (uuid: string) => void
+  progress?: RecentReadingEntry | null
 }
 
 export const MangaCard = memo(function MangaCard({
@@ -24,6 +26,7 @@ export const MangaCard = memo(function MangaCard({
   userUuid,
   width,
   onPress,
+  progress,
 }: MangaCardProps) {
   const downloads = useDownloads()
   const [imageFailed, setImageFailed] = useState(false)
@@ -49,6 +52,9 @@ export const MangaCard = memo(function MangaCard({
             ? '已暂停'
             : `${download.pages.filter(page => page.state === 'completed').length}/${download.pages.length}`
     : null
+  const progressPercent = progress && progress.pageCount > 0
+    ? Math.min(100, Math.round((progress.pageIndex + 1) / progress.pageCount * 100))
+    : 0
 
   useEffect(() => setImageFailed(false), [imageSource.cacheKey])
 
@@ -96,6 +102,27 @@ export const MangaCard = memo(function MangaCard({
         {manga.originalTitle && manga.originalTitle !== manga.displayTitle
           ? <Text numberOfLines={1} style={styles.originalTitle}>{manga.originalTitle}</Text>
           : null}
+        <View style={styles.readingState}>
+          <Ionicons
+            color={progress?.state === 'completed' ? '#15803d' : colors.muted}
+            name={progress?.state === 'completed'
+              ? 'checkmark-circle'
+              : progress
+                ? 'book-outline'
+                : 'ellipse-outline'}
+            size={14}
+          />
+          <Text style={[
+            styles.readingStateText,
+            progress?.state === 'completed' ? styles.readingCompletedText : null,
+          ]}>
+            {progress?.state === 'completed'
+              ? '已完成'
+              : progress
+                ? `阅读中 · ${progressPercent}%`
+                : '未开始'}
+          </Text>
+        </View>
         <Text style={styles.date}>{displayDate(manga.publishDate)}</Text>
       </View>
     </Pressable>
@@ -178,5 +205,18 @@ const styles = StyleSheet.create({
     marginTop: 'auto',
     color: colors.muted,
     fontSize: 12,
+  },
+  readingState: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  readingStateText: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  readingCompletedText: {
+    color: '#15803d',
   },
 })

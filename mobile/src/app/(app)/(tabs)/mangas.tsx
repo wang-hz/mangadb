@@ -66,6 +66,10 @@ export default function MangasScreen() {
     () => uniqueMangas(query.data?.pages ?? []),
     [query.data],
   )
+  const progressByManga = useMemo(
+    () => new Map(recentReading.allEntries.map(entry => [entry.manga.uuid, entry])),
+    [recentReading.allEntries],
+  )
   const total = query.data?.pages[0]?.total ?? 0
   const cardWidth = (width - GRID_PADDING * 2 - GRID_GAP) / 2
   const openManga = useCallback((uuid: string) => {
@@ -156,6 +160,7 @@ export default function MangasScreen() {
           api={api!}
           manga={item}
           onPress={openManga}
+          progress={progressByManga.get(item.uuid)}
           serverUrl={serverUrl!}
           userUuid={auth!.user.uuid}
           width={cardWidth}

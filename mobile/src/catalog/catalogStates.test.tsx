@@ -25,6 +25,7 @@ jest.mock('@/hooks/useDebouncedValue', () => ({
 jest.mock('@/hooks/useRecentReading', () => ({
   useRecentReading: () => ({
     entries: [],
+    allEntries: [],
     status: 'ready',
     error: null,
     refresh: jest.fn(),

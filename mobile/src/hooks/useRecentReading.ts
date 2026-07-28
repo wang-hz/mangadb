@@ -2,7 +2,7 @@ import { useFocusEffect } from 'expo-router'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppState } from 'react-native'
 import {
-  listRecentReading,
+  listReadingProgress,
   type RecentReadingEntry,
 } from '@/storage/progress'
 
@@ -10,6 +10,7 @@ type RecentReadingStatus = 'loading' | 'ready' | 'error'
 
 interface RecentReadingResult {
   entries: RecentReadingEntry[]
+  allEntries: RecentReadingEntry[]
   status: RecentReadingStatus
   error: string | null
   refresh: () => Promise<void>
@@ -24,11 +25,13 @@ export function useRecentReading(
   const [result, setResult] = useState<{
     identity: string | null
     entries: RecentReadingEntry[]
+    allEntries: RecentReadingEntry[]
     status: RecentReadingStatus
     error: string | null
   }>({
     identity: null,
     entries: [],
+    allEntries: [],
     status: 'loading',
     error: null,
   })
@@ -37,18 +40,31 @@ export function useRecentReading(
     const requestId = requestIdRef.current + 1
     requestIdRef.current = requestId
     if (!serverUrl || !userUuid || !identity) {
-      setResult({ identity: null, entries: [], status: 'ready', error: null })
+      setResult({
+        identity: null,
+        entries: [],
+        allEntries: [],
+        status: 'ready',
+        error: null,
+      })
       return
     }
     try {
-      const entries = await listRecentReading(serverUrl, userUuid)
+      const allEntries = await listReadingProgress(serverUrl, userUuid)
       if (requestIdRef.current !== requestId) return
-      setResult({ identity, entries, status: 'ready', error: null })
+      setResult({
+        identity,
+        entries: allEntries.filter(entry => !entry.hiddenFromRecent),
+        allEntries,
+        status: 'ready',
+        error: null,
+      })
     } catch (error) {
       if (requestIdRef.current !== requestId) return
       setResult({
         identity,
         entries: [],
+        allEntries: [],
         status: 'error',
         error: error instanceof Error ? error.message : '无法读取最近阅读',
       })
@@ -69,6 +85,7 @@ export function useRecentReading(
   const matchesIdentity = result.identity === identity
   return {
     entries: matchesIdentity ? result.entries : [],
+    allEntries: matchesIdentity ? result.allEntries : [],
     status: matchesIdentity ? result.status : 'loading',
     error: matchesIdentity ? result.error : null,
     refresh,

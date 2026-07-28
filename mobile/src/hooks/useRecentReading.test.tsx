@@ -1,9 +1,9 @@
 import { act, render, waitFor } from '@testing-library/react-native'
 import { AppState } from 'react-native'
-import { listRecentReading } from '@/storage/progress'
+import { listReadingProgress } from '@/storage/progress'
 import { useRecentReading } from './useRecentReading'
 
-jest.mock('@/storage/progress', () => ({ listRecentReading: jest.fn() }))
+jest.mock('@/storage/progress', () => ({ listReadingProgress: jest.fn() }))
 jest.mock('expo-router', () => ({
   useFocusEffect: (effect: () => void | (() => void)) => {
     const React = require('react')
@@ -27,7 +27,7 @@ describe('useRecentReading', () => {
       appStateListener = listener as (state: string) => void
       return { remove }
     })
-    jest.mocked(listRecentReading).mockResolvedValue([])
+    jest.mocked(listReadingProgress).mockResolvedValue([])
   })
 
   afterEach(() => {
@@ -37,23 +37,23 @@ describe('useRecentReading', () => {
   it('loads on focus and refreshes when the app becomes active', async () => {
     render(<Probe />)
     await waitFor(() => expect(current.status).toBe('ready'))
-    expect(listRecentReading).toHaveBeenCalledTimes(1)
+    expect(listReadingProgress).toHaveBeenCalledTimes(1)
 
     await act(async () => { appStateListener?.('background') })
-    expect(listRecentReading).toHaveBeenCalledTimes(1)
+    expect(listReadingProgress).toHaveBeenCalledTimes(1)
     await act(async () => { appStateListener?.('active') })
-    expect(listRecentReading).toHaveBeenCalledTimes(2)
+    expect(listReadingProgress).toHaveBeenCalledTimes(2)
   })
 
   it('does not expose results from a previous identity', async () => {
     let resolveFirst: ((entries: []) => void) | undefined
-    jest.mocked(listRecentReading)
+    jest.mocked(listReadingProgress)
       .mockImplementationOnce(() => new Promise(resolve => { resolveFirst = resolve }))
       .mockResolvedValueOnce([])
     const view = render(<Probe />)
     view.rerender(<Probe serverUrl="https://two.example.com" userUuid="user-2" />)
 
-    await waitFor(() => expect(listRecentReading).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(listReadingProgress).toHaveBeenCalledTimes(2))
     await act(async () => { resolveFirst?.([]) })
 
     expect(current.entries).toEqual([])
