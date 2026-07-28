@@ -191,6 +191,7 @@ export function PagedReader({
           <ReaderPage
             api={api}
             contentFit={preferences.pagedFit}
+            doubleTapScale={preferences.doubleTapZoomScale}
             height={height}
             gesturesEnabled={!screenReaderEnabled}
             index={index}
@@ -306,6 +307,7 @@ interface ReaderPageProps {
   onTap: (x: number) => void
   onZoomChange: (zoomed: boolean) => void
   contentFit: 'contain' | 'cover'
+  doubleTapScale: ReaderPreferences['doubleTapZoomScale']
   localUri?: string
 }
 
@@ -323,6 +325,7 @@ const ReaderPage = memo(function ReaderPage({
   onTap,
   onZoomChange,
   contentFit,
+  doubleTapScale,
   localUri,
 }: ReaderPageProps) {
   const [failed, setFailed] = useState(false)
@@ -355,6 +358,7 @@ const ReaderPage = memo(function ReaderPage({
               accessibilityLabel={`第 ${index + 1} 页图片`}
               cachePolicy="memory-disk"
               contentFit={contentFit}
+              doubleTapScale={doubleTapScale}
               gesturesEnabled={gesturesEnabled}
               height={height}
               key={attempt}

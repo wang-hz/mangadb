@@ -12,7 +12,6 @@ import Animated, {
 } from 'react-native-reanimated'
 
 const MIN_SCALE = 1
-const DOUBLE_TAP_SCALE = 2
 const MAX_SCALE = 4
 
 interface ZoomableReaderImageProps extends Pick<
@@ -23,6 +22,7 @@ interface ZoomableReaderImageProps extends Pick<
   width: number
   height: number
   gesturesEnabled: boolean
+  doubleTapScale: 2 | 3 | null
   onTap: (x: number) => void
   onZoomChange?: (zoomed: boolean) => void
 }
@@ -37,6 +37,7 @@ export function ZoomableReaderImage({
   width,
   height,
   gesturesEnabled,
+  doubleTapScale,
   onTap,
   onZoomChange,
   ...imageProps
@@ -77,10 +78,11 @@ export function ZoomableReaderImage({
 
   const zoomIn = useCallback(() => {
     const duration = reduceMotion ? 0 : 180
-    scale.value = withTiming(DOUBLE_TAP_SCALE, { duration })
-    savedScale.value = DOUBLE_TAP_SCALE
+    const nextScale = doubleTapScale ?? 2
+    scale.value = withTiming(nextScale, { duration })
+    savedScale.value = nextScale
     notifyZoomChange(true)
-  }, [notifyZoomChange, reduceMotion, savedScale, scale])
+  }, [doubleTapScale, notifyZoomChange, reduceMotion, savedScale, scale])
 
   useEffect(() => {
     reset()
@@ -134,11 +136,13 @@ export function ZoomableReaderImage({
     })
 
   const doubleTap = Gesture.Tap()
-    .enabled(gesturesEnabled)
+    .enabled(gesturesEnabled && doubleTapScale !== null)
     .numberOfTaps(2)
     .maxDuration(260)
     .onEnd(() => {
-      const nextScale = scale.value > MIN_SCALE + 0.01 ? MIN_SCALE : DOUBLE_TAP_SCALE
+      const nextScale = scale.value > MIN_SCALE + 0.01
+        ? MIN_SCALE
+        : (doubleTapScale ?? 2)
       const duration = reduceMotion ? 0 : 180
       scale.value = withTiming(nextScale, { duration })
       savedScale.value = nextScale

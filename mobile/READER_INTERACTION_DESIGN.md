@@ -8,8 +8,9 @@
   after zooming.
 - While an image is zoomed, the parent horizontal or vertical list is disabled.
   Resetting to fit re-enables normal page navigation.
-- Double tap toggles between fit and 2×. A visible 44×44 reset control and
-  accessibility increment/decrement actions provide non-gesture alternatives.
+- Double tap can be disabled or configured to toggle between fit and 2×/3×. A
+  visible 44×44 reset control and accessibility increment/decrement actions
+  provide non-gesture alternatives.
 - Zoom animation duration becomes zero when the operating system requests
   reduced motion.
 - Custom touch gestures are disabled while a screen reader is active. Labeled

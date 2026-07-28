@@ -9,6 +9,7 @@ export type PagedFit = 'contain' | 'cover'
 export type ScrollGap = 0 | 8 | 16
 export type ControlsAutoHideMs = 3000 | 5000 | null
 export type ReaderDimLevel = 0 | 0.2 | 0.4
+export type DoubleTapZoomScale = 2 | 3 | null
 
 export interface ReaderPreferences {
   defaultMode: ReaderMode
@@ -18,6 +19,7 @@ export interface ReaderPreferences {
   controlsAutoHideMs: ControlsAutoHideMs
   keepAwake: boolean
   readerDimLevel: ReaderDimLevel
+  doubleTapZoomScale: DoubleTapZoomScale
 }
 
 export const DEFAULT_READER_PREFERENCES: ReaderPreferences = {
@@ -28,6 +30,7 @@ export const DEFAULT_READER_PREFERENCES: ReaderPreferences = {
   controlsAutoHideMs: 3000,
   keepAwake: false,
   readerDimLevel: 0,
+  doubleTapZoomScale: 2,
 }
 
 export async function loadReaderPreferences(): Promise<ReaderPreferences> {
@@ -83,5 +86,9 @@ function normalizeReaderPreferences(value: unknown): ReaderPreferences {
       stored.readerDimLevel === 0.2 || stored.readerDimLevel === 0.4
       ? stored.readerDimLevel
       : DEFAULT_READER_PREFERENCES.readerDimLevel,
+    doubleTapZoomScale: stored.doubleTapZoomScale === 2 ||
+      stored.doubleTapZoomScale === 3 || stored.doubleTapZoomScale === null
+      ? stored.doubleTapZoomScale
+      : DEFAULT_READER_PREFERENCES.doubleTapZoomScale,
   }
 }

@@ -131,6 +131,20 @@ export function ReaderPreferencesControls({
         </Text>
       </PreferenceRow>
 
+      <PreferenceRow label="双击缩放" palette={palette}>
+        <SegmentedControl
+          disabled={disabled}
+          onChange={value => { void update('doubleTapZoomScale', value) }}
+          options={[
+            { label: '关闭', value: null },
+            { label: '2 倍', value: 2 },
+            { label: '3 倍', value: 3 },
+          ]}
+          palette={palette}
+          value={preferences.doubleTapZoomScale}
+        />
+      </PreferenceRow>
+
       <View style={styles.switchRow}>
         <View style={styles.switchCopy}>
           <Text style={[styles.label, { color: palette.text }]}>阅读时保持屏幕常亮</Text>

@@ -24,6 +24,7 @@ describe('reader preferences storage', () => {
       controlsAutoHideMs: null,
       keepAwake: true,
       readerDimLevel: 0.4 as const,
+      doubleTapZoomScale: 3 as const,
     }
     jest.mocked(AsyncStorage.getItem).mockResolvedValue(JSON.stringify(preferences))
 

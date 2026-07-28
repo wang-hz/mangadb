@@ -234,6 +234,7 @@ export function ScrollingReader({
           <ScrollingPage
             api={api}
             aspectRatio={aspectRatios[index] ?? 2 / 3}
+            doubleTapScale={preferences.doubleTapZoomScale}
             index={index}
             gesturesEnabled={!screenReaderEnabled}
             manga={manga}
@@ -284,6 +285,7 @@ interface ScrollingPageProps {
   manga: MangaDetail
   api: ApiClient
   aspectRatio: number
+  doubleTapScale: ReaderPreferences['doubleTapZoomScale']
   serverUrl: string
   userUuid: string
   index: number
@@ -302,6 +304,7 @@ const ScrollingPage = memo(function ScrollingPage({
   manga,
   api,
   aspectRatio,
+  doubleTapScale,
   serverUrl,
   userUuid,
   index,
@@ -347,6 +350,7 @@ const ScrollingPage = memo(function ScrollingPage({
               accessibilityLabel={`第 ${index + 1} 页图片`}
               cachePolicy="memory-disk"
               contentFit="contain"
+              doubleTapScale={doubleTapScale}
               gesturesEnabled={gesturesEnabled}
               height={imageHeight}
               key={attempt}
