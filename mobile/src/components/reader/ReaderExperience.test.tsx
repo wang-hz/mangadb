@@ -111,6 +111,7 @@ describe('ReaderExperience', () => {
       10,
       3,
       'paged',
+      manga,
     )
 
     fireEvent.press(screen.getByLabelText('翻页模式更新页码'))
@@ -122,6 +123,7 @@ describe('ReaderExperience', () => {
       10,
       5,
       'paged',
+      manga,
     )
 
     fireEvent.press(screen.getByLabelText('切换到滚动模式'))
@@ -133,6 +135,7 @@ describe('ReaderExperience', () => {
       10,
       5,
       'scroll',
+      manga,
     )
 
     fireEvent.press(screen.getByLabelText('滚动模式更新页码'))
@@ -144,6 +147,7 @@ describe('ReaderExperience', () => {
       10,
       6,
       'scroll',
+      manga,
     )
     fireEvent.press(screen.getByLabelText('切换到翻页模式'))
     expect(screen.getByText('paged:6')).toBeTruthy()
@@ -154,6 +158,7 @@ describe('ReaderExperience', () => {
       10,
       6,
       'paged',
+      manga,
     )
     expect(mockSaveReadingProgress).toHaveBeenCalledTimes(5)
   })

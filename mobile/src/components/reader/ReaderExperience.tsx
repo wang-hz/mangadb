@@ -51,6 +51,7 @@ export function ReaderExperience({
       manga.pages.length,
       nextPageIndex,
       nextMode,
+      manga,
     ).catch(() => {})
   }, [serverUrl, userUuid, manga.uuid, manga.pages.length])
 
