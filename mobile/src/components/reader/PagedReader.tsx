@@ -28,6 +28,7 @@ import {
   reportVisiblePageLoad,
 } from '@/components/reader/telemetry'
 import { localPageImageSource, mangaPageImageSource } from '@/media/images'
+import { useScreenReaderEnabled } from '@/hooks/useScreenReaderEnabled'
 import type { ReaderPreferences } from '@/storage/readerPreferences'
 import { colors } from '@/theme/colors'
 import {
@@ -79,6 +80,7 @@ export function PagedReader({
 }: PagedReaderProps) {
   const { width, height } = useWindowDimensions()
   const insets = useSafeAreaInsets()
+  const screenReaderEnabled = useScreenReaderEnabled()
   const listRef = useRef<FlatList<number>>(null)
   const previousWidthRef = useRef(width)
   const [controlsVisible, setControlsVisible] = useState(true)
@@ -190,6 +192,7 @@ export function PagedReader({
             api={api}
             contentFit={preferences.pagedFit}
             height={height}
+            gesturesEnabled={!screenReaderEnabled}
             index={index}
             manga={manga}
             localUri={localPageUris?.[index]}
@@ -297,6 +300,7 @@ interface ReaderPageProps {
   index: number
   width: number
   height: number
+  gesturesEnabled: boolean
   onPageLoad: (index: number, durationMs: number) => void
   onRefreshMetadata: () => Promise<void>
   onTap: (x: number) => void
@@ -313,6 +317,7 @@ const ReaderPage = memo(function ReaderPage({
   index,
   width,
   height,
+  gesturesEnabled,
   onPageLoad,
   onRefreshMetadata,
   onTap,
@@ -350,6 +355,7 @@ const ReaderPage = memo(function ReaderPage({
               accessibilityLabel={`第 ${index + 1} 页图片`}
               cachePolicy="memory-disk"
               contentFit={contentFit}
+              gesturesEnabled={gesturesEnabled}
               height={height}
               key={attempt}
               onError={() => {

@@ -24,6 +24,7 @@ import {
   reportVisiblePageLoad,
 } from '@/components/reader/telemetry'
 import { localPageImageSource, mangaPageImageSource } from '@/media/images'
+import { useScreenReaderEnabled } from '@/hooks/useScreenReaderEnabled'
 import type { ReaderPreferences } from '@/storage/readerPreferences'
 import { colors } from '@/theme/colors'
 import {
@@ -73,6 +74,7 @@ export function ScrollingReader({
 }: ScrollingReaderProps) {
   const { width, height } = useWindowDimensions()
   const insets = useSafeAreaInsets()
+  const screenReaderEnabled = useScreenReaderEnabled()
   const listRef = useRef<FlatList<string>>(null)
   const callbackRef = useRef(onPageChange)
   const retryCountRef = useRef(0)
@@ -233,6 +235,7 @@ export function ScrollingReader({
             api={api}
             aspectRatio={aspectRatios[index] ?? 2 / 3}
             index={index}
+            gesturesEnabled={!screenReaderEnabled}
             manga={manga}
             localUri={localPageUris?.[index]}
             onAspectRatio={updateAspectRatio}
@@ -284,6 +287,7 @@ interface ScrollingPageProps {
   serverUrl: string
   userUuid: string
   index: number
+  gesturesEnabled: boolean
   viewportWidth: number
   onTap: () => void
   onZoomChange: (zoomed: boolean) => void
@@ -301,6 +305,7 @@ const ScrollingPage = memo(function ScrollingPage({
   serverUrl,
   userUuid,
   index,
+  gesturesEnabled,
   viewportWidth,
   onTap,
   onZoomChange,
@@ -342,6 +347,7 @@ const ScrollingPage = memo(function ScrollingPage({
               accessibilityLabel={`第 ${index + 1} 页图片`}
               cachePolicy="memory-disk"
               contentFit="contain"
+              gesturesEnabled={gesturesEnabled}
               height={imageHeight}
               key={attempt}
               onError={() => {

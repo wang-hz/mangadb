@@ -22,6 +22,7 @@ interface ZoomableReaderImageProps extends Pick<
   accessibilityLabel: string
   width: number
   height: number
+  gesturesEnabled: boolean
   onTap: (x: number) => void
   onZoomChange?: (zoomed: boolean) => void
 }
@@ -35,6 +36,7 @@ export function ZoomableReaderImage({
   accessibilityLabel,
   width,
   height,
+  gesturesEnabled,
   onTap,
   onZoomChange,
   ...imageProps
@@ -94,6 +96,7 @@ export function ZoomableReaderImage({
   )
 
   const pinch = Gesture.Pinch()
+    .enabled(gesturesEnabled)
     .onStart(() => {
       savedScale.value = scale.value
     })
@@ -112,7 +115,7 @@ export function ZoomableReaderImage({
     })
 
   const pan = Gesture.Pan()
-    .enabled(zoomed)
+    .enabled(zoomed && gesturesEnabled)
     .minPointers(1)
     .onStart(() => {
       savedTranslateX.value = translateX.value
@@ -131,6 +134,7 @@ export function ZoomableReaderImage({
     })
 
   const doubleTap = Gesture.Tap()
+    .enabled(gesturesEnabled)
     .numberOfTaps(2)
     .maxDuration(260)
     .onEnd(() => {
@@ -147,6 +151,7 @@ export function ZoomableReaderImage({
     })
 
   const singleTap = Gesture.Tap()
+    .enabled(gesturesEnabled)
     .numberOfTaps(1)
     .onEnd(event => {
       runOnJS(onTap)(event.x)
@@ -175,6 +180,7 @@ export function ZoomableReaderImage({
           accessibilityHint="双击可放大或重置，放大后可拖动查看"
           accessibilityLabel={accessibilityLabel}
           accessibilityRole="image"
+          onAccessibilityTap={() => onTap(width / 2)}
           onAccessibilityAction={event => {
             if (event.nativeEvent.actionName === 'increment') zoomIn()
             if (event.nativeEvent.actionName === 'decrement') reset()
