@@ -187,7 +187,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   details: {
-    minHeight: 100,
+    height: 126,
     gap: 5,
     padding: 10,
   },

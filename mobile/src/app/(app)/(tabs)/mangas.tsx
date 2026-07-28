@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons'
 import { useInfiniteQuery } from '@tanstack/react-query'
 import { router } from 'expo-router'
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   FlatList,
@@ -12,6 +12,7 @@ import {
   Text,
   TextInput,
   useWindowDimensions,
+  type ViewToken,
   View,
 } from 'react-native'
 import { ApiError } from '@/api/client'
@@ -25,6 +26,7 @@ import { useRecentReading } from '@/hooks/useRecentReading'
 import { useSession } from '@/session/SessionContext'
 import type { RecentReadingEntry } from '@/storage/progress'
 import { colors } from '@/theme/colors'
+import { adaptiveGridLayout, anchorIndexForColumns } from '@/utils/grid'
 
 const GRID_PADDING = 12
 const GRID_GAP = 12
@@ -43,6 +45,15 @@ export default function MangasScreen() {
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
   const debouncedSearch = useDebouncedValue(search.trim(), 350)
   const recentReading = useRecentReading(serverUrl, auth?.user.uuid)
+  const listRef = useRef<FlatList<MangaSummary>>(null)
+  const visibleAnchorRef = useRef(0)
+  const previousColumnsRef = useRef<number | null>(null)
+  const restoreFrameRef = useRef<number | null>(null)
+  const restoreAttemptsRef = useRef(0)
+  const grid = useMemo(() => adaptiveGridLayout(width, {
+    horizontalPadding: GRID_PADDING,
+    gap: GRID_GAP,
+  }), [width])
 
   const query = useInfiniteQuery({
     queryKey: [
@@ -71,7 +82,7 @@ export default function MangasScreen() {
     [recentReading.allEntries],
   )
   const total = query.data?.pages[0]?.total ?? 0
-  const cardWidth = (width - GRID_PADDING * 2 - GRID_GAP) / 2
+  const cardWidth = grid.cardWidth
   const openManga = useCallback((uuid: string) => {
     router.push({ pathname: '/(app)/manga/[uuid]', params: { uuid } })
   }, [])
@@ -90,6 +101,34 @@ export default function MangasScreen() {
   const loadMore = () => {
     if (query.hasNextPage && !query.isFetchingNextPage) void query.fetchNextPage()
   }
+  const onViewableItemsChanged = useRef((info: {
+    viewableItems: Array<ViewToken<MangaSummary>>
+  }) => {
+    const firstVisible = info.viewableItems
+      .map(token => token.index)
+      .filter((index): index is number => index !== null)
+      .sort((a, b) => a - b)[0]
+    if (firstVisible !== undefined) visibleAnchorRef.current = firstVisible
+  }).current
+
+  useEffect(() => {
+    const previousColumns = previousColumnsRef.current
+    previousColumnsRef.current = grid.columns
+    if (previousColumns === null || previousColumns === grid.columns || mangas.length === 0) return
+    const target = anchorIndexForColumns(
+      visibleAnchorRef.current,
+      mangas.length,
+      grid.columns,
+    )
+    restoreAttemptsRef.current = 0
+    restoreFrameRef.current = requestAnimationFrame(() => {
+      listRef.current?.scrollToIndex({ index: target, animated: false, viewPosition: 0 })
+    })
+    return () => {
+      if (restoreFrameRef.current !== null) cancelAnimationFrame(restoreFrameRef.current)
+      restoreFrameRef.current = null
+    }
+  }, [grid.columns, mangas.length])
 
   return (
     <FlatList
@@ -97,6 +136,7 @@ export default function MangasScreen() {
       contentContainerStyle={styles.content}
       data={mangas}
       initialNumToRender={8}
+      key={`manga-grid-${grid.columns}`}
       keyboardDismissMode="on-drag"
       keyboardShouldPersistTaps="handled"
       keyExtractor={item => item.uuid}
@@ -143,9 +183,19 @@ export default function MangasScreen() {
         />
       )}
       maxToRenderPerBatch={8}
-      numColumns={2}
+      numColumns={grid.columns}
       onEndReached={loadMore}
       onEndReachedThreshold={0.45}
+      onScrollToIndexFailed={info => {
+        if (restoreAttemptsRef.current >= 4) return
+        restoreAttemptsRef.current += 1
+        const target = anchorIndexForColumns(info.index, mangas.length, grid.columns)
+        restoreFrameRef.current = requestAnimationFrame(() => {
+          listRef.current?.scrollToIndex({ index: target, animated: false, viewPosition: 0 })
+        })
+      }}
+      onViewableItemsChanged={onViewableItemsChanged}
+      ref={listRef}
       refreshControl={(
         <RefreshControl
           colors={[colors.brand]}
