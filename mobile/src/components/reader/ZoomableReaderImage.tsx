@@ -16,7 +16,14 @@ const MAX_SCALE = 4
 
 interface ZoomableReaderImageProps extends Pick<
   ImageProps,
-  'cachePolicy' | 'contentFit' | 'onError' | 'onLoad' | 'recyclingKey' | 'source'
+  | 'allowDownscaling'
+  | 'cachePolicy'
+  | 'contentFit'
+  | 'enforceEarlyResizing'
+  | 'onError'
+  | 'onLoad'
+  | 'recyclingKey'
+  | 'source'
 > {
   accessibilityLabel: string
   width: number

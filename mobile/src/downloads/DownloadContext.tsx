@@ -29,12 +29,14 @@ import { registerActiveDownloadQueue } from '@/downloads/registry'
 import { DownloadRepository } from '@/downloads/repository'
 import type { DownloadManifestV1 } from '@/downloads/types'
 import {
+  getNativeAppActive,
   getNativeNetworkSnapshot,
+  subscribeNativeAppState,
   subscribeNativeNetwork,
 } from '@/query/nativeState'
 import { useSession } from '@/session/SessionContext'
 
-type DownloadStatus = 'loading' | 'ready' | 'error' | 'unavailable'
+export type DownloadStatus = 'loading' | 'ready' | 'error' | 'unavailable'
 
 interface DownloadContextValue {
   status: DownloadStatus
@@ -53,6 +55,22 @@ interface DownloadContextValue {
   storageUsageBytes: number
   localPagesFor: (mangaUuid: string) => Promise<string[] | null>
   manifestFor: (mangaUuid: string) => DownloadManifestV1 | null
+}
+
+export interface DownloadActionsValue {
+  status: DownloadStatus
+  error: string | null
+  preferences: DownloadPreferences
+  enqueue: (manga: MangaDetail) => Promise<DownloadManifestV1>
+  update: (manga: MangaDetail) => Promise<DownloadManifestV1>
+  pause: (mangaUuid: string) => Promise<void>
+  resume: (mangaUuid: string) => Promise<void>
+  retry: (mangaUuid: string) => Promise<void>
+  deleteDownload: (mangaUuid: string) => Promise<void>
+  clearCurrentDownloads: () => Promise<void>
+  clearAllDownloads: () => Promise<void>
+  setWifiOnly: (wifiOnly: boolean) => Promise<void>
+  localPagesFor: (mangaUuid: string) => Promise<string[] | null>
 }
 
 export type DownloadQueueController = Pick<
@@ -88,6 +106,8 @@ const EMPTY_SNAPSHOT: DownloadQueueSnapshot = {
 }
 
 const DownloadContext = createContext<DownloadContextValue | null>(null)
+const DownloadActionsContext = createContext<DownloadActionsValue | null>(null)
+const DownloadStoreContext = createContext<DownloadQueueController | null>(null)
 
 export function DownloadProvider({
   children,
@@ -99,12 +119,21 @@ export function DownloadProvider({
     getNativeNetworkSnapshot,
     getNativeNetworkSnapshot,
   )
+  const appActive = useSyncExternalStore(
+    subscribeNativeAppState,
+    getNativeAppActive,
+    getNativeAppActive,
+  )
   const [preferences, setPreferences] = useState<DownloadPreferences | null>(null)
   const preferencesRef = useRef(DEFAULT_DOWNLOAD_PREFERENCES)
   const [queue, setQueue] = useState<DownloadQueueController | null>(null)
   const [snapshot, setSnapshot] = useState<DownloadQueueSnapshot>(EMPTY_SNAPSHOT)
   const [status, setStatus] = useState<DownloadStatus>('loading')
   const [error, setError] = useState<string | null>(null)
+  const storageUsageCacheRef = useRef(new Map<string, {
+    manifest: DownloadManifestV1
+    bytes: number
+  }>())
 
   useEffect(() => {
     let active = true
@@ -143,10 +172,12 @@ export function DownloadProvider({
       userUuid: session.auth.user.uuid,
       api: session.api,
     })
-    nextQueue.setEligible(isDownloadNetworkEligible(
-      getNativeNetworkSnapshot(),
-      preferencesRef.current.wifiOnly,
-    ))
+    nextQueue.setEligible(
+      getNativeAppActive() && isDownloadNetworkEligible(
+        getNativeNetworkSnapshot(),
+        preferencesRef.current.wifiOnly,
+      ),
+    )
     const unsubscribeQueue = nextQueue.subscribe(() => {
       if (active) setSnapshot(nextQueue.getSnapshot())
     })
@@ -186,8 +217,8 @@ export function DownloadProvider({
 
   useEffect(() => {
     if (!queue || !preferences) return
-    queue.setEligible(isDownloadNetworkEligible(network, preferences.wifiOnly))
-  }, [network, preferences, queue])
+    queue.setEligible(appActive && isDownloadNetworkEligible(network, preferences.wifiOnly))
+  }, [appActive, network, preferences, queue])
 
   const setWifiOnly = useCallback(async (wifiOnly: boolean) => {
     const nextPreferences = { wifiOnly }
@@ -201,11 +232,10 @@ export function DownloadProvider({
     return queue
   }, [queue])
 
-  const value = useMemo<DownloadContextValue>(() => ({
+  const actions = useMemo<DownloadActionsValue>(() => ({
     status,
     error,
     preferences: preferences ?? DEFAULT_DOWNLOAD_PREFERENCES,
-    snapshot,
     enqueue: manga => requireQueue().enqueue(manga),
     update: manga => requireQueue().update(manga),
     pause: mangaUuid => requireQueue().pause(mangaUuid),
@@ -215,25 +245,88 @@ export function DownloadProvider({
     clearCurrentDownloads: () => requireQueue().clearCurrent(),
     clearAllDownloads: () => requireQueue().clearAll(),
     setWifiOnly,
-    storageUsageBytes: snapshot.manifests.reduce(
-      (total, manifest) => total + manifest.pages.reduce(
-        (mangaTotal, page) => mangaTotal + page.bytesWritten,
-        0,
-      ),
-      0,
-    ),
     localPagesFor: mangaUuid => requireQueue().localPageUris(mangaUuid),
+  }), [error, preferences, requireQueue, setWifiOnly, status])
+
+  const storageUsageBytes = useMemo(() => {
+    const nextCache = new Map<string, { manifest: DownloadManifestV1; bytes: number }>()
+    let total = 0
+    snapshot.manifests.forEach(manifest => {
+      const cached = storageUsageCacheRef.current.get(manifest.manga.uuid)
+      const bytes = cached?.manifest === manifest
+        ? cached.bytes
+        : manifest.pages.reduce((sum, page) => sum + page.bytesWritten, 0)
+      nextCache.set(manifest.manga.uuid, { manifest, bytes })
+      total += bytes
+    })
+    storageUsageCacheRef.current = nextCache
+    return total
+  }, [snapshot.manifests])
+
+  const value = useMemo<DownloadContextValue>(() => ({
+    ...actions,
+    snapshot,
+    storageUsageBytes,
     manifestFor: mangaUuid =>
       snapshot.manifests.find(manifest => manifest.manga.uuid === mangaUuid) ?? null,
-  }), [error, preferences, requireQueue, setWifiOnly, snapshot, status])
+  }), [actions, snapshot, storageUsageBytes])
 
-  return <DownloadContext.Provider value={value}>{children}</DownloadContext.Provider>
+  return (
+    <DownloadStoreContext.Provider value={queue}>
+      <DownloadActionsContext.Provider value={actions}>
+        <DownloadContext.Provider value={value}>{children}</DownloadContext.Provider>
+      </DownloadActionsContext.Provider>
+    </DownloadStoreContext.Provider>
+  )
 }
 
 export function useDownloads(): DownloadContextValue {
   const context = useContext(DownloadContext)
   if (!context) throw new Error('useDownloads must be used inside DownloadProvider')
   return context
+}
+
+export function useDownloadActions(): DownloadActionsValue {
+  const context = useContext(DownloadActionsContext)
+  if (!context) throw new Error('useDownloadActions must be used inside DownloadProvider')
+  return context
+}
+
+export function useDownloadManifest(mangaUuid?: string): DownloadManifestV1 | null {
+  const queue = useContext(DownloadStoreContext)
+  const subscribe = useCallback((listener: () => void) =>
+    queue ? queue.subscribe(listener) : () => {}, [queue])
+  const getSnapshot = useCallback(() => {
+    if (!queue || !mangaUuid) return null
+    return queue.getSnapshot().manifests.find(
+      manifest => manifest.manga.uuid === mangaUuid,
+    ) ?? null
+  }, [mangaUuid, queue])
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+}
+
+export function useDownloadedMangaUuids(): ReadonlySet<string> {
+  const queue = useContext(DownloadStoreContext)
+  const cachedRef = useRef<{ key: string; value: ReadonlySet<string> }>({
+    key: '',
+    value: new Set(),
+  })
+  const subscribe = useCallback((listener: () => void) =>
+    queue ? queue.subscribe(listener) : () => {}, [queue])
+  const getSnapshot = useCallback(() => {
+    const uuids = queue?.getSnapshot().manifests
+      .filter(manifest =>
+        (manifest.state === 'completed' || manifest.state === 'stale') &&
+        manifest.pages.every(page => page.state === 'completed'))
+      .map(manifest => manifest.manga.uuid)
+      .sort() ?? []
+    const key = uuids.join('\u0000')
+    if (cachedRef.current.key !== key) {
+      cachedRef.current = { key, value: new Set(uuids) }
+    }
+    return cachedRef.current.value
+  }, [queue])
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 }
 
 function createDefaultQueue(options: {

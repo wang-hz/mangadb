@@ -3,15 +3,6 @@ import type { AppStateStatus, NativeEventSubscription } from 'react-native'
 import { AppState, Text } from 'react-native'
 import { AppPrivacyShield } from './AppPrivacyShield'
 
-jest.mock('expo-blur', () => {
-  const React = require('react')
-  const { View } = require('react-native')
-
-  return {
-    BlurView: (props: object) => React.createElement(View, props),
-  }
-})
-
 describe('AppPrivacyShield', () => {
   it('covers the app while iOS is inactive or backgrounded', () => {
     let listener: ((state: AppStateStatus) => void) | undefined
@@ -27,7 +18,7 @@ describe('AppPrivacyShield', () => {
       </AppPrivacyShield>,
     )
 
-    expect(screen.getByTestId('app-privacy-shield').props.pointerEvents).toBe('none')
+    expect(screen.queryByTestId('app-privacy-shield')).toBeNull()
 
     act(() => listener?.('inactive'))
     expect(screen.getByTestId('app-privacy-shield').props.pointerEvents).toBe('auto')
@@ -36,7 +27,7 @@ describe('AppPrivacyShield', () => {
     expect(screen.getByTestId('app-privacy-shield').props.pointerEvents).toBe('auto')
 
     act(() => listener?.('active'))
-    expect(screen.getByTestId('app-privacy-shield').props.pointerEvents).toBe('none')
+    expect(screen.queryByTestId('app-privacy-shield')).toBeNull()
 
     screen.unmount()
     expect(remove).toHaveBeenCalledTimes(1)

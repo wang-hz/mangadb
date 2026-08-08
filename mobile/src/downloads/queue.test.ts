@@ -193,6 +193,44 @@ describe('DownloadQueue', () => {
     ).toBe(true))
   })
 
+  it('uses one active manga job by default', async () => {
+    const repository = new MemoryQueueRepository()
+    const pending: Array<ReturnType<typeof deferred<DownloadedPage>>> = []
+    const downloader = {
+      download: jest.fn().mockImplementation(() => {
+        const operation = deferred<DownloadedPage>()
+        pending.push(operation)
+        return operation.promise
+      }),
+    }
+    const queue = makeQueue(repository, downloader)
+    await queue.initialize()
+    await Promise.all([
+      queue.enqueue(manga('manga-1', 1)),
+      queue.enqueue(manga('manga-2', 1)),
+    ])
+    await waitFor(() => expect(downloader.download).toHaveBeenCalledTimes(1))
+
+    pending[0].resolve(downloadedPage)
+    await waitFor(() => expect(downloader.download).toHaveBeenCalledTimes(2))
+    pending[1].resolve(downloadedPage)
+    await waitFor(() => expect(
+      queue.getSnapshot().manifests.every(item => item.state === 'completed'),
+    ).toBe(true))
+  })
+
+  it('persists only completed pages and the final manga boundary', async () => {
+    const repository = new MemoryQueueRepository()
+    const queue = makeQueue(repository, {
+      download: jest.fn().mockResolvedValue(downloadedPage),
+    })
+    await queue.initialize()
+    await queue.enqueue(manga('manga-1', 2))
+    await waitFor(() => expect(queue.getSnapshot().manifests[0]?.state).toBe('completed'))
+
+    expect(repository.saveCount).toBe(3)
+  })
+
   it('aborts before deleting an active manga and removes its snapshot', async () => {
     const repository = new MemoryQueueRepository()
     const pending = abortableDownload()
@@ -365,6 +403,7 @@ class MemoryQueueRepository {
   readonly deleted: string[] = []
   createCount = 0
   deleteAllCount = 0
+  saveCount = 0
 
   async reconcile() {
     return [...this.stored.values()]
@@ -383,6 +422,7 @@ class MemoryQueueRepository {
   }
 
   async save(manifest: DownloadManifestV1) {
+    this.saveCount += 1
     this.stored.set(manifest.manga.uuid, manifest)
   }
 

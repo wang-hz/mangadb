@@ -1,11 +1,11 @@
 import { render, screen } from '@testing-library/react-native'
 import type { ApiClient } from '@/api/client'
 import { MangaCard } from '@/components/MangaCard'
-import { useDownloads } from '@/downloads/DownloadContext'
+import { useDownloadManifest } from '@/downloads/DownloadContext'
 import { createDownloadManifest } from '@/downloads/types'
 
 jest.mock('expo-image', () => ({ Image: () => null }))
-jest.mock('@/downloads/DownloadContext', () => ({ useDownloads: jest.fn() }))
+jest.mock('@/downloads/DownloadContext', () => ({ useDownloadManifest: jest.fn() }))
 
 const manga = {
       uuid: 'manga-1',
@@ -19,9 +19,7 @@ const manga = {
 
 describe('MangaCard states', () => {
   beforeEach(() => {
-    jest.mocked(useDownloads).mockReturnValue({
-      manifestFor: jest.fn().mockReturnValue(null),
-    } as never)
+    jest.mocked(useDownloadManifest).mockReturnValue(null)
   })
 
   it('shows completed offline state', () => {
@@ -36,9 +34,7 @@ describe('MangaCard states', () => {
     })
     manifest.state = 'completed'
     manifest.pages[0].state = 'completed'
-    jest.mocked(useDownloads).mockReturnValue({
-      manifestFor: jest.fn().mockReturnValue(manifest),
-    } as never)
+    jest.mocked(useDownloadManifest).mockReturnValue(manifest)
 
     render(
       <MangaCard

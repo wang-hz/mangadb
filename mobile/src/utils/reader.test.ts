@@ -58,6 +58,20 @@ describe('reader helpers', () => {
     ])
   })
 
+  it('builds monotonic layouts for a thousand-page reader', () => {
+    const layouts = buildScrollingPageLayouts(
+      Array.from({ length: 1000 }, (_, index) => index % 3 === 0 ? 0.5 : 2 / 3),
+      390,
+      8,
+    )
+    expect(layouts).toHaveLength(1000)
+    expect(layouts.every((layout, index) =>
+      layout.index === index &&
+      layout.length > 0 &&
+      (index === 0 || layout.offset > layouts[index - 1].offset),
+    )).toBe(true)
+  })
+
   it('finds the page crossing the viewport center for tall and short pages', () => {
     const layouts = [
       { index: 0, offset: 0, length: 1_200 },

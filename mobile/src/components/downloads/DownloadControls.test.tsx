@@ -1,10 +1,16 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native'
 import type { MangaDetail } from '@/api/types'
 import { DownloadControls } from '@/components/downloads/DownloadControls'
-import { useDownloads } from '@/downloads/DownloadContext'
+import {
+  useDownloadActions,
+  useDownloadManifest,
+} from '@/downloads/DownloadContext'
 import { createDownloadManifest } from '@/downloads/types'
 
-jest.mock('@/downloads/DownloadContext', () => ({ useDownloads: jest.fn() }))
+jest.mock('@/downloads/DownloadContext', () => ({
+  useDownloadActions: jest.fn(),
+  useDownloadManifest: jest.fn(),
+}))
 
 const manga: MangaDetail = {
   uuid: 'manga-1',
@@ -22,7 +28,8 @@ const manga: MangaDetail = {
 describe('DownloadControls', () => {
   it('starts a new download from manga detail', async () => {
     const downloads = downloadContext(null)
-    jest.mocked(useDownloads).mockReturnValue(downloads)
+    jest.mocked(useDownloadActions).mockReturnValue(downloads)
+    jest.mocked(useDownloadManifest).mockReturnValue(null)
     render(<DownloadControls manga={manga} />)
 
     fireEvent.press(screen.getByText('下载到本机'))
@@ -39,7 +46,8 @@ describe('DownloadControls', () => {
     manifest.state = 'downloading'
     manifest.pages[0].state = 'completed'
     const downloads = downloadContext(manifest)
-    jest.mocked(useDownloads).mockReturnValue(downloads)
+    jest.mocked(useDownloadActions).mockReturnValue(downloads)
+    jest.mocked(useDownloadManifest).mockReturnValue(manifest)
     render(<DownloadControls manga={manga} />)
 
     expect(screen.getByText('正在下载 · 1/2 页')).toBeOnTheScreen()
@@ -56,7 +64,8 @@ describe('DownloadControls', () => {
     manifest.state = 'completed'
     manifest.pages.forEach(page => { page.state = 'completed' })
     const downloads = downloadContext(manifest)
-    jest.mocked(useDownloads).mockReturnValue(downloads)
+    jest.mocked(useDownloadActions).mockReturnValue(downloads)
+    jest.mocked(useDownloadManifest).mockReturnValue(manifest)
 
     render(<DownloadControls manga={manga} />)
 
@@ -73,11 +82,6 @@ function downloadContext(manifest: ReturnType<typeof createDownloadManifest> | n
     status: 'ready' as const,
     error: null,
     preferences: { wifiOnly: true },
-    snapshot: {
-      initialized: true,
-      eligible: true,
-      manifests: manifest ? [manifest] : [],
-    },
     enqueue: jest.fn().mockResolvedValue(manifest),
     update: jest.fn().mockResolvedValue(manifest),
     pause: jest.fn().mockResolvedValue(undefined),
@@ -87,8 +91,6 @@ function downloadContext(manifest: ReturnType<typeof createDownloadManifest> | n
     clearCurrentDownloads: jest.fn().mockResolvedValue(undefined),
     clearAllDownloads: jest.fn().mockResolvedValue(undefined),
     setWifiOnly: jest.fn().mockResolvedValue(undefined),
-    storageUsageBytes: 0,
     localPagesFor: jest.fn().mockResolvedValue(null),
-    manifestFor: jest.fn().mockReturnValue(manifest),
   }
 }

@@ -8,12 +8,21 @@ import { DownloadProvider } from '@/downloads/DownloadContext'
 import { stopActiveDownloadQueue } from '@/downloads/registry'
 import { createMobileQueryClient } from '@/query/client'
 import { installNativeQueryStateListeners } from '@/query/nativeState'
+import {
+  configureImageCache,
+  installImageCacheLifecycle,
+} from '@/media/cacheLifecycle'
 import { clearSessionCaches } from '@/session/cleanup'
 import { SessionProvider } from '@/session/SessionContext'
 import { ReaderPreferencesProvider } from './ReaderPreferencesContext'
 
 export function AppProviders({ children }: PropsWithChildren) {
+  useState(() => {
+    configureImageCache()
+    return true
+  })
   useEffect(() => installNativeQueryStateListeners(), [])
+  useEffect(() => installImageCacheLifecycle(), [])
 
   const [queryClient] = useState(createMobileQueryClient)
   const onSessionCleanup = useCallback(async () => {

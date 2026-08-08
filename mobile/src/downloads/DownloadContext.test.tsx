@@ -4,6 +4,7 @@ import type { MangaDetail } from '@/api/types'
 import {
   DownloadProvider,
   type DownloadQueueController,
+  useDownloadManifest,
   useDownloads,
 } from '@/downloads/DownloadContext'
 import type { DownloadQueueSnapshot } from '@/downloads/queue'
@@ -11,6 +12,14 @@ import { createDownloadManifest } from '@/downloads/types'
 import { useSession } from '@/session/SessionContext'
 
 jest.mock('@/session/SessionContext', () => ({ useSession: jest.fn() }))
+jest.mock('@/query/nativeState', () => {
+  const actual = jest.requireActual('@/query/nativeState')
+  return {
+    ...actual,
+    getNativeAppActive: jest.fn(() => true),
+    subscribeNativeAppState: jest.fn(() => () => {}),
+  }
+})
 
 describe('DownloadProvider', () => {
   let downloads: ReturnType<typeof useDownloads>
@@ -95,6 +104,37 @@ describe('DownloadProvider', () => {
     await waitFor(() => expect(downloads.status).toBe('unavailable'))
     expect(createQueue).not.toHaveBeenCalled()
   })
+
+  it('does not rerender a manga selector when another manifest changes', async () => {
+    const queue = new FakeDownloadQueue()
+    let selected: ReturnType<typeof useDownloadManifest> = null
+    let renderCount = 0
+    function ManifestProbe() {
+      selected = useDownloadManifest('manga-1')
+      renderCount += 1
+      return null
+    }
+    render(
+      <DownloadProvider createQueue={() => queue}>
+        <ManifestProbe />
+      </DownloadProvider>,
+    )
+    await waitFor(() => expect(queue.initialize).toHaveBeenCalled())
+    const first = createDownloadManifest({
+      serverUrl: 'https://example.com',
+      userUuid: 'user-1',
+    }, manga())
+    await act(async () => queue.setManifests([first]))
+    await waitFor(() => expect(selected).toBe(first))
+    const selectedRenderCount = renderCount
+
+    const second = createDownloadManifest({
+      serverUrl: 'https://example.com',
+      userUuid: 'user-1',
+    }, { ...manga(), uuid: 'manga-2' })
+    await act(async () => queue.setManifests([first, second]))
+    expect(renderCount).toBe(selectedRenderCount)
+  })
 })
 
 class FakeDownloadQueue implements DownloadQueueController {
@@ -103,21 +143,25 @@ class FakeDownloadQueue implements DownloadQueueController {
     eligible: false,
     manifests: [],
   }
-  private listener: (() => void) | null = null
+  private readonly listeners = new Set<() => void>()
 
   getSnapshot = jest.fn(() => this.snapshot)
   subscribe = jest.fn((listener: () => void) => {
-    this.listener = listener
-    return () => { this.listener = null }
+    this.listeners.add(listener)
+    return () => { this.listeners.delete(listener) }
   })
   setEligible = jest.fn((eligible: boolean) => {
     this.snapshot = { ...this.snapshot, eligible }
-    this.listener?.()
+    this.listeners.forEach(listener => listener())
   })
   initialize = jest.fn(async () => {
     this.snapshot = { ...this.snapshot, initialized: true }
-    this.listener?.()
+    this.listeners.forEach(listener => listener())
   })
+  setManifests(manifests: DownloadQueueSnapshot['manifests']) {
+    this.snapshot = { ...this.snapshot, manifests }
+    this.listeners.forEach(listener => listener())
+  }
   enqueue = jest.fn(async (item: MangaDetail) => createDownloadManifest({
     serverUrl: 'https://example.com',
     userUuid: 'user-1',

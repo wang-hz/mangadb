@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native'
 import { useKeepAwake } from 'expo-keep-awake'
 import type { ApiClient } from '@/api/client'
 import type { MangaDetail } from '@/api/types'
@@ -84,6 +84,7 @@ const manga: MangaDetail = {
 }
 
 describe('ReaderExperience', () => {
+  afterEach(() => jest.useRealTimers())
   beforeEach(() => {
     mockSaveReadingProgress.mockResolvedValue({
       pageIndex: 3,
@@ -94,6 +95,7 @@ describe('ReaderExperience', () => {
   })
 
   it('keeps the same position while switching between reader modes', async () => {
+    jest.useFakeTimers()
     const onReaderReady = jest.fn()
     render(
       <ReaderExperience
@@ -125,41 +127,17 @@ describe('ReaderExperience', () => {
 
     fireEvent.press(screen.getByLabelText('翻页模式更新页码'))
     expect(screen.getByText('paged:5')).toBeTruthy()
-    expect(mockSaveReadingProgress).toHaveBeenLastCalledWith(
-      'https://example.com',
-      'user-1',
-      'manga-1',
-      10,
-      5,
-      'paged',
-      manga,
-    )
 
     fireEvent.press(screen.getByLabelText('切换到滚动模式'))
     expect(screen.getByText('scroll:5')).toBeTruthy()
-    expect(mockSaveReadingProgress).toHaveBeenLastCalledWith(
-      'https://example.com',
-      'user-1',
-      'manga-1',
-      10,
-      5,
-      'scroll',
-      manga,
-    )
 
     fireEvent.press(screen.getByLabelText('滚动模式更新页码'))
     expect(screen.getByText('scroll:6')).toBeTruthy()
-    expect(mockSaveReadingProgress).toHaveBeenLastCalledWith(
-      'https://example.com',
-      'user-1',
-      'manga-1',
-      10,
-      6,
-      'scroll',
-      manga,
-    )
     fireEvent.press(screen.getByLabelText('切换到翻页模式'))
     expect(screen.getByText('paged:6')).toBeTruthy()
+    expect(mockSaveReadingProgress).toHaveBeenCalledTimes(1)
+
+    await act(async () => { jest.advanceTimersByTime(400) })
     expect(mockSaveReadingProgress).toHaveBeenLastCalledWith(
       'https://example.com',
       'user-1',
@@ -169,7 +147,7 @@ describe('ReaderExperience', () => {
       'paged',
       manga,
     )
-    expect(mockSaveReadingProgress).toHaveBeenCalledTimes(5)
+    expect(mockSaveReadingProgress).toHaveBeenCalledTimes(2)
   })
 
   it('keeps the screen awake only when the preference is enabled', async () => {

@@ -24,6 +24,7 @@ describe('reading progress storage', () => {
   beforeEach(() => {
     jest.mocked(AsyncStorage.getItem).mockReset().mockResolvedValue(null)
     jest.mocked(AsyncStorage.setItem).mockReset().mockResolvedValue(undefined)
+    jest.mocked(AsyncStorage.multiSet).mockReset().mockResolvedValue(undefined)
     jest.mocked(AsyncStorage.removeItem).mockReset().mockResolvedValue(undefined)
   })
 
@@ -227,6 +228,9 @@ function installStorageMap() {
   jest.mocked(AsyncStorage.getItem).mockImplementation(async key => values.get(key) ?? null)
   jest.mocked(AsyncStorage.setItem).mockImplementation(async (key, value) => {
     values.set(key, value)
+  })
+  jest.mocked(AsyncStorage.multiSet).mockImplementation(async entries => {
+    entries.forEach(([key, value]) => values.set(key, value))
   })
   jest.mocked(AsyncStorage.removeItem).mockImplementation(async key => {
     values.delete(key)

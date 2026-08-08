@@ -17,6 +17,8 @@ let networkSnapshot: NativeNetworkSnapshot = {
   connectionType: NetInfoStateType.unknown,
 }
 const networkListeners = new Set<() => void>()
+let appActive = AppState.currentState === null || AppState.currentState === 'active'
+const appStateListeners = new Set<() => void>()
 
 export function installNativeQueryStateListeners(): () => void {
   onlineManager.setEventListener(setOnline =>
@@ -30,7 +32,13 @@ export function installNativeQueryStateListeners(): () => void {
       })
     }))
   focusManager.setEventListener(setFocused => {
-    const handleAppState = (state: AppStateStatus) => setFocused(state === 'active')
+    const handleAppState = (state: AppStateStatus) => {
+      const nextActive = state === 'active'
+      setFocused(nextActive)
+      if (appActive === nextActive) return
+      appActive = nextActive
+      appStateListeners.forEach(listener => listener())
+    }
     handleAppState(AppState.currentState)
     const subscription = AppState.addEventListener('change', handleAppState)
     return () => subscription.remove()
@@ -61,6 +69,15 @@ export function getNativeNetworkSnapshot(): NativeNetworkSnapshot {
 export function subscribeNativeNetwork(listener: () => void): () => void {
   networkListeners.add(listener)
   return () => networkListeners.delete(listener)
+}
+
+export function getNativeAppActive(): boolean {
+  return appActive
+}
+
+export function subscribeNativeAppState(listener: () => void): () => void {
+  appStateListeners.add(listener)
+  return () => appStateListeners.delete(listener)
 }
 
 function updateNetworkSnapshot(nextSnapshot: NativeNetworkSnapshot): void {

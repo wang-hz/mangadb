@@ -28,7 +28,7 @@ import { useCatalogFilters } from '@/hooks/useCatalogFilters'
 import { useAdaptiveGridAnchor } from '@/hooks/useAdaptiveGridAnchor'
 import { useRecentReading } from '@/hooks/useRecentReading'
 import { useSession } from '@/session/SessionContext'
-import { useDownloads } from '@/downloads/DownloadContext'
+import { useDownloadedMangaUuids } from '@/downloads/DownloadContext'
 import { matchesLocalMangaFilters } from '@/catalog/mangaFilters'
 import { activeCatalogFilterCount } from '@/storage/catalogFilters'
 import type { RecentReadingEntry } from '@/storage/progress'
@@ -53,7 +53,7 @@ export default function MangasScreen() {
   const debouncedSearch = useDebouncedValue(filters.search.trim(), 350)
   const recentReading = useRecentReading(serverUrl, auth?.user.uuid)
   const favorites = useFavorites(serverUrl, auth?.user.uuid)
-  const downloads = useDownloads()
+  const downloadedUuids = useDownloadedMangaUuids()
   const tagsQuery = useQuery({
     queryKey: ['catalog-filter-tags', serverUrl, auth?.user.uuid],
     queryFn: ({ signal }) => getAllTags(api!, signal),
@@ -101,13 +101,6 @@ export default function MangasScreen() {
     () => new Map(recentReading.allEntries.map(entry => [entry.manga.uuid, entry])),
     [recentReading.allEntries],
   )
-  const downloadedUuids = useMemo(() => new Set(
-    downloads.snapshot.manifests
-      .filter(manifest =>
-        (manifest.state === 'completed' || manifest.state === 'stale') &&
-        manifest.pages.every(page => page.state === 'completed'))
-      .map(manifest => manifest.manga.uuid),
-  ), [downloads.snapshot.manifests])
   const mangas = useMemo(() => serverMangas.filter(manga =>
     matchesLocalMangaFilters(
       manga.uuid,

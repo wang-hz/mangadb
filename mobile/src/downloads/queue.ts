@@ -88,7 +88,7 @@ export class DownloadQueue {
     this.api = options.api
     this.repository = options.repository
     this.downloader = options.downloader
-    this.concurrency = Math.max(1, Math.trunc(options.concurrency ?? 2))
+    this.concurrency = Math.max(1, Math.trunc(options.concurrency ?? 1))
     this.maxAttempts = Math.max(1, Math.trunc(options.maxAttempts ?? 3))
     this.now = options.now ?? (() => new Date())
     this.waitForRetry = options.waitForRetry ?? defaultRetryWait
@@ -451,7 +451,8 @@ export class DownloadQueue {
         updatedAt: this.timestamp(),
         failure: null,
       })
-      await this.persist(downloadingManifest)
+      this.manifests.set(mangaUuid, downloadingManifest)
+      this.publish()
 
       try {
         const paths = await this.repository.pagePaths(

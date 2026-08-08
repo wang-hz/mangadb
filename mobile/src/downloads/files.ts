@@ -15,11 +15,10 @@ export interface DownloadFileStore {
 }
 
 export interface DownloadPageFileStore {
-  writePageAtomic: (
-    partialUri: string,
-    completedUri: string,
-    bytes: Uint8Array,
-  ) => Promise<void>
+  preparePagePartial: (partialUri: string) => Promise<void>
+  pageFileSize: (uri: string) => Promise<number | null>
+  promotePagePartial: (partialUri: string, completedUri: string) => Promise<void>
+  deletePagePartial: (partialUri: string) => Promise<void>
 }
 
 export function defaultDownloadRootUri(): string {
@@ -102,22 +101,28 @@ export class ExpoDownloadFileStore implements DownloadFileStore, DownloadPageFil
     }
   }
 
-  async writePageAtomic(
-    partialUri: string,
-    completedUri: string,
-    bytes: Uint8Array,
-  ): Promise<void> {
+  async preparePagePartial(partialUri: string): Promise<void> {
     const partial = new File(partialUri)
     partial.parentDirectory.create({ idempotent: true, intermediates: true })
-    partial.create({ intermediates: true, overwrite: true })
-    partial.write(bytes)
-    if (partial.size !== bytes.byteLength) {
-      partial.delete()
-      throw new Error('页面临时文件长度不匹配')
-    }
+    if (partial.exists) partial.delete()
+  }
+
+  async pageFileSize(uri: string): Promise<number | null> {
+    const file = new File(uri)
+    return file.exists ? file.size : null
+  }
+
+  async promotePagePartial(partialUri: string, completedUri: string): Promise<void> {
+    const partial = new File(partialUri)
+    if (!partial.exists) throw new Error('页面临时文件不存在')
     const completed = new File(completedUri)
     completed.parentDirectory.create({ idempotent: true, intermediates: true })
     if (completed.exists) completed.delete()
     partial.move(completed)
+  }
+
+  async deletePagePartial(partialUri: string): Promise<void> {
+    const partial = new File(partialUri)
+    if (partial.exists) partial.delete()
   }
 }

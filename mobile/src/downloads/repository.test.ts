@@ -192,6 +192,11 @@ describe('DownloadRepository', () => {
       'https://example.com',
       'user-1',
       manga.uuid,
+    )).resolves.toHaveLength(2)
+    await expect(repositoryWith(files).localPageUris(
+      'https://example.com',
+      'user-1',
+      manga.uuid,
     )).rejects.toThrow('第 2 页损坏或缺失')
   })
 

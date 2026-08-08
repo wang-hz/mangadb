@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useKeepAwake } from 'expo-keep-awake'
+import { AppState } from 'react-native'
 import type { ApiClient } from '@/api/client'
 import type { MangaDetail } from '@/api/types'
 import { PagedReader } from '@/components/reader/PagedReader'
 import { ReaderSettingsModal } from '@/components/reader/ReaderSettingsModal'
 import { ScrollingReader } from '@/components/reader/ScrollingReader'
-import { markMangaCompleted, saveReadingProgress } from '@/storage/progress'
+import { markMangaCompleted } from '@/storage/progress'
+import { ReadingProgressWriter } from '@/storage/progressWriter'
 import type { ReaderPreferences } from '@/storage/readerPreferences'
 import { clampPageIndex, type ReaderMode } from '@/utils/reader'
 
@@ -47,23 +49,37 @@ export function ReaderExperience({
   const pageIndexRef = useRef(initialPageIndex)
   const modeRef = useRef<ReaderMode>(initialMode)
   const initialStateRef = useRef({ pageIndex: initialPageIndex, mode: initialMode })
+  const progressWriter = useMemo(() => new ReadingProgressWriter(), [
+    manga.uuid,
+    serverUrl,
+    userUuid,
+  ])
 
   const persist = useCallback((nextPageIndex: number, nextMode: ReaderMode) => {
-    void saveReadingProgress(
+    progressWriter.schedule({
       serverUrl,
       userUuid,
-      manga.uuid,
-      manga.pages.length,
-      nextPageIndex,
-      nextMode,
+      mangaUuid: manga.uuid,
+      pageCount: manga.pages.length,
+      pageIndex: nextPageIndex,
+      mode: nextMode,
       manga,
-    ).catch(() => {})
-  }, [serverUrl, userUuid, manga.uuid, manga.pages.length])
+    })
+  }, [manga, progressWriter, serverUrl, userUuid])
 
   useEffect(() => {
     persist(initialStateRef.current.pageIndex, initialStateRef.current.mode)
+    void progressWriter.flush().catch(() => {})
     onReaderReady()
-  }, [persist, onReaderReady])
+    return () => { void progressWriter.flush().catch(() => {}) }
+  }, [persist, onReaderReady, progressWriter])
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', state => {
+      if (state !== 'active') void progressWriter.flush().catch(() => {})
+    })
+    return () => subscription.remove()
+  }, [progressWriter])
 
   const changePage = useCallback((nextPageIndex: number) => {
     const clamped = clampPageIndex(nextPageIndex, manga.pages.length)
@@ -75,6 +91,7 @@ export function ReaderExperience({
   }, [manga.pages.length, persist])
 
   const complete = useCallback(async () => {
+    progressWriter.cancel()
     await markMangaCompleted(
       serverUrl,
       userUuid,
@@ -83,7 +100,7 @@ export function ReaderExperience({
       modeRef.current,
     )
     setCompleted(true)
-  }, [manga, serverUrl, userUuid])
+  }, [manga, progressWriter, serverUrl, userUuid])
 
   const changeMode = useCallback((nextMode: ReaderMode) => {
     if (nextMode === modeRef.current) return

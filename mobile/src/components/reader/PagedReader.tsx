@@ -18,7 +18,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { ApiClient } from '@/api/client'
 import type { MangaDetail } from '@/api/types'
 import { PrimaryButton } from '@/components/PrimaryButton'
-import { useReaderPagePrefetch } from '@/components/reader/prefetch'
 import { ReaderCompletionPanel } from '@/components/reader/ReaderCompletionPanel'
 import { ReaderDimmer } from '@/components/reader/ReaderDimmer'
 import { ReaderTopBar } from '@/components/reader/ReaderTopBar'
@@ -101,17 +100,6 @@ export function PagedReader({
     reportVisiblePageLoad('paged', index, durationMs, !firstPageReportedRef.current)
     firstPageReportedRef.current = true
   }, [])
-  useReaderPagePrefetch({
-    api,
-    direction: preferences.pagedDirection,
-    manga,
-    mode: 'paged',
-    pageIndex,
-    serverUrl,
-    userUuid,
-    enabled: !localPageUris,
-  })
-
   useEffect(() => {
     if (!controlsVisible || jumpVisible || settingsVisible) return
     if (preferences.controlsAutoHideMs === null) return
@@ -158,13 +146,12 @@ export function PagedReader({
   return (
     <View style={styles.root}>
       <StatusBar hidden={!controlsVisible} style="light" />
-      {/* A three-viewport window prefetches neighbors with the same authenticated cache key. */}
       <FlatList
         data={pageIndexes}
         decelerationRate="fast"
         getItemLayout={(_, index) => ({ length: width, offset: width * index, index })}
         horizontal
-        initialNumToRender={3}
+        initialNumToRender={1}
         initialScrollIndex={displayIndexForPage(
           pageIndex,
           manga.pages.length,
@@ -172,7 +159,7 @@ export function PagedReader({
         )}
         key={preferences.pagedDirection}
         keyExtractor={index => String(index)}
-        maxToRenderPerBatch={3}
+        maxToRenderPerBatch={1}
         onMomentumScrollEnd={event => {
           const displayIndex = clampPageIndex(
             Math.round(event.nativeEvent.contentOffset.x / width),
@@ -355,12 +342,14 @@ const ReaderPage = memo(function ReaderPage({
       {!failed
         ? (
             <ZoomableReaderImage
+              allowDownscaling
               accessibilityLabel={`第 ${index + 1} 页图片`}
-              cachePolicy="memory-disk"
+              cachePolicy={localUri ? 'none' : 'disk'}
               contentFit={contentFit}
               doubleTapScale={doubleTapScale}
               gesturesEnabled={gesturesEnabled}
               height={height}
+              enforceEarlyResizing={Platform.OS === 'ios'}
               key={attempt}
               onError={() => {
                 setLoading(false)

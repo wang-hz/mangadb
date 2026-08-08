@@ -41,6 +41,20 @@ export class ApiClient {
     return this.token ? { Authorization: `Bearer ${this.token}` } : {}
   }
 
+  async handleExternalResponse(status: number): Promise<void> {
+    this.reportReachability(true)
+    if (status !== 401) return
+    try {
+      await this.onUnauthorized?.()
+    } catch {
+      // Preserve the native transfer's HTTP status if credential cleanup fails.
+    }
+  }
+
+  handleExternalNetworkFailure(): void {
+    this.reportReachability(false)
+  }
+
   async request<T>(path: string, options: RequestInit = {}): Promise<T> {
     const response = await this.requestResponse(path, options)
     if (response.status === 204) return undefined as T

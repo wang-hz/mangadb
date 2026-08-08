@@ -3,15 +3,18 @@ import { useState } from 'react'
 import { Alert, StyleSheet, Text, View } from 'react-native'
 import type { MangaDetail } from '@/api/types'
 import { PrimaryButton } from '@/components/PrimaryButton'
-import { useDownloads } from '@/downloads/DownloadContext'
+import {
+  useDownloadActions,
+  useDownloadManifest,
+} from '@/downloads/DownloadContext'
 import type { DownloadManifestV1 } from '@/downloads/types'
 import { colors } from '@/theme/colors'
 
 type PendingAction = 'enqueue' | 'update' | 'pause' | 'resume' | 'retry' | 'delete' | null
 
 export function DownloadControls({ manga }: { manga: MangaDetail }) {
-  const downloads = useDownloads()
-  const manifest = downloads.manifestFor(manga.uuid)
+  const downloads = useDownloadActions()
+  const manifest = useDownloadManifest(manga.uuid)
   const [pending, setPending] = useState<PendingAction>(null)
   const [error, setError] = useState<string | null>(null)
   const stale = Boolean(manifest && manifest.manga.updateAt !== manga.updateAt)

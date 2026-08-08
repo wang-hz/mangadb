@@ -17,12 +17,25 @@ interface IdentityRecord extends DownloadIdentity {
   schemaVersion: 1
 }
 
+interface IdentityPaths {
+  identityUri: string
+  identityFileUri: string
+  mangasUri: string
+  updatesUri: string
+}
+
 export interface DownloadPagePaths {
   partialUri: string
   completedUri: string
 }
 
 export class DownloadRepository {
+  private readonly identityPathsCache = new Map<string, Promise<IdentityPaths>>()
+  private readonly localPagesCache = new Map<string, {
+    revision: string
+    uris: string[]
+  }>()
+
   constructor(
     private readonly files: DownloadFileStore = new ExpoDownloadFileStore(),
     private readonly rootUri = defaultDownloadRootUri(),
@@ -156,10 +169,12 @@ export class DownloadRepository {
     const identity = normalizeDownloadIdentity(serverUrl, userUuid)
     const paths = await this.paths(identity, mangaUuid)
     await this.files.deleteDirectory(paths.mangaUri)
+    this.localPagesCache.delete(localPagesCacheKey(identity, mangaUuid))
   }
 
   async deleteAll(): Promise<void> {
     await this.files.deleteDirectory(this.rootUri)
+    this.localPagesCache.clear()
   }
 
   async list(serverUrl: string, userUuid: string): Promise<DownloadManifestV1[]> {
@@ -257,17 +272,22 @@ export class DownloadRepository {
       manifest.pages.some(page => page.state !== 'completed')
     ) return null
 
-    const uris: string[] = []
-    for (const page of manifest.pages) {
+    const cacheKey = localPagesCacheKey(manifest.identity, mangaUuid)
+    const revision = localPagesRevision(manifest)
+    const cached = this.localPagesCache.get(cacheKey)
+    if (cached?.revision === revision) return [...cached.uris]
+
+    const uris = await mapWithConcurrency(manifest.pages, 8, async page => {
       const paths = await this.pagePaths(serverUrl, userUuid, mangaUuid, page.index)
       const size = await this.files.fileSize(paths.completedUri)
       const expected = page.expectedBytes ?? page.bytesWritten
       if (size === null || size <= 0 || expected <= 0 || size !== expected) {
         throw new DownloadRepositoryError(`本机下载的第 ${page.index + 1} 页损坏或缺失`)
       }
-      uris.push(paths.completedUri)
-    }
-    return uris
+      return paths.completedUri
+    })
+    this.localPagesCache.set(cacheKey, { revision, uris })
+    return [...uris]
   }
 
   private async ensureIdentity(
@@ -316,16 +336,62 @@ export class DownloadRepository {
     }
   }
 
-  private async identityPaths(identity: DownloadIdentity) {
-    const key = await this.identityKey(identity)
-    const identityUri = joinUri(this.rootUri, 'identities', key)
-    return {
-      identityUri,
-      identityFileUri: joinUri(identityUri, 'identity.json'),
-      mangasUri: joinUri(identityUri, 'mangas'),
-      updatesUri: joinUri(identityUri, 'updates'),
-    }
+  private identityPaths(identity: DownloadIdentity): Promise<IdentityPaths> {
+    const cacheKey = `${identity.serverUrl}\u0000${identity.userUuid}`
+    const existing = this.identityPathsCache.get(cacheKey)
+    if (existing) return existing
+    const operation = this.identityKey(identity).then(key => {
+      const identityUri = joinUri(this.rootUri, 'identities', key)
+      return {
+        identityUri,
+        identityFileUri: joinUri(identityUri, 'identity.json'),
+        mangasUri: joinUri(identityUri, 'mangas'),
+        updatesUri: joinUri(identityUri, 'updates'),
+      }
+    })
+    this.identityPathsCache.set(cacheKey, operation)
+    void operation.catch(() => {
+      if (this.identityPathsCache.get(cacheKey) === operation) {
+        this.identityPathsCache.delete(cacheKey)
+      }
+    })
+    return operation
   }
+}
+
+function localPagesCacheKey(identity: DownloadIdentity, mangaUuid: string): string {
+  return `${identity.serverUrl}\u0000${identity.userUuid}\u0000${mangaUuid}`
+}
+
+function localPagesRevision(manifest: DownloadManifestV1): string {
+  return [
+    manifest.manga.updateAt,
+    manifest.updatedAt,
+    manifest.completedAt ?? '',
+    manifest.pages.length,
+    ...manifest.pages.map(page => `${page.bytesWritten}:${page.expectedBytes ?? ''}`),
+  ].join('|')
+}
+
+async function mapWithConcurrency<T, R>(
+  values: readonly T[],
+  concurrency: number,
+  operation: (value: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(values.length)
+  let nextIndex = 0
+  const workers = Array.from(
+    { length: Math.min(concurrency, values.length) },
+    async () => {
+      while (nextIndex < values.length) {
+        const index = nextIndex
+        nextIndex += 1
+        results[index] = await operation(values[index])
+      }
+    },
+  )
+  await Promise.all(workers)
+  return results
 }
 
 export class DownloadRepositoryError extends Error {

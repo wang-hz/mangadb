@@ -60,6 +60,7 @@ jest.mock('@/hooks/useCatalogFilters', () => ({
 }))
 
 jest.mock('@/downloads/DownloadContext', () => ({
+  useDownloadedMangaUuids: () => new Set(),
   useDownloads: () => ({
     snapshot: { manifests: [] },
   }),

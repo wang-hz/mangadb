@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import type { MangaDetail } from '@/api/types'
-import { useDownloads } from '@/downloads/DownloadContext'
+import {
+  useDownloadActions,
+  useDownloadManifest,
+} from '@/downloads/DownloadContext'
 
 export type LocalDownloadStatus = 'loading' | 'available' | 'unavailable' | 'error'
 
@@ -18,8 +21,8 @@ interface Verification {
 }
 
 export function useLocalDownload(mangaUuid?: string): LocalDownload {
-  const downloads = useDownloads()
-  const manifest = mangaUuid ? downloads.manifestFor(mangaUuid) : null
+  const downloads = useDownloadActions()
+  const manifest = useDownloadManifest(mangaUuid)
   const candidate = manifest &&
     (manifest.state === 'completed' || manifest.state === 'stale') &&
     manifest.pages.every(page => page.state === 'completed')

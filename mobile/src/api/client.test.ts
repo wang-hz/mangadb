@@ -93,4 +93,20 @@ describe('ApiClient', () => {
     await expect(client.request('/api/test')).rejects.toMatchObject({ status: 0 })
     expect(onReachabilityChange).toHaveBeenCalledWith(false)
   })
+
+  it('preserves auth and reachability handling for native transfers', async () => {
+    const onUnauthorized = jest.fn().mockResolvedValue(undefined)
+    const onReachabilityChange = jest.fn()
+    const client = new ApiClient('https://example.com', {
+      onUnauthorized,
+      onReachabilityChange,
+    })
+
+    await client.handleExternalResponse(401)
+    client.handleExternalNetworkFailure()
+
+    expect(onUnauthorized).toHaveBeenCalledTimes(1)
+    expect(onReachabilityChange).toHaveBeenNthCalledWith(1, true)
+    expect(onReachabilityChange).toHaveBeenNthCalledWith(2, false)
+  })
 })

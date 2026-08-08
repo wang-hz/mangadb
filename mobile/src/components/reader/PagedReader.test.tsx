@@ -109,14 +109,15 @@ describe('PagedReader preferences', () => {
     expect(screen.getAllByLabelText('页面图片-contain').length).toBeGreaterThan(0)
   })
 
-  it('prefetches logical next pages first in RTL mode', async () => {
-    renderReader({ pagedDirection: 'rtl' })
+  it('does not start full-resolution image prefetches', async () => {
+    const { view } = renderReader({ pagedDirection: 'rtl' })
 
     await act(async () => {})
-    const urls = jest.mocked(Image.prefetch).mock.calls.map(call => String(call[0]))
-    expect(urls[0]).toContain('/pages/2?')
-    expect(urls[1]).toContain('/pages/3?')
-    expect(urls[2]).toContain('/pages/0?')
+    expect(Image.prefetch).not.toHaveBeenCalled()
+    const list = view.UNSAFE_getByType(FlatList)
+    expect(list.props.initialNumToRender).toBe(1)
+    expect(list.props.maxToRenderPerBatch).toBe(1)
+    expect(list.props.windowSize).toBe(3)
   })
 
   it('passes cover fitting to page images', () => {

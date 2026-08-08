@@ -62,9 +62,8 @@ export async function saveReadingProgress(
 ): Promise<ReadingProgress> {
   const identity = progressIdentity(serverUrl, userUuid)
   return enqueueIdentityWrite(identity, async () => {
-    const previousEntry = manga
-      ? (await loadProgressIndex(serverUrl, userUuid)).entries[mangaUuid]
-      : undefined
+    const index = manga ? await loadProgressIndex(serverUrl, userUuid) : null
+    const previousEntry = index?.entries[mangaUuid]
     const clampedPageIndex = clampPageIndex(pageIndex, pageCount)
     const progress: ReadingProgress = {
       pageIndex: clampedPageIndex,
@@ -74,19 +73,20 @@ export async function saveReadingProgress(
         : 'reading',
       updatedAt: new Date().toISOString(),
     }
-    await AsyncStorage.setItem(
-      progressKey(serverUrl, userUuid, mangaUuid),
-      JSON.stringify(progress),
-    )
-    if (manga) {
-      const index = await loadProgressIndex(serverUrl, userUuid)
+    const progressStorageKey = progressKey(serverUrl, userUuid, mangaUuid)
+    if (manga && index) {
       index.entries[mangaUuid] = {
         ...progress,
         manga: cloneMangaSummary(manga),
         pageCount: Math.max(0, Math.trunc(pageCount)),
         hiddenFromRecent: false,
       }
-      await saveProgressIndex(serverUrl, userUuid, index)
+      await AsyncStorage.multiSet([
+        [progressStorageKey, JSON.stringify(progress)],
+        [progressIndexKey(serverUrl, userUuid), JSON.stringify(index)],
+      ])
+    } else {
+      await AsyncStorage.setItem(progressStorageKey, JSON.stringify(progress))
     }
     return progress
   })

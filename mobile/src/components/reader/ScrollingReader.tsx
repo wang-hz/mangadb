@@ -14,7 +14,6 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { ApiClient } from '@/api/client'
 import type { MangaDetail } from '@/api/types'
-import { useReaderPagePrefetch } from '@/components/reader/prefetch'
 import { ReaderCompletionPanel } from '@/components/reader/ReaderCompletionPanel'
 import { ReaderDimmer } from '@/components/reader/ReaderDimmer'
 import { ReaderTopBar } from '@/components/reader/ReaderTopBar'
@@ -86,20 +85,13 @@ export function ScrollingReader({
   const scrollOffsetRef = useRef(0)
   const firstPageReportedRef = useRef(false)
   const visiblePageRef = useRef(pageIndex)
+  const pendingAspectRatiosRef = useRef<Record<number, number>>({})
+  const aspectRatioFrameRef = useRef<number | null>(null)
   visiblePageRef.current = pageIndex
   const [aspectRatios, setAspectRatios] = useState<Record<number, number>>({})
   const [controlsVisible, setControlsVisible] = useState(true)
   const [zoomedPageIndex, setZoomedPageIndex] = useState<number | null>(null)
   const imageWidth = Math.min(width, 900)
-  useReaderPagePrefetch({
-    api,
-    manga,
-    mode: 'scroll',
-    pageIndex,
-    serverUrl,
-    userUuid,
-    enabled: !localPageUris,
-  })
   const layouts = useMemo(() => buildScrollingPageLayouts(
     manga.pages.map((_, index) => aspectRatios[index] ?? 2 / 3),
     imageWidth,
@@ -138,6 +130,9 @@ export function ScrollingReader({
     if (retryTimerRef.current) clearTimeout(retryTimerRef.current)
     if (initializationTimerRef.current) clearTimeout(initializationTimerRef.current)
     if (settleTimerRef.current) clearTimeout(settleTimerRef.current)
+    if (aspectRatioFrameRef.current !== null) {
+      cancelAnimationFrame(aspectRatioFrameRef.current)
+    }
   }, [])
 
   const finishInitializationAfterDelay = () => {
@@ -169,9 +164,33 @@ export function ScrollingReader({
   }
 
   const updateAspectRatio = useCallback((index: number, ratio: number) => {
-    setAspectRatios(current => Math.abs((current[index] ?? 0) - ratio) < 0.001
-      ? current
-      : { ...current, [index]: ratio })
+    pendingAspectRatiosRef.current[index] = ratio
+    if (aspectRatioFrameRef.current !== null) return
+    aspectRatioFrameRef.current = requestAnimationFrame(() => {
+      aspectRatioFrameRef.current = null
+      const pending = pendingAspectRatiosRef.current
+      pendingAspectRatiosRef.current = {}
+      setAspectRatios(current => {
+        let changed = false
+        const next = { ...current }
+        Object.entries(pending).forEach(([key, value]) => {
+          const index = Number(key)
+          if (Math.abs((current[index] ?? 0) - value) < 0.001) return
+          next[index] = value
+          changed = true
+        })
+        return changed ? next : current
+      })
+    })
+  }, [])
+  const toggleControls = useCallback(() => {
+    setControlsVisible(visible => !visible)
+  }, [])
+  const updateZoomedPage = useCallback((index: number, zoomed: boolean) => {
+    setZoomedPageIndex(current => {
+      if (zoomed) return index
+      return current === index ? null : current
+    })
   }, [])
 
   return (
@@ -181,7 +200,7 @@ export function ScrollingReader({
         data={manga.pages}
         extraData={layouts}
         getItemLayout={(_, index) => layouts[index]}
-        initialNumToRender={3}
+        initialNumToRender={1}
         initialScrollIndex={pageIndex}
         keyExtractor={(_, index) => String(index)}
         ListFooterComponent={(
@@ -201,7 +220,7 @@ export function ScrollingReader({
           </View>
         )}
         maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
-        maxToRenderPerBatch={3}
+        maxToRenderPerBatch={1}
         onScrollBeginDrag={() => {
           initializingRef.current = false
           cancelSettle()
@@ -242,11 +261,8 @@ export function ScrollingReader({
             onAspectRatio={updateAspectRatio}
             onPageLoad={recordPageLoad}
             onRefreshMetadata={onRefreshMetadata}
-            onTap={() => setControlsVisible(visible => !visible)}
-            onZoomChange={zoomed => setZoomedPageIndex(current => {
-              if (zoomed) return index
-              return current === index ? null : current
-            })}
+            onTap={toggleControls}
+            onZoomChange={updateZoomedPage}
             pageGap={index === manga.pages.length - 1 ? 0 : preferences.scrollGap}
             serverUrl={serverUrl}
             userUuid={userUuid}
@@ -256,7 +272,7 @@ export function ScrollingReader({
         scrollEventThrottle={16}
         scrollEnabled={zoomedPageIndex === null}
         showsVerticalScrollIndicator={false}
-        windowSize={5}
+        windowSize={3}
       />
       <ReaderDimmer level={preferences.readerDimLevel} />
 
@@ -292,7 +308,7 @@ interface ScrollingPageProps {
   gesturesEnabled: boolean
   viewportWidth: number
   onTap: () => void
-  onZoomChange: (zoomed: boolean) => void
+  onZoomChange: (index: number, zoomed: boolean) => void
   onAspectRatio: (index: number, aspectRatio: number) => void
   onPageLoad: (index: number, durationMs: number) => void
   onRefreshMetadata: () => Promise<void>
@@ -347,12 +363,14 @@ const ScrollingPage = memo(function ScrollingPage({
       {!failed
         ? (
             <ZoomableReaderImage
+              allowDownscaling
               accessibilityLabel={`第 ${index + 1} 页图片`}
-              cachePolicy="memory-disk"
+              cachePolicy={localUri ? 'none' : 'disk'}
               contentFit="contain"
               doubleTapScale={doubleTapScale}
               gesturesEnabled={gesturesEnabled}
               height={imageHeight}
+              enforceEarlyResizing={Platform.OS === 'ios'}
               key={attempt}
               onError={() => {
                 setLoading(false)
@@ -376,7 +394,7 @@ const ScrollingPage = memo(function ScrollingPage({
               recyclingKey={`${manga.uuid}:${index}:${manga.updateAt}`}
               source={source}
               onTap={() => onTap()}
-              onZoomChange={onZoomChange}
+              onZoomChange={zoomed => onZoomChange(index, zoomed)}
               width={imageWidth}
             />
           )

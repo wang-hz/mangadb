@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import type { MangaSummary } from '@/api/types'
 import type { ApiClient } from '@/api/client'
-import { useDownloads } from '@/downloads/DownloadContext'
+import { useDownloadManifest } from '@/downloads/DownloadContext'
 import { mangaPageImageSource } from '@/media/images'
 import { colors } from '@/theme/colors'
 import type { RecentReadingEntry } from '@/storage/progress'
@@ -30,7 +30,7 @@ export const MangaCard = memo(function MangaCard({
   progress,
   favorite = false,
 }: MangaCardProps) {
-  const downloads = useDownloads()
+  const download = useDownloadManifest(manga.uuid)
   const [imageFailed, setImageFailed] = useState(false)
   const coverIndex = manga.cover ?? 0
   const imageSource = mangaPageImageSource(
@@ -42,7 +42,6 @@ export const MangaCard = memo(function MangaCard({
     manga.updateAt,
     true,
   )
-  const download = downloads.manifestFor(manga.uuid)
   const downloadBadge = download
     ? download.manga.updateAt !== manga.updateAt || download.state === 'stale'
       ? '需更新'

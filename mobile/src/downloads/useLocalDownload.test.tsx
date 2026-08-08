@@ -1,11 +1,17 @@
 import { render, screen, waitFor } from '@testing-library/react-native'
 import { Text } from 'react-native'
 import type { MangaDetail } from '@/api/types'
-import { useDownloads } from '@/downloads/DownloadContext'
+import {
+  useDownloadActions,
+  useDownloadManifest,
+} from '@/downloads/DownloadContext'
 import { createDownloadManifest } from '@/downloads/types'
 import { useLocalDownload } from '@/downloads/useLocalDownload'
 
-jest.mock('@/downloads/DownloadContext', () => ({ useDownloads: jest.fn() }))
+jest.mock('@/downloads/DownloadContext', () => ({
+  useDownloadActions: jest.fn(),
+  useDownloadManifest: jest.fn(),
+}))
 
 const manga: MangaDetail = {
   uuid: 'manga-1',
@@ -96,11 +102,11 @@ function mockDownloads({
   manifest: ReturnType<typeof completedManifest>
   localPagesFor: jest.Mock
 }) {
-  jest.mocked(useDownloads).mockReturnValue({
+  jest.mocked(useDownloadManifest).mockReturnValue(manifest)
+  jest.mocked(useDownloadActions).mockReturnValue({
     status: 'ready',
     error: null,
     preferences: { wifiOnly: true },
-    snapshot: { initialized: true, eligible: true, manifests: [manifest] },
     enqueue: jest.fn(),
     update: jest.fn(),
     pause: jest.fn(),
@@ -110,8 +116,6 @@ function mockDownloads({
     clearCurrentDownloads: jest.fn(),
     clearAllDownloads: jest.fn(),
     setWifiOnly: jest.fn(),
-    storageUsageBytes: 20,
     localPagesFor,
-    manifestFor: uuid => uuid === manifest.manga.uuid ? manifest : null,
   })
 }
