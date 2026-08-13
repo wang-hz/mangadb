@@ -159,7 +159,7 @@ const en = {
   'import.noItems': 'No items. Add ZIP files or folders.',
   'import.noItemsWarning': 'No items to import',
   'import.batchDone': 'Batch import complete',
-  'import.successResult': 'Imported: {{title}} ({{pages}} pages)',
+  'import.successResult': 'Imported: {{pages}} pages, file size {{size}}',
   'import.errorResult': 'Import failed',
   'import.pending': 'Pending',
   'import.tagType': 'Type',

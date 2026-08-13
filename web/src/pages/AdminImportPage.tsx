@@ -70,6 +70,18 @@ const IMAGE_EXT = /\.(jpe?g|png|webp|gif|avif)$/i
 
 function uid() { return Math.random().toString(36).slice(2) }
 
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`
+  if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MB`
+  return `${(bytes / 1024 ** 3).toFixed(1)} GB`
+}
+
+function getItemFileSize(item: ImportItem): number {
+  if (item.file) return item.file.size
+  return item.folderFiles?.reduce((total, file) => total + file.size, 0) ?? 0
+}
+
 function applyParsed(name: string): { form: FormState; initialTags: TagListItem[] } {
   const p = parseFilename(name)
   const pending = (typeName: string, value: string | null): TagListItem[] =>
@@ -209,7 +221,7 @@ function ItemBody({ item, tagTypes, onFormChange, onTagsChange, onFullnameChange
   const { form } = item
 
   if (item.status === 'done' && item.result) {
-    return <Alert type="success" message={t('import.successResult', { title: item.result.displayTitle, pages: item.result.pageCount })} showIcon />
+    return <Alert type="success" message={t('import.successResult', { pages: item.result.pageCount, size: formatFileSize(getItemFileSize(item)) })} showIcon />
   }
   if (item.status === 'error') {
     return <Alert type="error" message={item.errorMsg ?? t('import.errorResult')} showIcon />

@@ -159,7 +159,7 @@ const zh = {
   'import.noItems': '暂无待导入漫画，请添加压缩包或文件夹',
   'import.noItemsWarning': '没有可导入的项目',
   'import.batchDone': '批量导入完成',
-  'import.successResult': '导入成功：《{{title}}》共 {{pages}} 页',
+  'import.successResult': '导入成功：共 {{pages}} 页，文件大小 {{size}}',
   'import.errorResult': '导入失败',
   'import.pending': '待导入',
   'import.tagType': '类型',

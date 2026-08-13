@@ -159,7 +159,7 @@ const ja = {
   'import.noItems': 'アイテムがありません。ZIPファイルまたはフォルダを追加してください。',
   'import.noItemsWarning': 'インポートするアイテムがありません',
   'import.batchDone': '一括インポートが完了しました',
-  'import.successResult': 'インポート成功：《{{title}}》全{{pages}}ページ',
+  'import.successResult': 'インポート成功：全{{pages}}ページ、ファイルサイズ {{size}}',
   'import.errorResult': 'インポート失敗',
   'import.pending': '待機中',
   'import.tagType': 'タイプ',

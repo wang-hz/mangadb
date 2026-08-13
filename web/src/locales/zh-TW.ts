@@ -159,7 +159,7 @@ const zhTW = {
   'import.noItems': '尚無待匯入漫畫，請新增壓縮檔或資料夾',
   'import.noItemsWarning': '沒有可匯入的項目',
   'import.batchDone': '批次匯入完成',
-  'import.successResult': '匯入成功：《{{title}}》共 {{pages}} 頁',
+  'import.successResult': '匯入成功：共 {{pages}} 頁，檔案大小 {{size}}',
   'import.errorResult': '匯入失敗',
   'import.pending': '待匯入',
   'import.tagType': '類型',

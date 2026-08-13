@@ -6,6 +6,7 @@ import { ImportController } from '@/controller/import.controller';
 
 const router = Router();
 const importController = new ImportController();
+const IMPORT_MAX_FILE_SIZE = 10 * 1024 * 1024 * 1024;
 
 const storage = multer.diskStorage({
   destination: os.tmpdir(),
@@ -15,7 +16,10 @@ const storage = multer.diskStorage({
   },
 });
 
-const upload = multer({ storage });
+const upload = multer({
+  storage,
+  limits: { fileSize: IMPORT_MAX_FILE_SIZE },
+});
 
 const uploadFields = upload.fields([
   { name: 'file', maxCount: 1 },
@@ -25,6 +29,10 @@ const uploadFields = upload.fields([
 router.post('/upload', (req, res, next) => {
   uploadFields(req, res, err => {
     if (err instanceof multer.MulterError) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        res.status(400).json({ error: 'File too large (maximum 10 GB)' });
+        return;
+      }
       res.status(400).json({ error: err.message });
       return;
     }
