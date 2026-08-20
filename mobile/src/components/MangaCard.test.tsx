@@ -33,7 +33,7 @@ describe('MangaCard states', () => {
       mangaTags: [],
     })
     manifest.state = 'completed'
-    manifest.pages[0].state = 'completed'
+    manifest.pages[0]!.state = 'completed'
     jest.mocked(useDownloadManifest).mockReturnValue(manifest)
 
     render(
@@ -55,24 +55,16 @@ describe('MangaCard states', () => {
 
   it('shows reading progress and completed state', () => {
     const view = renderCard({
-      manga,
       pageCount: 10,
       pageIndex: 3,
-      mode: 'paged',
       state: 'reading',
-      updatedAt: '2026-07-28T00:00:00.000Z',
-      hiddenFromRecent: false,
     })
     expect(screen.getByText('阅读中 · 40%')).toBeOnTheScreen()
 
     view.rerender(renderCardElement({
-      manga,
       pageCount: 10,
       pageIndex: 9,
-      mode: 'paged',
       state: 'completed',
-      updatedAt: '2026-07-28T00:00:00.000Z',
-      hiddenFromRecent: false,
     }))
     expect(screen.getByText('已完成')).toBeOnTheScreen()
   })

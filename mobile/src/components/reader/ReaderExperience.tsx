@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useKeepAwake } from 'expo-keep-awake'
-import { AppState } from 'react-native'
+import { StatusBar } from 'expo-status-bar'
+import { AppState, StyleSheet, View } from 'react-native'
 import type { ApiClient } from '@/api/client'
 import type { MangaDetail } from '@/api/types'
 import { PagedReader } from '@/components/reader/PagedReader'
 import { ReaderSettingsModal } from '@/components/reader/ReaderSettingsModal'
 import { ScrollingReader } from '@/components/reader/ScrollingReader'
+import { useStableViewport } from '@/hooks/useStableViewport'
 import { markMangaCompleted } from '@/storage/progress'
 import { ReadingProgressWriter } from '@/storage/progressWriter'
 import type { ReaderPreferences } from '@/storage/readerPreferences'
+import { colors } from '@/theme/colors'
 import { clampPageIndex, type ReaderMode } from '@/utils/reader'
 
 interface ReaderExperienceProps {
@@ -42,6 +45,7 @@ export function ReaderExperience({
   onReturnToDetail,
   initialCompleted = false,
 }: ReaderExperienceProps) {
+  const viewport = useStableViewport()
   const [pageIndex, setPageIndex] = useState(initialPageIndex)
   const [mode, setMode] = useState<ReaderMode>(initialMode)
   const [settingsVisible, setSettingsVisible] = useState(false)
@@ -49,6 +53,11 @@ export function ReaderExperience({
   const pageIndexRef = useRef(initialPageIndex)
   const modeRef = useRef<ReaderMode>(initialMode)
   const initialStateRef = useRef({ pageIndex: initialPageIndex, mode: initialMode })
+  const mangaRef = useRef(manga)
+  const pageCountRef = useRef(manga.pages.length)
+  const onReaderReadyRef = useRef(onReaderReady)
+  mangaRef.current = manga
+  onReaderReadyRef.current = onReaderReady
   const progressWriter = useMemo(() => new ReadingProgressWriter(), [
     manga.uuid,
     serverUrl,
@@ -56,30 +65,51 @@ export function ReaderExperience({
   ])
 
   const persist = useCallback((nextPageIndex: number, nextMode: ReaderMode) => {
+    const latestManga = mangaRef.current
     progressWriter.schedule({
       serverUrl,
       userUuid,
-      mangaUuid: manga.uuid,
-      pageCount: manga.pages.length,
+      mangaUuid: latestManga.uuid,
+      pageCount: latestManga.pages.length,
       pageIndex: nextPageIndex,
       mode: nextMode,
-      manga,
+      manga: latestManga,
     })
-  }, [manga, progressWriter, serverUrl, userUuid])
+  }, [progressWriter, serverUrl, userUuid])
 
   useEffect(() => {
     persist(initialStateRef.current.pageIndex, initialStateRef.current.mode)
     void progressWriter.flush().catch(() => {})
-    onReaderReady()
+    onReaderReadyRef.current()
     return () => { void progressWriter.flush().catch(() => {}) }
-  }, [persist, onReaderReady, progressWriter])
+  }, [persist, progressWriter])
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', state => {
-      if (state !== 'active') void progressWriter.flush().catch(() => {})
+      if (state !== 'active') {
+        setSettingsVisible(false)
+        void progressWriter.flush().catch(() => {})
+      }
     })
     return () => subscription.remove()
   }, [progressWriter])
+
+  useEffect(() => {
+    if (viewport.isTransitioning) setSettingsVisible(false)
+  }, [viewport.isTransitioning])
+
+  const currentPageIndex = clampPageIndex(pageIndex, manga.pages.length)
+
+  useEffect(() => {
+    if (pageCountRef.current === manga.pages.length) return
+    pageCountRef.current = manga.pages.length
+    setCompleted(false)
+    const clamped = clampPageIndex(pageIndexRef.current, manga.pages.length)
+    if (clamped === pageIndexRef.current) return
+    pageIndexRef.current = clamped
+    setPageIndex(clamped)
+    persist(clamped, modeRef.current)
+  }, [manga.pages.length, persist])
 
   const changePage = useCallback((nextPageIndex: number) => {
     const clamped = clampPageIndex(nextPageIndex, manga.pages.length)
@@ -92,15 +122,16 @@ export function ReaderExperience({
 
   const complete = useCallback(async () => {
     progressWriter.cancel()
+    const latestManga = mangaRef.current
     await markMangaCompleted(
       serverUrl,
       userUuid,
-      manga,
-      manga.pages.length,
+      latestManga,
+      latestManga.pages.length,
       modeRef.current,
     )
     setCompleted(true)
-  }, [manga, progressWriter, serverUrl, userUuid])
+  }, [progressWriter, serverUrl, userUuid])
 
   const changeMode = useCallback((nextMode: ReaderMode) => {
     if (nextMode === modeRef.current) return
@@ -120,29 +151,46 @@ export function ReaderExperience({
     onRefreshMetadata,
     onModeChange: changeMode,
     onPageChange: changePage,
-    pageIndex,
+    pageIndex: currentPageIndex,
     serverUrl,
     userUuid,
     preferences,
     settingsVisible,
+    viewport,
     onOpenSettings: () => setSettingsVisible(true),
     onReturnToDetail,
   }
 
-  const reader = mode === 'paged'
-    ? <PagedReader {...commonProps} />
-    : <ScrollingReader {...commonProps} />
+  const reader = viewport.isTransitioning
+    ? (
+        <View style={styles.viewportTransition} testID="reader-viewport-transition">
+          <StatusBar hidden style="light" />
+        </View>
+      )
+    : mode === 'paged'
+      ? (
+          <PagedReader
+            {...commonProps}
+            key={`paged:${viewport.epoch}:${manga.pages.length}`}
+          />
+        )
+      : (
+          <ScrollingReader
+            {...commonProps}
+            key={`scroll:${viewport.epoch}:${manga.pages.length}`}
+          />
+        )
 
   return (
-    <>
+    <View style={styles.root}>
       {preferences.keepAwake ? <ReaderWakeLock /> : null}
       {reader}
       <ReaderSettingsModal
         onClose={() => setSettingsVisible(false)}
         onDefaultModeChange={changeMode}
-        visible={settingsVisible}
+        visible={settingsVisible && !viewport.isTransitioning}
       />
-    </>
+    </View>
   )
 }
 
@@ -150,3 +198,14 @@ function ReaderWakeLock() {
   useKeepAwake('mangadb-reader')
   return null
 }
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: colors.reader,
+  },
+  viewportTransition: {
+    flex: 1,
+    backgroundColor: colors.reader,
+  },
+})

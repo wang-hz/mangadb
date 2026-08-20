@@ -31,10 +31,6 @@ export interface DownloadPagePaths {
 
 export class DownloadRepository {
   private readonly identityPathsCache = new Map<string, Promise<IdentityPaths>>()
-  private readonly localPagesCache = new Map<string, {
-    revision: string
-    uris: string[]
-  }>()
 
   constructor(
     private readonly files: DownloadFileStore = new ExpoDownloadFileStore(),
@@ -66,23 +62,7 @@ export class DownloadRepository {
     const paths = await this.paths(identity, mangaUuid)
     const raw = await this.files.readText(paths.manifestUri)
     if (raw === null) return null
-    let value: unknown
-    try {
-      value = JSON.parse(raw)
-    } catch {
-      throw new DownloadRepositoryError('下载清单不是有效的 JSON')
-    }
-    if (!isDownloadManifestV1(value)) {
-      throw new DownloadRepositoryError('下载清单版本或内容无效')
-    }
-    if (
-      value.identity.serverUrl !== identity.serverUrl ||
-      value.identity.userUuid !== identity.userUuid ||
-      value.manga.uuid !== mangaUuid
-    ) {
-      throw new DownloadRepositoryError('下载清单身份不匹配')
-    }
-    return normalizeRestoredManifest(value)
+    return parseManifest(raw, identity, mangaUuid)
   }
 
   async save(manifest: DownloadManifestV1): Promise<void> {
@@ -169,59 +149,66 @@ export class DownloadRepository {
     const identity = normalizeDownloadIdentity(serverUrl, userUuid)
     const paths = await this.paths(identity, mangaUuid)
     await this.files.deleteDirectory(paths.mangaUri)
-    this.localPagesCache.delete(localPagesCacheKey(identity, mangaUuid))
   }
 
   async deleteAll(): Promise<void> {
     await this.files.deleteDirectory(this.rootUri)
-    this.localPagesCache.clear()
   }
 
   async list(serverUrl: string, userUuid: string): Promise<DownloadManifestV1[]> {
     const identity = normalizeDownloadIdentity(serverUrl, userUuid)
     const identityPaths = await this.identityPaths(identity)
-    const identityRaw = await this.files.readText(identityPaths.identityFileUri)
-    if (identityRaw === null) return []
-    let identityRecord: unknown
-    try {
-      identityRecord = JSON.parse(identityRaw)
-    } catch {
-      throw new DownloadRepositoryError('下载身份记录损坏')
-    }
-    if (!isMatchingIdentityRecord(identityRecord, identity)) {
-      throw new DownloadRepositoryError('下载身份摘要冲突')
-    }
+    await this.ensureListIdentity(identity, identityPaths)
 
+    await this.recoverReplacementBackups(identity, identityPaths)
     const names = await this.files.listDirectoryNames(identityPaths.mangasUri)
     const manifests: DownloadManifestV1[] = []
     for (const name of names) {
-      let mangaUuid: string
+      const mangaUri = joinUri(identityPaths.mangasUri, name)
       try {
-        mangaUuid = decodeURIComponent(name)
-      } catch {
-        throw new DownloadRepositoryError('漫画下载目录名称无效')
+        const mangaUuid = decodeURIComponent(name)
+        const manifest = await this.load(
+          identity.serverUrl,
+          identity.userUuid,
+          mangaUuid,
+        )
+        if (!manifest) throw new DownloadRepositoryError('下载清单缺失')
+        manifests.push(manifest)
+      } catch (error) {
+        if (
+          !(error instanceof DownloadRepositoryError) &&
+          !(error instanceof URIError)
+        ) throw error
+        await this.files.deleteDirectory(mangaUri)
       }
-      const manifest = await this.load(identity.serverUrl, identity.userUuid, mangaUuid)
-      if (manifest) manifests.push(manifest)
     }
     return manifests.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
   }
 
   async reconcile(serverUrl: string, userUuid: string): Promise<DownloadManifestV1[]> {
     const manifests = await this.list(serverUrl, userUuid)
-    await Promise.all(manifests.map(async manifest => {
+    const validManifests: DownloadManifestV1[] = []
+    for (const manifest of manifests) {
       const identity = normalizeDownloadIdentity(
         manifest.identity.serverUrl,
         manifest.identity.userUuid,
       )
       const paths = await this.paths(identity, manifest.manga.uuid)
       await this.files.deleteDirectory(joinUri(paths.mangaUri, 'partial'))
+      try {
+        await this.verifyCompletedPages(manifest, paths.mangaUri)
+      } catch (error) {
+        if (!(error instanceof DownloadRepositoryError)) throw error
+        await this.files.deleteDirectory(paths.mangaUri)
+        continue
+      }
       await this.save(manifest)
-    }))
+      validManifests.push(manifest)
+    }
     const identity = normalizeDownloadIdentity(serverUrl, userUuid)
     const identityPaths = await this.identityPaths(identity)
     await this.files.deleteDirectory(identityPaths.updatesUri)
-    return manifests
+    return validManifests
   }
 
   async pagePaths(
@@ -265,29 +252,192 @@ export class DownloadRepository {
     userUuid: string,
     mangaUuid: string,
   ): Promise<string[] | null> {
-    const manifest = await this.load(serverUrl, userUuid, mangaUuid)
+    let manifest: DownloadManifestV1 | null
+    try {
+      manifest = await this.load(serverUrl, userUuid, mangaUuid)
+    } catch (error) {
+      if (!(error instanceof DownloadRepositoryError)) throw error
+      await this.delete(serverUrl, userUuid, mangaUuid)
+      return null
+    }
+    if (!manifest) {
+      await this.delete(serverUrl, userUuid, mangaUuid)
+      return null
+    }
     if (
-      !manifest ||
       (manifest.state !== 'completed' && manifest.state !== 'stale') ||
       manifest.pages.some(page => page.state !== 'completed')
     ) return null
 
-    const cacheKey = localPagesCacheKey(manifest.identity, mangaUuid)
-    const revision = localPagesRevision(manifest)
-    const cached = this.localPagesCache.get(cacheKey)
-    if (cached?.revision === revision) return [...cached.uris]
+    try {
+      return await mapWithConcurrency(manifest.pages, 8, async page => {
+        const paths = await this.pagePaths(serverUrl, userUuid, mangaUuid, page.index)
+        const size = await this.files.fileSize(paths.completedUri)
+        const expected = page.expectedBytes ?? page.bytesWritten
+        if (size === null || size <= 0 || expected <= 0 || size !== expected) {
+          throw new DownloadRepositoryError(`本机下载的第 ${page.index + 1} 页损坏或缺失`)
+        }
+        return paths.completedUri
+      })
+    } catch (error) {
+      if (!(error instanceof DownloadRepositoryError)) throw error
+      await this.delete(serverUrl, userUuid, mangaUuid)
+      return null
+    }
+  }
 
-    const uris = await mapWithConcurrency(manifest.pages, 8, async page => {
-      const paths = await this.pagePaths(serverUrl, userUuid, mangaUuid, page.index)
-      const size = await this.files.fileSize(paths.completedUri)
+  private async ensureListIdentity(
+    identity: DownloadIdentity,
+    identityPaths: IdentityPaths,
+  ): Promise<void> {
+    const raw = await this.files.readText(identityPaths.identityFileUri)
+    if (raw !== null) {
+      let value: unknown
+      try {
+        value = JSON.parse(raw)
+      } catch {
+        value = null
+      }
+      if (isIdentityRecord(value)) {
+        if (!isMatchingIdentityRecord(value, identity)) {
+          throw new DownloadRepositoryError('下载身份摘要冲突')
+        }
+        return
+      }
+    }
+    await this.rebuildIdentityRecord(identity, identityPaths)
+  }
+
+  private async rebuildIdentityRecord(
+    identity: DownloadIdentity,
+    identityPaths: IdentityPaths,
+  ): Promise<void> {
+    const invalidDirectories: string[] = []
+    const locations = [
+      { uri: identityPaths.mangasUri, allowBackup: true },
+      { uri: identityPaths.updatesUri, allowBackup: false },
+    ]
+    for (const location of locations) {
+      const names = await this.files.listDirectoryNames(location.uri)
+      for (const name of names) {
+        const itemUri = joinUri(location.uri, name)
+        const raw = await this.files.readText(joinUri(itemUri, 'manifest.json'))
+        if (raw === null) {
+          invalidDirectories.push(itemUri)
+          continue
+        }
+        let manifest: DownloadManifestV1
+        try {
+          manifest = parseManifestDocument(raw)
+        } catch (error) {
+          if (!(error instanceof DownloadRepositoryError)) throw error
+          invalidDirectories.push(itemUri)
+          continue
+        }
+        if (
+          manifest.identity.serverUrl !== identity.serverUrl ||
+          manifest.identity.userUuid !== identity.userUuid
+        ) {
+          throw new DownloadRepositoryError('下载身份摘要冲突')
+        }
+        if (!directoryNameMatchesManifest(name, manifest.manga.uuid, location.allowBackup)) {
+          invalidDirectories.push(itemUri)
+        }
+      }
+    }
+    for (const uri of invalidDirectories) await this.files.deleteDirectory(uri)
+    const record: IdentityRecord = { schemaVersion: 1, ...identity }
+    await this.files.writeTextAtomic(
+      identityPaths.identityFileUri,
+      JSON.stringify(record),
+    )
+  }
+
+  private async recoverReplacementBackups(
+    identity: DownloadIdentity,
+    identityPaths: IdentityPaths,
+  ): Promise<void> {
+    const names = await this.files.listDirectoryNames(identityPaths.mangasUri)
+    for (const name of names) {
+      if (!name.endsWith('.backup')) continue
+      const encodedMangaUuid = name.slice(0, -'.backup'.length)
+      if (!encodedMangaUuid) continue
+      let mangaUuid: string
+      try {
+        mangaUuid = decodeURIComponent(encodedMangaUuid)
+      } catch {
+        continue
+      }
+      const backupUri = joinUri(identityPaths.mangasUri, name)
+      const backupRaw = await this.files.readText(joinUri(backupUri, 'manifest.json'))
+      if (backupRaw === null) continue
+      let backup: DownloadManifestV1
+      try {
+        backup = parseManifest(backupRaw, identity, mangaUuid)
+      } catch (error) {
+        if (!(error instanceof DownloadRepositoryError)) throw error
+        // A real manga UUID may itself end in ".backup"; only touch a directory
+        // whose manifest proves that it belongs to the suffix-stripped UUID.
+        continue
+      }
+
+      const destinationUri = joinUri(identityPaths.mangasUri, encodedMangaUuid)
+      const destinationRaw = await this.files.readText(
+        joinUri(destinationUri, 'manifest.json'),
+      )
+      const backupHealthy = await this.isReadableManifest(backup, backupUri)
+      let destinationHealthy = false
+      if (destinationRaw !== null) {
+        try {
+          const destination = parseManifest(destinationRaw, identity, mangaUuid)
+          destinationHealthy = await this.isReadableManifest(
+            destination,
+            destinationUri,
+          )
+        } catch (error) {
+          if (!(error instanceof DownloadRepositoryError)) throw error
+        }
+      }
+      if (!backupHealthy && !destinationHealthy) continue
+      await this.files.recoverDirectoryReplacement(
+        destinationUri,
+        backupUri,
+        backupHealthy && !destinationHealthy,
+      )
+    }
+  }
+
+  private async isReadableManifest(
+    manifest: DownloadManifestV1,
+    mangaUri: string,
+  ): Promise<boolean> {
+    if (
+      (manifest.state !== 'completed' && manifest.state !== 'stale') ||
+      manifest.pages.some(page => page.state !== 'completed')
+    ) return false
+    try {
+      await this.verifyCompletedPages(manifest, mangaUri)
+      return true
+    } catch (error) {
+      if (error instanceof DownloadRepositoryError) return false
+      throw error
+    }
+  }
+
+  private async verifyCompletedPages(
+    manifest: DownloadManifestV1,
+    mangaUri: string,
+  ): Promise<void> {
+    const completedPages = manifest.pages.filter(page => page.state === 'completed')
+    await mapWithConcurrency(completedPages, 8, async page => {
+      const filename = String(page.index).padStart(6, '0')
+      const uri = joinUri(mangaUri, 'pages', `${filename}.page`)
+      const size = await this.files.fileSize(uri)
       const expected = page.expectedBytes ?? page.bytesWritten
       if (size === null || size <= 0 || expected <= 0 || size !== expected) {
         throw new DownloadRepositoryError(`本机下载的第 ${page.index + 1} 页损坏或缺失`)
       }
-      return paths.completedUri
     })
-    this.localPagesCache.set(cacheKey, { revision, uris })
-    return [...uris]
   }
 
   private async ensureIdentity(
@@ -359,18 +509,33 @@ export class DownloadRepository {
   }
 }
 
-function localPagesCacheKey(identity: DownloadIdentity, mangaUuid: string): string {
-  return `${identity.serverUrl}\u0000${identity.userUuid}\u0000${mangaUuid}`
+function parseManifest(
+  raw: string,
+  identity: DownloadIdentity,
+  mangaUuid: string,
+): DownloadManifestV1 {
+  const value = parseManifestDocument(raw)
+  if (
+    value.identity.serverUrl !== identity.serverUrl ||
+    value.identity.userUuid !== identity.userUuid ||
+    value.manga.uuid !== mangaUuid
+  ) {
+    throw new DownloadRepositoryError('下载清单身份不匹配')
+  }
+  return value
 }
 
-function localPagesRevision(manifest: DownloadManifestV1): string {
-  return [
-    manifest.manga.updateAt,
-    manifest.updatedAt,
-    manifest.completedAt ?? '',
-    manifest.pages.length,
-    ...manifest.pages.map(page => `${page.bytesWritten}:${page.expectedBytes ?? ''}`),
-  ].join('|')
+function parseManifestDocument(raw: string): DownloadManifestV1 {
+  let value: unknown
+  try {
+    value = JSON.parse(raw)
+  } catch {
+    throw new DownloadRepositoryError('下载清单不是有效的 JSON')
+  }
+  if (!isDownloadManifestV1(value)) {
+    throw new DownloadRepositoryError('下载清单版本或内容无效')
+  }
+  return normalizeRestoredManifest(value)
 }
 
 async function mapWithConcurrency<T, R>(
@@ -379,6 +544,7 @@ async function mapWithConcurrency<T, R>(
   operation: (value: T) => Promise<R>,
 ): Promise<R[]> {
   const results = new Array<R>(values.length)
+  const indexedValues = values.map((value, index) => ({ index, value }))
   let nextIndex = 0
   const workers = Array.from(
     { length: Math.min(concurrency, values.length) },
@@ -386,7 +552,9 @@ async function mapWithConcurrency<T, R>(
       while (nextIndex < values.length) {
         const index = nextIndex
         nextIndex += 1
-        results[index] = await operation(values[index])
+        const entry = indexedValues[index]
+        if (!entry) throw new Error('并发任务索引越界')
+        results[entry.index] = await operation(entry.value)
       }
     },
   )
@@ -410,6 +578,31 @@ function isMatchingIdentityRecord(
   return record.schemaVersion === 1 &&
     record.serverUrl === identity.serverUrl &&
     record.userUuid === identity.userUuid
+}
+
+function isIdentityRecord(value: unknown): value is IdentityRecord {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
+  const record = value as Partial<IdentityRecord>
+  return record.schemaVersion === 1 &&
+    typeof record.serverUrl === 'string' &&
+    record.serverUrl.length > 0 &&
+    typeof record.userUuid === 'string' &&
+    record.userUuid.length > 0
+}
+
+function directoryNameMatchesManifest(
+  name: string,
+  mangaUuid: string,
+  allowBackup: boolean,
+): boolean {
+  try {
+    if (decodeURIComponent(name) === mangaUuid) return true
+    return allowBackup &&
+      name.endsWith('.backup') &&
+      decodeURIComponent(name.slice(0, -'.backup'.length)) === mangaUuid
+  } catch {
+    return false
+  }
 }
 
 function joinUri(base: string, ...segments: string[]): string {

@@ -44,7 +44,9 @@ describe('DownloadControls', () => {
       userUuid: 'user-1',
     }, manga)
     manifest.state = 'downloading'
-    manifest.pages[0].state = 'completed'
+    const firstPage = manifest.pages[0]
+    if (!firstPage) throw new Error('missing test page')
+    firstPage.state = 'completed'
     const downloads = downloadContext(manifest)
     jest.mocked(useDownloadActions).mockReturnValue(downloads)
     jest.mocked(useDownloadManifest).mockReturnValue(manifest)

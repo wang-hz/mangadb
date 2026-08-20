@@ -24,6 +24,7 @@ export class ApiClient {
   private readonly timeoutMs: number
   private readonly onUnauthorized?: () => void | Promise<void>
   private readonly onReachabilityChange?: (reachable: boolean) => void
+  private unauthorizedFlight: Promise<void> | null = null
 
   constructor(serverUrl: string, options: ApiClientOptions = {}) {
     this.baseUrl = serverUrl.replace(/\/+$/, '')
@@ -41,14 +42,9 @@ export class ApiClient {
     return this.token ? { Authorization: `Bearer ${this.token}` } : {}
   }
 
-  async handleExternalResponse(status: number): Promise<void> {
+  handleExternalResponse(status: number): void {
     this.reportReachability(true)
-    if (status !== 401) return
-    try {
-      await this.onUnauthorized?.()
-    } catch {
-      // Preserve the native transfer's HTTP status if credential cleanup fails.
-    }
+    if (status === 401) this.notifyUnauthorized()
   }
 
   handleExternalNetworkFailure(): void {
@@ -56,12 +52,26 @@ export class ApiClient {
   }
 
   async request<T>(path: string, options: RequestInit = {}): Promise<T> {
-    const response = await this.requestResponse(path, options)
-    if (response.status === 204) return undefined as T
-    return await response.json() as T
+    return this.consumeResponse(path, options, async (response, signal) => {
+      if (response.status === 204) return undefined as T
+      try {
+        return await response.json() as T
+      } catch (error) {
+        if (signal.aborted) throw error
+        throw new ApiError('服务器返回了无效的 JSON', 502, error)
+      }
+    })
   }
 
   async requestResponse(path: string, options: RequestInit = {}): Promise<Response> {
+    return this.consumeResponse(path, options, response => Promise.resolve(response))
+  }
+
+  private async consumeResponse<T>(
+    path: string,
+    options: RequestInit,
+    consume: (response: Response, signal: AbortSignal) => Promise<T>,
+  ): Promise<T> {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs)
     const externalSignal = options.signal
@@ -81,20 +91,17 @@ export class ApiClient {
       })
       this.reportReachability(true)
 
-      if (response.status === 401) {
-        try {
-          await this.onUnauthorized?.()
-        } catch {
-          // Preserve the server's 401 even if local credential cleanup fails.
-        }
-      }
+      if (response.status === 401) this.notifyUnauthorized()
 
       if (!response.ok) {
-        const body = await parseResponseBody(response)
+        const body = await waitForAbort(
+          parseResponseBody(response),
+          controller.signal,
+        )
         throw new ApiError(errorMessage(body, response.status), response.status, body)
       }
 
-      return response
+      return await waitForAbort(consume(response, controller.signal), controller.signal)
     } catch (error) {
       if (error instanceof ApiError) throw error
       if (controller.signal.aborted && !externalSignal?.aborted) {
@@ -113,6 +120,46 @@ export class ApiClient {
   private reportReachability(reachable: boolean): void {
     try { this.onReachabilityChange?.(reachable) } catch {}
   }
+
+  private notifyUnauthorized(): void {
+    if (!this.onUnauthorized || this.unauthorizedFlight) return
+    let callbackResult: void | Promise<void>
+    try {
+      callbackResult = this.onUnauthorized()
+    } catch {
+      return
+    }
+    const operation = Promise.resolve(callbackResult).catch(() => {})
+    this.unauthorizedFlight = operation
+    void operation.finally(() => {
+      if (this.unauthorizedFlight === operation) this.unauthorizedFlight = null
+    }).catch(() => {})
+  }
+}
+
+function waitForAbort<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) return Promise.reject(abortError())
+  return new Promise<T>((resolve, reject) => {
+    let settled = false
+    const finish = (callback: () => void) => {
+      if (settled) return
+      settled = true
+      signal.removeEventListener('abort', onAbort)
+      callback()
+    }
+    const onAbort = () => finish(() => reject(abortError()))
+    signal.addEventListener('abort', onAbort, { once: true })
+    operation.then(
+      value => finish(() => resolve(value)),
+      error => finish(() => reject(error)),
+    )
+  })
+}
+
+function abortError(): Error {
+  const error = new Error('Request aborted')
+  error.name = 'AbortError'
+  return error
 }
 
 async function parseResponseBody(response: Response): Promise<unknown> {

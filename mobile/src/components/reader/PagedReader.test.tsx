@@ -1,6 +1,6 @@
-import { act, fireEvent, render, screen } from '@testing-library/react-native'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native'
 import { Image } from 'expo-image'
-import { FlatList } from 'react-native'
+import { AppState, FlatList, Modal, type NativeEventSubscription } from 'react-native'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import type { ApiClient } from '@/api/client'
 import type { MangaDetail } from '@/api/types'
@@ -58,40 +58,53 @@ function renderReader(
   onRefreshMetadata = jest.fn().mockResolvedValue(undefined),
   localPageUris?: readonly string[],
 ) {
+  const element = (viewport = stableViewport) => (
+    <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+      <PagedReader
+        api={{
+          authorizationHeaders: () => ({ Authorization: 'Bearer token' }),
+          url: (path: string) => `https://example.com${path}`,
+        } as unknown as ApiClient}
+        completed={false}
+        manga={manga}
+        localPageUris={localPageUris}
+        mode="paged"
+        onBack={jest.fn()}
+        onModeChange={jest.fn()}
+        onMarkCompleted={jest.fn().mockResolvedValue(undefined)}
+        onOpenSettings={jest.fn()}
+        onPageChange={onPageChange}
+        onRefreshMetadata={onRefreshMetadata}
+        onReturnToDetail={jest.fn()}
+        pageIndex={1}
+        preferences={{ ...DEFAULT_READER_PREFERENCES, ...preferencePatch }}
+        settingsVisible={false}
+        serverUrl="https://example.com"
+        userUuid="user-1"
+        viewport={viewport}
+      />
+    </SafeAreaProvider>
+  )
+  const view = render(element())
   return {
     onPageChange,
-    view: render(
-      <SafeAreaProvider initialMetrics={safeAreaMetrics}>
-        <PagedReader
-          api={{
-            authorizationHeaders: () => ({ Authorization: 'Bearer token' }),
-            url: (path: string) => `https://example.com${path}`,
-          } as unknown as ApiClient}
-          completed={false}
-          manga={manga}
-          localPageUris={localPageUris}
-          mode="paged"
-          onBack={jest.fn()}
-          onModeChange={jest.fn()}
-          onMarkCompleted={jest.fn().mockResolvedValue(undefined)}
-          onOpenSettings={jest.fn()}
-          onPageChange={onPageChange}
-          onRefreshMetadata={onRefreshMetadata}
-          onReturnToDetail={jest.fn()}
-          pageIndex={1}
-          preferences={{ ...DEFAULT_READER_PREFERENCES, ...preferencePatch }}
-          settingsVisible={false}
-          serverUrl="https://example.com"
-          userUuid="user-1"
-        />
-      </SafeAreaProvider>,
-    ),
+    rerenderViewport: (viewport: typeof stableViewport) => view.rerender(element(viewport)),
+    view,
   }
 }
 
 const safeAreaMetrics = {
   frame: { x: 0, y: 0, width: 390, height: 844 },
   insets: { top: 0, left: 0, right: 0, bottom: 0 },
+}
+
+const stableViewport = {
+  width: 390,
+  height: 844,
+  scale: 3,
+  fontScale: 1,
+  epoch: 0,
+  isTransitioning: false,
 }
 
 describe('PagedReader preferences', () => {
@@ -198,6 +211,70 @@ describe('PagedReader preferences', () => {
     await act(async () => { finishRefresh?.() })
   })
 
+  it('shows metadata refresh failures without an unhandled rejection', async () => {
+    const onRefreshMetadata = jest.fn().mockRejectedValue(new Error('offline'))
+    renderReader({}, jest.fn(), onRefreshMetadata)
+    fireEvent(screen.getAllByLabelText('页面图片-contain')[0], 'error')
+
+    fireEvent.press(screen.getByText('刷新页面信息'), { stopPropagation: jest.fn() })
+
+    await waitFor(() => expect(
+      screen.getByText('刷新失败，请检查网络后重试'),
+    ).toBeOnTheScreen())
+  })
+
+  it('remounts the list for a new viewport epoch, resets zoom, and ignores stale callbacks', () => {
+    const onPageChange = jest.fn()
+    const { rerenderViewport, view } = renderReader({}, onPageChange)
+    const staleMomentumEnd = view.UNSAFE_getByType(FlatList).props.onMomentumScrollEnd
+    fireEvent(
+      screen.getByLabelText('第 2 页图片'),
+      'accessibilityAction',
+      { nativeEvent: { actionName: 'increment' } },
+    )
+    expect(view.UNSAFE_getByType(FlatList).props.scrollEnabled).toBe(false)
+
+    rerenderViewport({
+      ...stableViewport,
+      width: 844,
+      height: 390,
+      epoch: 1,
+    })
+
+    expect(screen.getByTestId('paged-reader-list-1')).toBeOnTheScreen()
+    expect(view.UNSAFE_getByType(FlatList).props.initialScrollIndex).toBe(1)
+    expect(view.UNSAFE_getByType(FlatList).props.scrollEnabled).toBe(true)
+    expect(view.UNSAFE_getByType(FlatList).props.onScrollToIndexFailed).toBeUndefined()
+
+    act(() => {
+      staleMomentumEnd({ nativeEvent: { contentOffset: { x: 0 } } })
+    })
+    expect(onPageChange).not.toHaveBeenCalled()
+  })
+
+  it('allows all app orientations in the page jump modal and closes it in background', () => {
+    let appStateListener: ((state: 'background') => void) | undefined
+    jest.spyOn(AppState, 'addEventListener').mockImplementation(((_event, listener) => {
+      appStateListener = listener as (state: 'background') => void
+      return { remove: jest.fn() } as NativeEventSubscription
+    }) as typeof AppState.addEventListener)
+    const { view } = renderReader()
+
+    fireEvent.press(screen.getByText('2 / 4'))
+    const modal = view.UNSAFE_getByType(Modal)
+    expect(modal.props.visible).toBe(true)
+    expect(modal.props.supportedOrientations).toEqual([
+      'portrait',
+      'portrait-upside-down',
+      'landscape-left',
+      'landscape-right',
+    ])
+
+    act(() => appStateListener?.('background'))
+    expect(view.UNSAFE_getByType(Modal).props.visible).toBe(false)
+    jest.restoreAllMocks()
+  })
+
   it.each([3000, 5000] as const)('hides controls after %i ms', timeout => {
     jest.useFakeTimers()
     const { view } = renderReader({ controlsAutoHideMs: timeout })
@@ -219,4 +296,5 @@ describe('PagedReader preferences', () => {
     view.unmount()
     jest.useRealTimers()
   })
+
 })

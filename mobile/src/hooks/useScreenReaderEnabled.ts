@@ -8,7 +8,7 @@ export function useScreenReaderEnabled() {
     let active = true
     void AccessibilityInfo.isScreenReaderEnabled().then(value => {
       if (active && value) setEnabled(true)
-    })
+    }).catch(() => {})
     const subscription = AccessibilityInfo.addEventListener(
       'screenReaderChanged',
       setEnabled,

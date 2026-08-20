@@ -2,7 +2,9 @@ import { useFocusEffect } from 'expo-router'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppState } from 'react-native'
 import {
+  listRecentReading,
   listReadingProgress,
+  type ReadingProgressEntry,
   type RecentReadingEntry,
 } from '@/storage/progress'
 
@@ -10,7 +12,7 @@ type RecentReadingStatus = 'loading' | 'ready' | 'error'
 
 interface RecentReadingResult {
   entries: RecentReadingEntry[]
-  allEntries: RecentReadingEntry[]
+  allEntries: ReadingProgressEntry[]
   status: RecentReadingStatus
   error: string | null
   refresh: () => Promise<void>
@@ -25,7 +27,7 @@ export function useRecentReading(
   const [result, setResult] = useState<{
     identity: string | null
     entries: RecentReadingEntry[]
-    allEntries: RecentReadingEntry[]
+    allEntries: ReadingProgressEntry[]
     status: RecentReadingStatus
     error: string | null
   }>({
@@ -50,11 +52,14 @@ export function useRecentReading(
       return
     }
     try {
-      const allEntries = await listReadingProgress(serverUrl, userUuid)
+      const [entries, allEntries] = await Promise.all([
+        listRecentReading(serverUrl, userUuid),
+        listReadingProgress(serverUrl, userUuid),
+      ])
       if (requestIdRef.current !== requestId) return
       setResult({
         identity,
-        entries: allEntries.filter(entry => !entry.hiddenFromRecent),
+        entries,
         allEntries,
         status: 'ready',
         error: null,

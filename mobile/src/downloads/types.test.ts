@@ -45,8 +45,8 @@ describe('download manifest', () => {
       manga,
     )
     manifest.state = 'downloading'
-    manifest.pages[0].state = 'completed'
-    manifest.pages[1].state = 'downloading'
+    required(manifest.pages[0]).state = 'completed'
+    required(manifest.pages[1]).state = 'downloading'
 
     const restored = normalizeRestoredManifest(manifest)
 
@@ -68,3 +68,8 @@ describe('download manifest', () => {
     expect(isDownloadManifestV1({ ...manifest, pages: manifest.pages.slice(0, 1) })).toBe(false)
   })
 })
+
+function required<T>(value: T | undefined): T {
+  if (value === undefined) throw new Error('测试数据缺失')
+  return value
+}

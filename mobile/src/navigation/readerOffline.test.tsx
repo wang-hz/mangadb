@@ -1,12 +1,13 @@
-import { render, screen, waitFor } from '@testing-library/react-native'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native'
 import { useQuery } from '@tanstack/react-query'
-import { useLocalSearchParams } from 'expo-router'
+import { router, useLocalSearchParams } from 'expo-router'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import type { MangaDetail } from '@/api/types'
-import ReaderScreen from '@/app/(app)/reader/[uuid]'
+import ReaderScreen, { ErrorBoundary as ReaderErrorBoundary } from '@/app/(app)/reader/[uuid]'
 import { useLocalDownload } from '@/downloads/useLocalDownload'
 import { useReaderPreferences } from '@/providers/ReaderPreferencesContext'
 import { useSession } from '@/session/SessionContext'
+import { loadReadingProgress } from '@/storage/progress'
 
 jest.mock('@tanstack/react-query', () => ({ useQuery: jest.fn() }))
 jest.mock('expo-router', () => ({
@@ -57,6 +58,7 @@ const manga: MangaDetail = {
 
 describe('ReaderScreen offline launch', () => {
   beforeEach(() => {
+    jest.mocked(loadReadingProgress).mockReset().mockResolvedValue(null)
     jest.mocked(useLocalSearchParams).mockReturnValue({ uuid: 'manga-1' })
     jest.mocked(useSession).mockReturnValue({
       status: 'authenticated',
@@ -128,6 +130,49 @@ describe('ReaderScreen offline launch', () => {
     expect(screen.getByText('当前处于离线状态，且本机没有可用的完整下载。'))
       .toBeOnTheScreen()
     expect(screen.queryByText('正在准备漫画页面')).not.toBeOnTheScreen()
+  })
+
+  it('does not mount the reader or overwrite progress until a failed storage read is retried', async () => {
+    jest.mocked(useLocalDownload).mockReturnValue({
+      status: 'available',
+      manga,
+      pageUris: ['file:///downloads/000000.page'],
+      error: null,
+    })
+    jest.mocked(loadReadingProgress)
+      .mockRejectedValueOnce(new Error('storage unavailable'))
+      .mockResolvedValueOnce({
+        pageIndex: 0,
+        mode: 'paged',
+        state: 'reading',
+        updatedAt: '2026-08-20T00:00:00.000Z',
+      })
+
+    renderReader()
+
+    await waitFor(() => expect(screen.getByText('无法恢复阅读位置')).toBeOnTheScreen())
+    expect(screen.queryByText('reader:离线漫画:file:///downloads/000000.page')).toBeNull()
+    fireEvent.press(screen.getByText('重试'))
+    await waitFor(() => expect(screen.getByText(
+      'reader:离线漫画:file:///downloads/000000.page',
+    )).toBeOnTheScreen())
+    expect(loadReadingProgress).toHaveBeenCalledTimes(2)
+  })
+
+  it('offers a reader-specific escape route after a render failure', () => {
+    render(
+      <ReaderErrorBoundary
+        error={new Error('render failed')}
+        retry={jest.fn().mockResolvedValue(undefined)}
+      />,
+    )
+
+    expect(screen.getByText('阅读器遇到问题')).toBeOnTheScreen()
+    fireEvent.press(screen.getByText('返回漫画详情'))
+    expect(router.replace).toHaveBeenCalledWith({
+      pathname: '/(app)/manga/[uuid]',
+      params: { uuid: 'manga-1' },
+    })
   })
 })
 

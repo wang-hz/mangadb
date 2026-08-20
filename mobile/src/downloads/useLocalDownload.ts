@@ -1,9 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { MangaDetail } from '@/api/types'
 import {
   useDownloadActions,
   useDownloadManifest,
 } from '@/downloads/DownloadContext'
+import {
+  getNativeAppActive,
+  subscribeNativeAppState,
+} from '@/query/nativeState'
 
 export type LocalDownloadStatus = 'loading' | 'available' | 'unavailable' | 'error'
 
@@ -23,6 +27,18 @@ interface Verification {
 export function useLocalDownload(mangaUuid?: string): LocalDownload {
   const downloads = useDownloadActions()
   const manifest = useDownloadManifest(mangaUuid)
+  const appActive = useSyncExternalStore(
+    subscribeNativeAppState,
+    getNativeAppActive,
+    getNativeAppActive,
+  )
+  const foregroundRef = useRef({ active: appActive, generation: 0 })
+  if (foregroundRef.current.active !== appActive) {
+    foregroundRef.current = {
+      active: appActive,
+      generation: foregroundRef.current.generation + Number(appActive),
+    }
+  }
   const candidate = manifest &&
     (manifest.state === 'completed' || manifest.state === 'stale') &&
     manifest.pages.every(page => page.state === 'completed')
@@ -35,16 +51,19 @@ export function useLocalDownload(mangaUuid?: string): LocalDownload {
         ...candidate.pages.map(page => page.bytesWritten),
       ].join(':')
     : null
+  const verificationIdentity = identity
+    ? `${identity}\u0000${foregroundRef.current.generation}`
+    : null
   const [verification, setVerification] = useState<Verification | null>(null)
 
   useEffect(() => {
-    if (!candidate || !identity) return
+    if (!candidate || !verificationIdentity || !appActive) return
     let active = true
     downloads.localPagesFor(candidate.manga.uuid)
       .then(pageUris => {
         if (!active) return
         setVerification({
-          identity,
+          identity: verificationIdentity,
           pageUris,
           error: pageUris ? null : '本机下载尚未完成',
         })
@@ -52,13 +71,13 @@ export function useLocalDownload(mangaUuid?: string): LocalDownload {
       .catch(error => {
         if (!active) return
         setVerification({
-          identity,
+          identity: verificationIdentity,
           pageUris: null,
           error: error instanceof Error ? error.message : '无法校验本机下载',
         })
       })
     return () => { active = false }
-  }, [candidate, downloads.localPagesFor, identity])
+  }, [appActive, candidate, downloads.localPagesFor, verificationIdentity])
 
   if (!mangaUuid || downloads.status === 'unavailable') {
     return { status: 'unavailable', manga: null, pageUris: null, error: null }
@@ -74,10 +93,10 @@ export function useLocalDownload(mangaUuid?: string): LocalDownload {
   if (downloads.status === 'loading') {
     return { status: 'loading', manga: null, pageUris: null, error: null }
   }
-  if (!candidate || !identity) {
+  if (!candidate || !verificationIdentity) {
     return { status: 'unavailable', manga: null, pageUris: null, error: null }
   }
-  if (!verification || verification.identity !== identity) {
+  if (!appActive || !verification || verification.identity !== verificationIdentity) {
     return { status: 'loading', manga: candidate.manga, pageUris: null, error: null }
   }
   if (!verification.pageUris) {

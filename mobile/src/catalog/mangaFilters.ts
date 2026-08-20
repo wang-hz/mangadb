@@ -1,10 +1,10 @@
 import type { CatalogFilters } from '@/storage/catalogFilters'
-import type { RecentReadingEntry } from '@/storage/progress'
+import type { ReadingProgressEntry } from '@/storage/progress'
 
 export function matchesLocalMangaFilters(
   mangaUuid: string,
   filters: CatalogFilters,
-  progress: RecentReadingEntry | undefined,
+  progress: Pick<ReadingProgressEntry, 'state'> | undefined,
   favorite: boolean,
   downloaded: boolean,
 ) {

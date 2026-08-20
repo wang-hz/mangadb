@@ -12,17 +12,33 @@ import type { PageResult, Tag } from './types'
 describe('tag API', () => {
   const request = jest.fn()
   const client = { request } as unknown as ApiClient
+  const timestamp = '2026-08-20T00:00:00.000Z'
+  const tag = (uuid: string): Tag => ({
+    uuid,
+    name: uuid,
+    createAt: timestamp,
+    updateAt: timestamp,
+    tagType: { uuid: 'type-1', name: '题材' },
+  })
+  const tagType = (uuid: string) => ({
+    uuid,
+    name: uuid,
+    createAt: timestamp,
+    updateAt: timestamp,
+  })
+
+  beforeEach(() => request.mockReset())
 
   it('loads all tag pages without duplicates', async () => {
     request
       .mockResolvedValueOnce({
-        items: [{ uuid: 'tag-1' }, { uuid: 'tag-2' }],
+        items: [tag('tag-1'), tag('tag-2')],
         total: 3,
         page: 1,
         limit: 2,
       })
       .mockResolvedValueOnce({
-        items: [{ uuid: 'tag-2' }, { uuid: 'tag-3' }],
+        items: [tag('tag-2'), tag('tag-3')],
         total: 3,
         page: 2,
         limit: 2,
@@ -47,7 +63,6 @@ describe('tag API', () => {
   })
 
   it('loads every tag type page and requests summary mangas using bounded page sizes', async () => {
-    const tagType = (uuid: string) => ({ uuid })
     request
       .mockResolvedValueOnce({
         items: Array.from({ length: 100 }, (_, index) => tagType(String(index))),
@@ -71,12 +86,41 @@ describe('tag API', () => {
   })
 
   it('deduplicates shifted tag pages and stops when complete', () => {
-    const tag = (uuid: string) => ({ uuid }) as Tag
     const pages: PageResult<Tag>[] = [
       { items: [tag('one'), tag('two')], total: 3, page: 1, limit: 2 },
       { items: [tag('two'), tag('three')], total: 3, page: 2, limit: 2 },
     ]
     expect(uniqueTags(pages).map(item => item.uuid)).toEqual(['one', 'two', 'three'])
-    expect(nextTagPage(pages[1], pages)).toBeUndefined()
+    expect(nextTagPage(pages[1]!, pages)).toBeUndefined()
+  })
+
+  it('rejects a repeated full page instead of looping forever', async () => {
+    request
+      .mockResolvedValueOnce({ items: [tag('one')], total: 3, page: 1, limit: 1 })
+      .mockResolvedValueOnce({ items: [tag('one')], total: 3, page: 2, limit: 1 })
+
+    await expect(getAllTags(client)).rejects.toThrow('标签分页没有进展')
+    expect(request).toHaveBeenCalledTimes(2)
+  })
+
+  it('stops infinite-query pagination at the 100-page safety limit', () => {
+    const page: PageResult<Tag> = {
+      items: [tag('last')],
+      total: 101,
+      page: 100,
+      limit: 1,
+    }
+    expect(nextTagPage(page, [page])).toBeUndefined()
+  })
+
+  it('rejects malformed tag entities at the API boundary', async () => {
+    request.mockResolvedValue({
+      items: [{ uuid: 'missing-fields' }],
+      total: 1,
+      page: 1,
+      limit: 30,
+    })
+
+    await expect(getTags(client, { page: 1 })).rejects.toMatchObject({ status: 502 })
   })
 })

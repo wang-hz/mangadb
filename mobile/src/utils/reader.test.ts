@@ -68,7 +68,7 @@ describe('reader helpers', () => {
     expect(layouts.every((layout, index) =>
       layout.index === index &&
       layout.length > 0 &&
-      (index === 0 || layout.offset > layouts[index - 1].offset),
+      (index === 0 || layout.offset > layouts[index - 1]!.offset),
     )).toBe(true)
   })
 

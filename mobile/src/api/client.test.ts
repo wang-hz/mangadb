@@ -7,6 +7,8 @@ describe('ApiClient', () => {
     globalThis.fetch = fetchMock
   })
 
+  afterEach(() => jest.useRealTimers())
+
   it('builds server-relative URLs and sends Bearer authentication', async () => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ status: 'ok' }), {
       status: 200,
@@ -102,11 +104,66 @@ describe('ApiClient', () => {
       onReachabilityChange,
     })
 
-    await client.handleExternalResponse(401)
+    client.handleExternalResponse(401)
     client.handleExternalNetworkFailure()
 
     expect(onUnauthorized).toHaveBeenCalledTimes(1)
     expect(onReachabilityChange).toHaveBeenNthCalledWith(1, true)
     expect(onReachabilityChange).toHaveBeenNthCalledWith(2, false)
+  })
+
+  it('does not block a native transfer on session cleanup and coalesces 401 notices', () => {
+    const onUnauthorized = jest.fn(() => new Promise<void>(() => {}))
+    const client = new ApiClient('https://example.com', { onUnauthorized })
+
+    expect(client.handleExternalResponse(401)).toBeUndefined()
+    expect(client.handleExternalResponse(401)).toBeUndefined()
+    expect(onUnauthorized).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the timeout active while consuming a successful JSON body', async () => {
+    jest.useFakeTimers()
+    const response = new Response('{}', {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    })
+    jest.spyOn(response, 'json').mockReturnValue(new Promise(() => {}))
+    fetchMock.mockResolvedValue(response)
+    const client = new ApiClient('https://example.com', { timeoutMs: 25 })
+
+    const request = client.request('/api/slow-body')
+    await Promise.resolve()
+    jest.advanceTimersByTime(25)
+    await expect(request).rejects.toMatchObject({ status: 0, message: '请求超时，请检查服务器连接' })
+    jest.useRealTimers()
+  })
+
+  it('keeps the timeout active while consuming an error body', async () => {
+    jest.useFakeTimers()
+    const response = new Response('{}', {
+      status: 500,
+      headers: { 'content-type': 'application/json' },
+    })
+    jest.spyOn(response, 'json').mockReturnValue(new Promise(() => {}))
+    fetchMock.mockResolvedValue(response)
+    const client = new ApiClient('https://example.com', { timeoutMs: 25 })
+
+    const request = client.request('/api/slow-error')
+    await Promise.resolve()
+    jest.advanceTimersByTime(25)
+    await expect(request).rejects.toMatchObject({ status: 0, message: '请求超时，请检查服务器连接' })
+    jest.useRealTimers()
+  })
+
+  it('reports malformed successful JSON as a reachable protocol error', async () => {
+    fetchMock.mockResolvedValue(new Response('{broken', {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }))
+    const onReachabilityChange = jest.fn()
+    const client = new ApiClient('https://example.com', { onReachabilityChange })
+
+    await expect(client.request('/api/broken')).rejects.toMatchObject({ status: 502 })
+    expect(onReachabilityChange).toHaveBeenCalledWith(true)
   })
 })

@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { StatusBar } from 'expo-status-bar'
-import { router, useLocalSearchParams } from 'expo-router'
+import { type ErrorBoundaryProps, router, useLocalSearchParams } from 'expo-router'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -8,6 +8,7 @@ import { ApiError } from '@/api/client'
 import { getManga } from '@/api/mangas'
 import type { MangaDetail } from '@/api/types'
 import { PrimaryButton } from '@/components/PrimaryButton'
+import { RouteErrorFallback } from '@/components/RouteErrorFallback'
 import { ReaderExperience } from '@/components/reader/ReaderExperience'
 import { useLocalDownload } from '@/downloads/useLocalDownload'
 import { useReaderPreferences } from '@/providers/ReaderPreferencesContext'
@@ -108,6 +109,30 @@ export default function ReaderScreen() {
   )
 }
 
+export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+  const params = useLocalSearchParams<{ uuid?: string | string[] }>()
+  const mangaUuid = firstParam(params.uuid)
+  return (
+    <RouteErrorFallback
+      error={error}
+      leaveLabel={mangaUuid ? '返回漫画详情' : '返回漫画库'}
+      message="阅读器已安全退出，本次错误已记录在本机。你可以重新加载或返回详情页。"
+      onLeave={() => {
+        if (mangaUuid) {
+          router.replace({
+            pathname: '/(app)/manga/[uuid]',
+            params: { uuid: mangaUuid },
+          })
+        } else {
+          router.replace('/(app)/(tabs)/mangas')
+        }
+      }}
+      retry={retry}
+      title="阅读器遇到问题"
+    />
+  )
+}
+
 function ReaderContent({
   manga,
   onRefreshMetadata,
@@ -125,12 +150,13 @@ function ReaderContent({
 }) {
   const { api, auth, serverUrl } = useSession()
   const { preferences, status: preferencesStatus } = useReaderPreferences()
-  const sessionIdentity = [serverUrl, auth?.user.uuid, manga.uuid].join(':')
-  const progressIdentity = [serverUrl, auth?.user.uuid, manga.uuid, manga.pages.length].join(':')
-  const [loadedProgress, setLoadedProgress] = useState<{
-    identity: string
-    value: ReadingProgress | null
-  } | null>(null)
+  const sessionIdentity = JSON.stringify([serverUrl, auth?.user.uuid, manga.uuid])
+  const [progressLoadRevision, setProgressLoadRevision] = useState(0)
+  const [loadedProgress, setLoadedProgress] = useState<
+    | { identity: string; status: 'ready'; value: ReadingProgress | null }
+    | { identity: string; status: 'error'; error: string }
+    | null
+  >(null)
   const consumedOverrideIdentityRef = useRef<string | null>(null)
   const markOverrideConsumed = useCallback(() => {
     if (requestedPage !== undefined || requestedMode !== undefined) {
@@ -147,13 +173,22 @@ function ReaderContent({
       manga.pages.length,
     )
       .then(value => {
-        if (active) setLoadedProgress({ identity: progressIdentity, value })
+        if (active) setLoadedProgress({ identity: sessionIdentity, status: 'ready', value })
       })
-      .catch(() => {
-        if (active) setLoadedProgress({ identity: progressIdentity, value: null })
+      .catch(error => {
+        if (active) {
+          setLoadedProgress({
+            identity: sessionIdentity,
+            status: 'error',
+            error: error instanceof Error ? error.message : '无法读取本机阅读位置',
+          })
+        }
       })
     return () => { active = false }
-  }, [serverUrl, auth?.user.uuid, manga.uuid, manga.pages.length, progressIdentity])
+  }, [
+    sessionIdentity,
+    progressLoadRevision,
+  ])
 
   if (manga.pages.length === 0) {
     return (
@@ -166,8 +201,22 @@ function ReaderContent({
     )
   }
 
-  if (loadedProgress?.identity !== progressIdentity) {
+  if (loadedProgress?.identity !== sessionIdentity) {
     return <ReaderState loading message="正在恢复本机阅读位置" title={manga.displayTitle} />
+  }
+
+  if (loadedProgress.status === 'error') {
+    return (
+      <ReaderState
+        action={() => {
+          setLoadedProgress(null)
+          setProgressLoadRevision(value => value + 1)
+        }}
+        actionLabel="重试"
+        message={loadedProgress.error || '请检查本机存储后重试。'}
+        title="无法恢复阅读位置"
+      />
+    )
   }
 
   if (preferencesStatus === 'loading') {
@@ -192,13 +241,7 @@ function ReaderContent({
       initialMode={initialMode}
       initialCompleted={progress?.state === 'completed'}
       initialPageIndex={clampPageIndex(initialPageIndex, manga.pages.length)}
-      key={JSON.stringify([
-        serverUrl,
-        auth!.user.uuid,
-        manga.uuid,
-        manga.pages.length,
-        progress?.updatedAt ?? 'new',
-      ])}
+      key={sessionIdentity}
       manga={manga}
       localPageUris={localPageUris}
       onBack={goBackOrLibrary}

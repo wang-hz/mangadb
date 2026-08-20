@@ -1,9 +1,12 @@
 import { act, render, waitFor } from '@testing-library/react-native'
 import { AppState } from 'react-native'
-import { listReadingProgress } from '@/storage/progress'
+import { listRecentReading, listReadingProgress } from '@/storage/progress'
 import { useRecentReading } from './useRecentReading'
 
-jest.mock('@/storage/progress', () => ({ listReadingProgress: jest.fn() }))
+jest.mock('@/storage/progress', () => ({
+  listRecentReading: jest.fn(),
+  listReadingProgress: jest.fn(),
+}))
 jest.mock('expo-router', () => ({
   useFocusEffect: (effect: () => void | (() => void)) => {
     const React = require('react')
@@ -27,6 +30,7 @@ describe('useRecentReading', () => {
       appStateListener = listener as (state: string) => void
       return { remove }
     })
+    jest.mocked(listRecentReading).mockResolvedValue([])
     jest.mocked(listReadingProgress).mockResolvedValue([])
   })
 
@@ -38,11 +42,13 @@ describe('useRecentReading', () => {
     render(<Probe />)
     await waitFor(() => expect(current.status).toBe('ready'))
     expect(listReadingProgress).toHaveBeenCalledTimes(1)
+    expect(listRecentReading).toHaveBeenCalledTimes(1)
 
     await act(async () => { appStateListener?.('background') })
     expect(listReadingProgress).toHaveBeenCalledTimes(1)
     await act(async () => { appStateListener?.('active') })
     expect(listReadingProgress).toHaveBeenCalledTimes(2)
+    expect(listRecentReading).toHaveBeenCalledTimes(2)
   })
 
   it('does not expose results from a previous identity', async () => {

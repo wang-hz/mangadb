@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as SecureStore from 'expo-secure-store'
 import { act, render, waitFor } from '@testing-library/react-native'
 import { SessionProvider, useSession } from './SessionContext'
+import { ACCESS_TOKEN_LOGOUT_TOMBSTONE_KEY } from './logoutTombstone'
 
 function token(username: string, uuid: string): string {
   const encode = (value: object) => btoa(JSON.stringify(value))
@@ -123,9 +124,36 @@ describe('SessionProvider', () => {
     expect(session.serverUrl).toBe('https://one.example.com')
     expect(session.auth).toBeNull()
     expect(SecureStore.deleteItemAsync).toHaveBeenCalledTimes(1)
-    expect(AsyncStorage.removeItem).not.toHaveBeenCalled()
+    expect(AsyncStorage.removeItem).not.toHaveBeenCalledWith('mangadb.serverUrl.v1')
     expect(AsyncStorage.clear).not.toHaveBeenCalled()
     expect(onSessionCleanup).toHaveBeenCalledTimes(1)
+  })
+
+  it('writes the tombstone before clearing runtime auth and waiting for credential deletion', async () => {
+    await renderSession()
+    await authenticateSession()
+    jest.mocked(AsyncStorage.setItem).mockClear()
+    jest.mocked(SecureStore.deleteItemAsync).mockClear()
+    let finishTokenRemoval: (() => void) | undefined
+    jest.mocked(SecureStore.deleteItemAsync).mockImplementationOnce(
+      () => new Promise<void>(resolve => { finishTokenRemoval = resolve }),
+    )
+
+    let signOutPromise!: ReturnType<typeof session.signOut>
+    act(() => { signOutPromise = session.signOut() })
+
+    await waitFor(() => expect(AsyncStorage.setItem).toHaveBeenCalledWith(
+      ACCESS_TOKEN_LOGOUT_TOMBSTONE_KEY,
+      '1',
+    ))
+    await waitFor(() => expect(session.status).toBe('needs-login'))
+    expect(session.auth).toBeNull()
+    expect(SecureStore.deleteItemAsync).toHaveBeenCalledTimes(1)
+    expect(jest.mocked(AsyncStorage.setItem).mock.invocationCallOrder[0])
+      .toBeLessThan(jest.mocked(SecureStore.deleteItemAsync).mock.invocationCallOrder[0]!)
+
+    finishTokenRemoval?.()
+    await act(async () => { await signOutPromise })
   })
 
   it('clears the server without touching reading progress storage', async () => {
@@ -148,25 +176,61 @@ describe('SessionProvider', () => {
     expect(onSessionCleanup).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps the current session when credential deletion fails and allows retry', async () => {
+  it('clears the runtime session and persists a tombstone when credential deletion fails', async () => {
     await renderSession()
-    const accessToken = await authenticateSession()
+    await authenticateSession()
     onSessionCleanup.mockClear()
-    jest.mocked(SecureStore.deleteItemAsync)
-      .mockRejectedValueOnce(new Error('keychain unavailable'))
-      .mockResolvedValueOnce(undefined)
-
-    await act(async () => {
-      await expect(session.signOut()).rejects.toThrow('keychain unavailable')
-    })
-    expect(session.status).toBe('authenticated')
-    expect(session.auth?.token).toBe(accessToken)
-    expect(onSessionCleanup).not.toHaveBeenCalled()
+    jest.mocked(AsyncStorage.removeItem).mockClear()
+    jest.mocked(SecureStore.deleteItemAsync).mockRejectedValueOnce(
+      new Error('keychain unavailable'),
+    )
 
     await act(async () => {
       await expect(session.signOut()).resolves.toEqual({ cacheCleared: true })
     })
     expect(session.status).toBe('needs-login')
+    expect(session.auth).toBeNull()
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith(
+      ACCESS_TOKEN_LOGOUT_TOMBSTONE_KEY,
+      '1',
+    )
+    expect(AsyncStorage.removeItem).not.toHaveBeenCalledWith(
+      ACCESS_TOKEN_LOGOUT_TOMBSTONE_KEY,
+    )
+    expect(onSessionCleanup).toHaveBeenCalledTimes(1)
+  })
+
+  it('retains a valid server when secure token loading fails', async () => {
+    jest.mocked(AsyncStorage.getItem).mockResolvedValue('https://example.com')
+    jest.mocked(SecureStore.getItemAsync).mockRejectedValue(new Error('keychain unavailable'))
+
+    render(
+      <SessionProvider onSessionCleanup={onSessionCleanup}>
+        <SessionProbe />
+      </SessionProvider>,
+    )
+
+    await waitFor(() => expect(session.status).toBe('needs-login'))
+    expect(session.serverUrl).toBe('https://example.com')
+    expect(session.auth).toBeNull()
+  })
+
+  it('does not restore a token covered by a logout tombstone', async () => {
+    jest.mocked(AsyncStorage.getItem).mockImplementation(async key =>
+      key === ACCESS_TOKEN_LOGOUT_TOMBSTONE_KEY ? '1' : 'https://example.com')
+    jest.mocked(SecureStore.getItemAsync).mockResolvedValue(token('reader', 'user-1'))
+
+    render(
+      <SessionProvider onSessionCleanup={onSessionCleanup}>
+        <SessionProbe />
+      </SessionProvider>,
+    )
+
+    await waitFor(() => expect(session.status).toBe('needs-login'))
+    expect(session.auth).toBeNull()
+    expect(SecureStore.deleteItemAsync).toHaveBeenCalledTimes(1)
+    expect(AsyncStorage.removeItem).toHaveBeenCalledWith(ACCESS_TOKEN_LOGOUT_TOMBSTONE_KEY)
+    expect(onSessionCleanup).toHaveBeenCalledTimes(1)
   })
 
   it('coalesces concurrent 401 cleanup for the current session', async () => {
@@ -211,7 +275,11 @@ describe('SessionProvider', () => {
     })
 
     expect(session.status).toBe('needs-login')
-    expect(SecureStore.deleteItemAsync).toHaveBeenCalledTimes(2)
+    expect(SecureStore.deleteItemAsync).toHaveBeenCalledTimes(1)
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith(
+      ACCESS_TOKEN_LOGOUT_TOMBSTONE_KEY,
+      '1',
+    )
     expect(onSessionCleanup).toHaveBeenCalledTimes(1)
   })
 
@@ -224,7 +292,8 @@ describe('SessionProvider', () => {
       finishCleanup = resolve
     }))
 
-    const signOutPromise = session.signOut()
+    let signOutPromise!: ReturnType<typeof session.signOut>
+    act(() => { signOutPromise = session.signOut() })
     await waitFor(() => expect(session.status).toBe('needs-login'))
     const nextToken = token('next-reader', 'user-2')
     const authenticatePromise = session.authenticate(nextToken)

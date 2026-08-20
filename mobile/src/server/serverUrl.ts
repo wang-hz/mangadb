@@ -77,15 +77,18 @@ function isPrivateIpv4(hostname: string): boolean {
   if (parts.length !== 4 || parts.some(part => !/^\d+$/.test(part))) return false
   const octets = parts.map(Number)
   if (octets.some(octet => octet < 0 || octet > 255)) return false
-  return octets[0] === 10 ||
-    (octets[0] === 169 && octets[1] === 254) ||
-    (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31) ||
-    (octets[0] === 192 && octets[1] === 168)
+  const first = octets[0]
+  const second = octets[1]
+  if (first === undefined || second === undefined) return false
+  return first === 10 ||
+    (first === 169 && second === 254) ||
+    (first === 172 && second >= 16 && second <= 31) ||
+    (first === 192 && second === 168)
 }
 
 function isPrivateIpv6(hostname: string): boolean {
   const firstHextetText = hostname.split(':')[0]
-  if (!/^[0-9a-f]{1,4}$/i.test(firstHextetText)) return false
+  if (!firstHextetText || !/^[0-9a-f]{1,4}$/i.test(firstHextetText)) return false
   const firstHextet = Number.parseInt(firstHextetText, 16)
   return (firstHextet & 0xfe00) === 0xfc00 || (firstHextet & 0xffc0) === 0xfe80
 }

@@ -26,4 +26,18 @@ describe('useScreenReaderEnabled', () => {
     unmount()
     expect(remove).toHaveBeenCalledTimes(1)
   })
+
+  it('keeps the safe default when the initial native read fails', async () => {
+    const remove = jest.fn()
+    jest.spyOn(AccessibilityInfo, 'isScreenReaderEnabled')
+      .mockRejectedValue(new Error('native unavailable'))
+    jest.spyOn(AccessibilityInfo, 'addEventListener').mockReturnValue(
+      { remove } as unknown as ReturnType<typeof AccessibilityInfo.addEventListener>,
+    )
+
+    const { result } = renderHook(() => useScreenReaderEnabled())
+    await act(async () => { await Promise.resolve() })
+
+    expect(result.current).toBe(false)
+  })
 })

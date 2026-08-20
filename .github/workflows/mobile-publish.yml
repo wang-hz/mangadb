@@ -134,12 +134,27 @@ jobs:
           mkdir -p "$RUNNER_TEMP/mobile-android"
           cp android/app/build/outputs/apk/release/app-release.apk \
             "$RUNNER_TEMP/mobile-android/mangadb-${MANGADB_APP_VERSION}.apk"
+          diagnostics_path="$RUNNER_TEMP/mobile-android/diagnostics"
+          mkdir -p "$diagnostics_path"
+          cp android/app/build/generated/sourcemaps/react/release/index.android.bundle.map \
+            "$diagnostics_path/index.android.bundle.map"
+          cp android/app/build/outputs/native-debug-symbols/release/native-debug-symbols.zip \
+            "$diagnostics_path/native-debug-symbols.zip"
+          if [[ -f android/app/build/outputs/mapping/release/mapping.txt ]]; then
+            cp android/app/build/outputs/mapping/release/mapping.txt "$diagnostics_path/mapping.txt"
+          fi
+          (
+            cd "$diagnostics_path"
+            zip -qry "../mangadb-${MANGADB_APP_VERSION}-android-diagnostics.zip" .
+          )
 
       - name: Upload Android artifact
         uses: actions/upload-artifact@v4
         with:
           name: mobile-android-${{ github.run_id }}
-          path: ${{ runner.temp }}/mobile-android/*.apk
+          path: |
+            ${{ runner.temp }}/mobile-android/*.apk
+            ${{ runner.temp }}/mobile-android/*-diagnostics.zip
           if-no-files-found: error
           retention-days: 7
 
@@ -183,6 +198,8 @@ jobs:
 
       - name: Build iOS device app
         run: |
+          mkdir -p "$RUNNER_TEMP/ios-build"
+          export SOURCEMAP_FILE="$RUNNER_TEMP/ios-build/index.ios.bundle.map"
           xcodebuild \
             -workspace ios/MangaDB.xcworkspace \
             -scheme MangaDB \
@@ -206,12 +223,27 @@ jobs:
             COPYFILE_DISABLE=1 zip -qry "mangadb-${MANGADB_APP_VERSION}.ipa" Payload
           )
           unzip -tq "$RUNNER_TEMP/mobile-ios/mangadb-${MANGADB_APP_VERSION}.ipa"
+          diagnostics_path="$RUNNER_TEMP/mobile-ios/diagnostics"
+          dsym_path="$RUNNER_TEMP/ios-build/Build/Products/Release-iphoneos/MangaDB.app.dSYM"
+          test -f "$RUNNER_TEMP/ios-build/index.ios.bundle.map"
+          test -d "$dsym_path"
+          mkdir -p "$diagnostics_path"
+          cp "$RUNNER_TEMP/ios-build/index.ios.bundle.map" \
+            "$diagnostics_path/index.ios.bundle.map"
+          cp -R "$dsym_path" "$diagnostics_path/MangaDB.app.dSYM"
+          (
+            cd "$diagnostics_path"
+            COPYFILE_DISABLE=1 zip -qry \
+              "../mangadb-${MANGADB_APP_VERSION}-ios-diagnostics.zip" .
+          )
 
       - name: Upload iOS artifact
         uses: actions/upload-artifact@v4
         with:
           name: mobile-ios-${{ github.run_id }}
-          path: ${{ runner.temp }}/mobile-ios/*.ipa
+          path: |
+            ${{ runner.temp }}/mobile-ios/*.ipa
+            ${{ runner.temp }}/mobile-ios/*-diagnostics.zip
           if-no-files-found: error
           retention-days: 7
 

@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native'
+import { Share } from 'react-native'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native'
 import SettingsScreen from '@/app/(app)/(tabs)/settings'
 import { useDownloads } from '@/downloads/DownloadContext'
 import { ReaderPreferencesProvider } from '@/providers/ReaderPreferencesContext'
@@ -9,7 +10,10 @@ jest.mock('@/session/SessionContext', () => ({ useSession: jest.fn() }))
 jest.mock('@/downloads/DownloadContext', () => ({ useDownloads: jest.fn() }))
 
 describe('SettingsScreen reading preferences', () => {
+  afterEach(() => jest.restoreAllMocks())
+
   beforeEach(() => {
+    jest.clearAllMocks()
     jest.mocked(AsyncStorage.getItem).mockResolvedValue(null)
     jest.mocked(AsyncStorage.setItem).mockResolvedValue(undefined)
     jest.mocked(useSession).mockReturnValue({
@@ -62,8 +66,75 @@ describe('SettingsScreen reading preferences', () => {
     expect(screen.getByLabelText('阅读时保持屏幕常亮')).toBeOnTheScreen()
     expect(screen.getByLabelText('仅使用 Wi-Fi 下载')).toBeOnTheScreen()
     expect(screen.getByText('0 本 · 0 B')).toBeOnTheScreen()
-    const downloadSettings = jest.mocked(useDownloads).mock.results[0].value
+    const downloadSettings = jest.mocked(useDownloads).mock.results.at(-1)?.value
+    if (!downloadSettings) throw new Error('missing download context result')
     fireEvent(screen.getByLabelText('仅使用 Wi-Fi 下载'), 'valueChange', false)
     await waitFor(() => expect(downloadSettings.setWifiOnly).toHaveBeenCalledWith(false))
   })
+
+  it('shares only the bounded local diagnostic payload', async () => {
+    const diagnostic = {
+      schemaVersion: 1,
+      id: 'record-1',
+      timestamp: '2026-08-20T00:00:00.000Z',
+      appVersion: '0.1.0',
+      platform: 'ios',
+      category: 'reader',
+      code: 'page-stall.paged',
+      route: '/reader/:id',
+      viewport: 'landscape-900x400',
+    }
+    jest.mocked(AsyncStorage.getItem).mockImplementation(async key =>
+      key === 'mangadb.localDiagnostics.v1' ? JSON.stringify([diagnostic]) : null)
+    const share = jest.spyOn(Share, 'share').mockResolvedValue({ action: Share.sharedAction })
+
+    render(
+      <ReaderPreferencesProvider>
+        <SettingsScreen />
+      </ReaderPreferencesProvider>,
+    )
+
+    expect(await screen.findByText('当前共 1 条记录')).toBeOnTheScreen()
+    fireEvent.press(screen.getByText('分享诊断记录'))
+    await waitFor(() => expect(share).toHaveBeenCalledTimes(1))
+    const sharePayload = share.mock.calls[0]?.[0]
+    if (!sharePayload) throw new Error('missing share payload')
+    expect(sharePayload.message).toContain('page-stall.paged')
+    expect(sharePayload.message).not.toContain('https://')
+    expect(sharePayload.message).not.toContain('token')
+  })
+
+  it('catches Wi-Fi preference failures and allows a retry', async () => {
+    render(
+      <ReaderPreferencesProvider>
+        <SettingsScreen />
+      </ReaderPreferencesProvider>,
+    )
+    await screen.findByText('当前共 0 条记录')
+    await waitFor(() => expect(screen.getByLabelText('仅使用 Wi-Fi 下载')).not.toBeDisabled())
+    const downloadSettings = jest.mocked(useDownloads).mock.results.at(-1)?.value
+    if (!downloadSettings) throw new Error('missing download context result')
+    const save = deferred<void>()
+    jest.mocked(downloadSettings.setWifiOnly).mockImplementationOnce(() => save.promise)
+
+    fireEvent(screen.getByLabelText('仅使用 Wi-Fi 下载'), 'valueChange', false)
+
+    expect(downloadSettings.setWifiOnly).toHaveBeenCalledTimes(1)
+    fireEvent(screen.getByLabelText('仅使用 Wi-Fi 下载'), 'valueChange', false)
+    expect(downloadSettings.setWifiOnly).toHaveBeenCalledTimes(1)
+    await act(async () => { save.reject(new Error('storage failed')) })
+    expect(await screen.findByText('无法保存下载网络设置，请重试。')).toBeOnTheScreen()
+    fireEvent(screen.getByLabelText('仅使用 Wi-Fi 下载'), 'valueChange', false)
+    await waitFor(() => expect(downloadSettings.setWifiOnly).toHaveBeenCalledTimes(2))
+  })
 })
+
+function deferred<T>() {
+  let reject!: (error: unknown) => void
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((nextResolve, nextReject) => {
+    resolve = nextResolve
+    reject = nextReject
+  })
+  return { promise, reject, resolve }
+}

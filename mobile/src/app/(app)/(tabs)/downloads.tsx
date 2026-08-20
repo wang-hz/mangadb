@@ -107,9 +107,29 @@ export default function DownloadsScreen() {
 
 function DownloadRow({ manifest }: { manifest: DownloadManifestV1 }) {
   const downloads = useDownloads()
+  const [pending, setPending] = useState<'pause' | 'resume' | 'retry' | 'delete' | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
   const completed = manifest.pages.filter(page => page.state === 'completed').length
   const total = manifest.pages.length
   const percent = total === 0 ? 0 : Math.round(completed / total * 100)
+
+  const run = async (
+    action: Exclude<typeof pending, null>,
+    operation: () => Promise<void>,
+  ) => {
+    if (pending) return
+    setPending(action)
+    setActionError(null)
+    try {
+      await operation()
+    } catch {
+      setActionError(action === 'delete'
+        ? '删除失败，请重试。'
+        : '下载操作失败，请检查本机存储后重试。')
+    } finally {
+      setPending(null)
+    }
+  }
 
   const runDelete = () => {
     Alert.alert(
@@ -120,7 +140,9 @@ function DownloadRow({ manifest }: { manifest: DownloadManifestV1 }) {
         {
           text: '删除',
           style: 'destructive',
-          onPress: () => { void downloads.deleteDownload(manifest.manga.uuid) },
+          onPress: () => {
+            void run('delete', () => downloads.deleteDownload(manifest.manga.uuid))
+          },
         },
       ],
     )
@@ -161,30 +183,42 @@ function DownloadRow({ manifest }: { manifest: DownloadManifestV1 }) {
       {manifest.failure
         ? <Text style={styles.failure} numberOfLines={2}>{manifest.failure.message}</Text>
         : null}
+      {actionError
+        ? <Text accessibilityRole="alert" style={styles.failure}>{actionError}</Text>
+        : null}
       <View style={styles.actions}>
         {manifest.state === 'queued' || manifest.state === 'downloading'
           ? (
               <RowAction
+                disabled={pending !== null}
                 label="暂停"
-                onPress={() => { void downloads.pause(manifest.manga.uuid) }}
+                onPress={() => {
+                  void run('pause', () => downloads.pause(manifest.manga.uuid))
+                }}
               />
             )
           : manifest.state === 'paused'
             ? (
                 <RowAction
+                  disabled={pending !== null}
                   label="继续"
-                  onPress={() => { void downloads.resume(manifest.manga.uuid) }}
+                  onPress={() => {
+                    void run('resume', () => downloads.resume(manifest.manga.uuid))
+                  }}
                 />
               )
             : manifest.state === 'failed'
               ? (
                   <RowAction
+                    disabled={pending !== null}
                     label="重试"
-                    onPress={() => { void downloads.retry(manifest.manga.uuid) }}
+                    onPress={() => {
+                      void run('retry', () => downloads.retry(manifest.manga.uuid))
+                    }}
                   />
                 )
               : null}
-        <RowAction danger label="删除" onPress={runDelete} />
+        <RowAction danger disabled={pending !== null} label="删除" onPress={runDelete} />
       </View>
     </Pressable>
   )
@@ -193,20 +227,23 @@ function DownloadRow({ manifest }: { manifest: DownloadManifestV1 }) {
 function RowAction({
   label,
   danger = false,
+  disabled = false,
   onPress,
 }: {
   label: string
   danger?: boolean
+  disabled?: boolean
   onPress: () => void
 }) {
   return (
     <Pressable
       accessibilityRole="button"
+      disabled={disabled}
       onPress={event => {
         event.stopPropagation()
         onPress()
       }}
-      style={styles.rowAction}
+      style={[styles.rowAction, disabled ? styles.rowActionDisabled : null]}
     >
       <Text style={[styles.rowActionText, danger ? styles.rowActionDanger : null]}>{label}</Text>
     </Pressable>
@@ -368,6 +405,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 9,
     backgroundColor: '#f3f4f6',
+  },
+  rowActionDisabled: {
+    opacity: 0.45,
   },
   rowActionText: {
     color: colors.brand,

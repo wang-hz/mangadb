@@ -12,6 +12,11 @@ export interface DownloadFileStore {
     destinationUri: string,
     backupUri: string,
   ) => Promise<void>
+  recoverDirectoryReplacement: (
+    destinationUri: string,
+    backupUri: string,
+    preferBackup: boolean,
+  ) => Promise<void>
 }
 
 export interface DownloadPageFileStore {
@@ -99,6 +104,22 @@ export class ExpoDownloadFileStore implements DownloadFileStore, DownloadPageFil
       if (!destination.exists && backup.exists) backup.move(destination)
       throw error
     }
+  }
+
+  async recoverDirectoryReplacement(
+    destinationUri: string,
+    backupUri: string,
+    preferBackup: boolean,
+  ): Promise<void> {
+    const destination = new Directory(destinationUri)
+    const backup = new Directory(backupUri)
+    if (!backup.exists) return
+    if (destination.exists && !preferBackup) {
+      backup.delete()
+      return
+    }
+    if (destination.exists) destination.delete()
+    backup.move(destination)
   }
 
   async preparePagePartial(partialUri: string): Promise<void> {

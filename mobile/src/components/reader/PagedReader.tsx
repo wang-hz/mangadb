@@ -3,6 +3,7 @@ import { StatusBar } from 'expo-status-bar'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
+  AppState,
   FlatList,
   KeyboardAvoidingView,
   Modal,
@@ -11,7 +12,6 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  useWindowDimensions,
   View,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -28,6 +28,7 @@ import {
 } from '@/components/reader/telemetry'
 import { localPageImageSource, mangaPageImageSource } from '@/media/images'
 import { useScreenReaderEnabled } from '@/hooks/useScreenReaderEnabled'
+import type { StableViewport } from '@/hooks/useStableViewport'
 import type { ReaderPreferences } from '@/storage/readerPreferences'
 import { colors } from '@/theme/colors'
 import {
@@ -56,6 +57,7 @@ interface PagedReaderProps {
   completed: boolean
   onMarkCompleted: () => Promise<void>
   onReturnToDetail: () => void
+  viewport: StableViewport
 }
 
 export function PagedReader({
@@ -76,18 +78,25 @@ export function PagedReader({
   completed,
   onMarkCompleted,
   onReturnToDetail,
+  viewport,
 }: PagedReaderProps) {
-  const { width, height } = useWindowDimensions()
+  const { width, height, scale, epoch } = viewport
   const insets = useSafeAreaInsets()
   const screenReaderEnabled = useScreenReaderEnabled()
   const listRef = useRef<FlatList<number>>(null)
-  const previousWidthRef = useRef(width)
+  const mountedRef = useRef(true)
+  const epochRef = useRef(epoch)
+  epochRef.current = epoch
   const [controlsVisible, setControlsVisible] = useState(true)
   const [jumpVisible, setJumpVisible] = useState(false)
   const [pageZoomed, setPageZoomed] = useState(false)
   const firstPageReportedRef = useRef(false)
   const visiblePageRef = useRef(pageIndex)
   visiblePageRef.current = pageIndex
+  const isCurrentEpoch = useCallback(
+    (callbackEpoch: number) => mountedRef.current && epochRef.current === callbackEpoch,
+    [],
+  )
   const pageIndexes = useMemo(
     () => pageIndexesForDirection(manga.pages.length, preferences.pagedDirection),
     [manga.pages.length, preferences.pagedDirection],
@@ -96,10 +105,29 @@ export function PagedReader({
   const rightTarget = pageIndex + pageDeltaForTap(preferences.pagedDirection, 'right')
   const validPage = (target: number) => target >= 0 && target < manga.pages.length
   const recordPageLoad = useCallback((index: number, durationMs: number) => {
+    if (!isCurrentEpoch(epoch)) return
     if (index !== visiblePageRef.current) return
     reportVisiblePageLoad('paged', index, durationMs, !firstPageReportedRef.current)
     firstPageReportedRef.current = true
+  }, [epoch, isCurrentEpoch])
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
   }, [])
+
+  useEffect(() => {
+    setPageZoomed(false)
+    setJumpVisible(false)
+  }, [epoch])
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', state => {
+      if (state !== 'active' && isCurrentEpoch(epoch)) setJumpVisible(false)
+    })
+    return () => subscription.remove()
+  }, [epoch, isCurrentEpoch])
+
   useEffect(() => {
     if (!controlsVisible || jumpVisible || settingsVisible) return
     if (preferences.controlsAutoHideMs === null) return
@@ -107,23 +135,8 @@ export function PagedReader({
     return () => clearTimeout(timeout)
   }, [controlsVisible, jumpVisible, settingsVisible, pageIndex, preferences.controlsAutoHideMs])
 
-  useEffect(() => {
-    if (previousWidthRef.current === width) return
-    previousWidthRef.current = width
-    const frame = requestAnimationFrame(() => {
-      listRef.current?.scrollToOffset({
-        offset: displayIndexForPage(
-          pageIndex,
-          manga.pages.length,
-          preferences.pagedDirection,
-        ) * width,
-        animated: false,
-      })
-    })
-    return () => cancelAnimationFrame(frame)
-  }, [width, pageIndex, manga.pages.length, preferences.pagedDirection])
-
   const scrollToPage = (nextIndex: number, animated = true) => {
+    if (!isCurrentEpoch(epoch)) return
     const clamped = clampPageIndex(nextIndex, manga.pages.length)
     listRef.current?.scrollToIndex({
       index: displayIndexForPage(clamped, manga.pages.length, preferences.pagedDirection),
@@ -132,6 +145,7 @@ export function PagedReader({
   }
 
   const handlePageTap = (x: number) => {
+    if (!isCurrentEpoch(epoch)) return
     if (x < width * 0.32) {
       if (validPage(leftTarget)) scrollToPage(leftTarget)
       else setControlsVisible(true)
@@ -157,19 +171,17 @@ export function PagedReader({
           manga.pages.length,
           preferences.pagedDirection,
         )}
-        key={preferences.pagedDirection}
+        key={`${preferences.pagedDirection}:${epoch}`}
         keyExtractor={index => String(index)}
         maxToRenderPerBatch={1}
         onMomentumScrollEnd={event => {
+          if (!isCurrentEpoch(epoch)) return
           const displayIndex = clampPageIndex(
             Math.round(event.nativeEvent.contentOffset.x / width),
             manga.pages.length,
           )
           const nextIndex = pageIndexes[displayIndex] ?? 0
           if (nextIndex !== pageIndex) onPageChange(nextIndex)
-        }}
-        onScrollToIndexFailed={info => {
-          listRef.current?.scrollToOffset({ offset: info.index * width, animated: false })
         }}
         pagingEnabled
         ref={listRef}
@@ -188,8 +200,12 @@ export function PagedReader({
             onRefreshMetadata={onRefreshMetadata}
             onTap={handlePageTap}
             onZoomChange={zoomed => {
-              if (index === visiblePageRef.current) setPageZoomed(zoomed)
+              if (isCurrentEpoch(epoch) && index === visiblePageRef.current) {
+                setPageZoomed(zoomed)
+              }
             }}
+            pixelScale={scale}
+            viewportEpoch={epoch}
             serverUrl={serverUrl}
             userUuid={userUuid}
             width={width}
@@ -198,6 +214,7 @@ export function PagedReader({
         scrollEnabled={!pageZoomed}
         showsHorizontalScrollIndicator={false}
         windowSize={3}
+        testID={`paged-reader-list-${epoch}`}
       />
       <ReaderDimmer level={preferences.readerDimLevel} />
 
@@ -296,6 +313,8 @@ interface ReaderPageProps {
   contentFit: 'contain' | 'cover'
   doubleTapScale: ReaderPreferences['doubleTapZoomScale']
   localUri?: string
+  pixelScale: number
+  viewportEpoch: number
 }
 
 const ReaderPage = memo(function ReaderPage({
@@ -314,11 +333,15 @@ const ReaderPage = memo(function ReaderPage({
   contentFit,
   doubleTapScale,
   localUri,
+  pixelScale,
+  viewportEpoch,
 }: ReaderPageProps) {
   const [failed, setFailed] = useState(false)
   const [loading, setLoading] = useState(true)
   const [attempt, setAttempt] = useState(0)
   const [refreshingMetadata, setRefreshingMetadata] = useState(false)
+  const [metadataRefreshError, setMetadataRefreshError] = useState(false)
+  const mountedRef = useRef(true)
   const loadStartedAtRef = useRef(Date.now())
   const source = localUri
     ? localPageImageSource(localUri)
@@ -330,12 +353,26 @@ const ReaderPage = memo(function ReaderPage({
         index,
         manga.updateAt,
       )
+  const requestKey = `${source.cacheKey ?? source.uri ?? ''}:${attempt}:${viewportEpoch}`
+  const requestGenerationRef = useRef({ key: requestKey, generation: 0 })
+  if (requestGenerationRef.current.key !== requestKey) {
+    requestGenerationRef.current = {
+      key: requestKey,
+      generation: requestGenerationRef.current.generation + 1,
+    }
+  }
+  const requestGeneration = requestGenerationRef.current.generation
 
   useEffect(() => {
     setFailed(false)
     setLoading(true)
     loadStartedAtRef.current = Date.now()
-  }, [source.cacheKey, attempt])
+  }, [requestKey])
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
+  }, [])
 
   return (
     <View style={[styles.page, { width, height }]}>
@@ -352,6 +389,10 @@ const ReaderPage = memo(function ReaderPage({
               enforceEarlyResizing={Platform.OS === 'ios'}
               key={attempt}
               onError={() => {
+                if (
+                  !mountedRef.current ||
+                  requestGeneration !== requestGenerationRef.current.generation
+                ) return
                 setLoading(false)
                 setFailed(true)
                 reportReaderTelemetry({
@@ -362,10 +403,16 @@ const ReaderPage = memo(function ReaderPage({
                 })
               }}
               onLoad={() => {
+                if (
+                  !mountedRef.current ||
+                  requestGeneration !== requestGenerationRef.current.generation
+                ) return
                 setLoading(false)
                 onPageLoad(index, Date.now() - loadStartedAtRef.current)
               }}
-              recyclingKey={`${manga.uuid}:${index}:${manga.updateAt}`}
+              recyclingKey={`${manga.uuid}:${index}:${manga.updateAt}:${viewportEpoch}`}
+              pixelScale={pixelScale}
+              resetKey={viewportEpoch}
               source={source}
               onTap={onTap}
               onZoomChange={onZoomChange}
@@ -391,6 +438,7 @@ const ReaderPage = memo(function ReaderPage({
                   })
                   setAttempt(value => value + 1)
                   setFailed(false)
+                  setMetadataRefreshError(false)
                 }}
               >
                 <Text style={styles.pageFailureAction}>点击重试</Text>
@@ -401,13 +449,23 @@ const ReaderPage = memo(function ReaderPage({
                 onPress={event => {
                   event.stopPropagation()
                   setRefreshingMetadata(true)
-                  void onRefreshMetadata().finally(() => setRefreshingMetadata(false))
+                  setMetadataRefreshError(false)
+                  void onRefreshMetadata()
+                    .catch(() => {
+                      if (mountedRef.current) setMetadataRefreshError(true)
+                    })
+                    .finally(() => {
+                      if (mountedRef.current) setRefreshingMetadata(false)
+                    })
                 }}
               >
                 <Text style={styles.metadataRefreshAction}>
                   {refreshingMetadata ? '正在刷新页面信息' : '刷新页面信息'}
                 </Text>
               </Pressable>
+              {metadataRefreshError
+                ? <Text style={styles.metadataRefreshError}>刷新失败，请检查网络后重试</Text>
+                : null}
             </Pressable>
           )}
       {loading && !failed
@@ -458,6 +516,12 @@ function PageJumpModal({
       animationType="fade"
       onRequestClose={onClose}
       statusBarTranslucent
+      supportedOrientations={[
+        'portrait',
+        'portrait-upside-down',
+        'landscape-left',
+        'landscape-right',
+      ]}
       transparent
       visible={visible}
     >
@@ -533,6 +597,10 @@ const styles = StyleSheet.create({
   },
   metadataRefreshAction: {
     color: '#a3a3a3',
+    fontSize: 12,
+  },
+  metadataRefreshError: {
+    color: '#fca5a5',
     fontSize: 12,
   },
   bottomBar: {

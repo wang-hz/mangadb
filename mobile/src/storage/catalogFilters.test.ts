@@ -25,7 +25,9 @@ describe('catalog filter storage', () => {
     }
     await saveCatalogFilters('https://example.com', 'user-1', filters)
 
-    const [key, value] = jest.mocked(AsyncStorage.setItem).mock.calls[0]
+    const firstWrite = jest.mocked(AsyncStorage.setItem).mock.calls[0]
+    if (!firstWrite) throw new Error('missing storage write')
+    const [key, value] = firstWrite
     expect(key).toContain(encodeURIComponent('https://example.com'))
     expect(key).toContain('user-1')
     expect(JSON.parse(value)).toEqual(filters)

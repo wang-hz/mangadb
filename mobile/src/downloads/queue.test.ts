@@ -37,7 +37,7 @@ describe('DownloadQueue', () => {
 
     expect(downloader.download).toHaveBeenCalledTimes(2)
     expect(downloader.download.mock.calls.map(call => call[0].pageIndex)).toEqual([0, 1])
-    expect(queue.getSnapshot().manifests[0].pages).toEqual([
+    expect(firstManifest(queue).pages).toEqual([
       expect.objectContaining({ index: 0, state: 'completed', attempts: 1, bytesWritten: 3 }),
       expect.objectContaining({ index: 1, state: 'completed', attempts: 1, bytesWritten: 3 }),
     ])
@@ -58,6 +58,84 @@ describe('DownloadQueue', () => {
     await queue.pause('manga-1')
   })
 
+  it('coalesces stop and waits for an in-flight initialization without publishing late data', async () => {
+    const repository = new MemoryQueueRepository()
+    const reconciliation = deferred<DownloadManifestV1[]>()
+    repository.reconcile = jest.fn(() => reconciliation.promise)
+    const downloader = { download: jest.fn() }
+    const queue = makeQueue(repository, downloader)
+    const listener = jest.fn()
+    queue.subscribe(listener)
+    const initialization = queue.initialize()
+
+    const firstStop = queue.stop()
+    const secondStop = queue.stop()
+    expect(firstStop).toBe(secondStop)
+    listener.mockClear()
+    let stopped = false
+    void firstStop.then(() => { stopped = true })
+    await Promise.resolve()
+    expect(stopped).toBe(false)
+
+    reconciliation.resolve([
+      createDownloadManifest(identity, manga('late-manga', 1)),
+    ])
+    await initialization
+    await firstStop
+
+    expect(queue.getSnapshot()).toMatchObject({ initialized: false, eligible: false })
+    expect(queue.getSnapshot().manifests).toHaveLength(0)
+    expect(downloader.download).not.toHaveBeenCalled()
+    expect(listener).not.toHaveBeenCalled()
+  })
+
+  it('waits for an in-flight enqueue and never starts its late result after stop', async () => {
+    const repository = new MemoryQueueRepository()
+    const creation = deferred<DownloadManifestV1>()
+    repository.create = jest.fn(() => creation.promise)
+    const downloader = { download: jest.fn() }
+    const queue = makeQueue(repository, downloader)
+    await queue.initialize()
+    const listener = jest.fn()
+    queue.subscribe(listener)
+
+    const enqueue = queue.enqueue(manga('manga-1', 1))
+    const stop = queue.stop()
+    listener.mockClear()
+    let stopped = false
+    void stop.then(() => { stopped = true })
+    await Promise.resolve()
+    expect(stopped).toBe(false)
+
+    creation.resolve(createDownloadManifest(identity, manga('manga-1', 1)))
+    await enqueue
+    await stop
+
+    expect(queue.getSnapshot().manifests).toHaveLength(0)
+    expect(downloader.download).not.toHaveBeenCalled()
+    expect(listener).not.toHaveBeenCalled()
+  })
+
+  it('removes a completed snapshot when local page verification deletes corrupt files', async () => {
+    const repository = new MemoryQueueRepository()
+    const manifest = createDownloadManifest(identity, manga('manga-1', 1))
+    manifest.state = 'completed'
+    manifest.pages = manifest.pages.map(page => ({
+      ...page,
+      state: 'completed',
+      bytesWritten: 3,
+      expectedBytes: 3,
+    }))
+    repository.stored.set(manifest.manga.uuid, manifest)
+    repository.localPageUris = jest.fn(async () => null)
+    const queue = makeQueue(repository, { download: jest.fn() })
+    await queue.initialize()
+
+    await expect(queue.localPageUris(manifest.manga.uuid)).resolves.toBeNull()
+
+    expect(queue.getSnapshot().manifests).toHaveLength(0)
+  })
+
   it('pauses and explicitly resumes without counting the cancelled attempt', async () => {
     const repository = new MemoryQueueRepository()
     const first = abortableDownload()
@@ -74,7 +152,7 @@ describe('DownloadQueue', () => {
     await queue.pause('manga-1')
 
     expect(queue.getSnapshot().manifests[0]).toMatchObject({ state: 'paused' })
-    expect(queue.getSnapshot().manifests[0].pages[0]).toMatchObject({
+    expect(required(firstManifest(queue).pages[0])).toMatchObject({
       state: 'pending',
       attempts: 0,
     })
@@ -98,7 +176,7 @@ describe('DownloadQueue', () => {
 
     queue.setEligible(false)
     await waitFor(() => expect(queue.getSnapshot().manifests[0]?.state).toBe('queued'))
-    expect(queue.getSnapshot().manifests[0].pages[0].attempts).toBe(0)
+    expect(required(firstManifest(queue).pages[0]).attempts).toBe(0)
 
     queue.setEligible(true)
     await waitFor(() => expect(queue.getSnapshot().manifests[0]?.state).toBe('completed'))
@@ -122,7 +200,46 @@ describe('DownloadQueue', () => {
 
     expect(downloader.download).toHaveBeenCalledTimes(3)
     expect(waitForRetry.mock.calls.map(call => call[0])).toEqual([500, 1000])
-    expect(queue.getSnapshot().manifests[0].pages[0].attempts).toBe(3)
+    expect(required(firstManifest(queue).pages[0]).attempts).toBe(3)
+  })
+
+  it('removes the retry abort listener after its timer resolves', async () => {
+    jest.useFakeTimers()
+    const removeEventListener = jest.spyOn(
+      AbortSignal.prototype,
+      'removeEventListener',
+    )
+    try {
+      const repository = new MemoryQueueRepository()
+      const downloader = {
+        download: jest.fn()
+          .mockRejectedValueOnce(new DownloadPageError('offline', 'network', true))
+          .mockResolvedValueOnce(downloadedPage),
+      }
+      const queue = new DownloadQueue({
+        ...identity,
+        api: {} as ApiClient,
+        repository,
+        downloader,
+        now: () => new Date('2026-07-27T12:00:00.000Z'),
+      })
+      await queue.initialize()
+      await queue.enqueue(manga('manga-1', 1))
+      await flushMicrotasks()
+
+      expect(jest.getTimerCount()).toBe(1)
+      await jest.advanceTimersByTimeAsync(500)
+      await flushMicrotasks()
+
+      expect(queue.getSnapshot().manifests[0]?.state).toBe('completed')
+      expect(removeEventListener).toHaveBeenCalledWith(
+        'abort',
+        expect.any(Function),
+      )
+    } finally {
+      removeEventListener.mockRestore()
+      jest.useRealTimers()
+    }
   })
 
   it('pauses rather than retrying an expired session', async () => {
@@ -138,7 +255,7 @@ describe('DownloadQueue', () => {
     await queue.enqueue(manga('manga-1', 1))
     await waitFor(() => expect(queue.getSnapshot().manifests[0]?.state).toBe('paused'))
 
-    expect(queue.getSnapshot().manifests[0].failure).toMatchObject({
+    expect(firstManifest(queue).failure).toMatchObject({
       code: 'unauthorized',
       pageIndex: 0,
     })
@@ -161,7 +278,7 @@ describe('DownloadQueue', () => {
     await waitFor(() => expect(queue.getSnapshot().manifests[0]?.state).toBe('completed'))
 
     expect(downloader.download).toHaveBeenCalledTimes(2)
-    expect(queue.getSnapshot().manifests[0].failure).toBeNull()
+    expect(firstManifest(queue).failure).toBeNull()
   })
 
   it('limits concurrent manga jobs and starts the next after a slot is released', async () => {
@@ -184,10 +301,10 @@ describe('DownloadQueue', () => {
     ])
     await waitFor(() => expect(downloader.download).toHaveBeenCalledTimes(2))
 
-    pending[0].resolve(downloadedPage)
+    required(pending[0]).resolve(downloadedPage)
     await waitFor(() => expect(downloader.download).toHaveBeenCalledTimes(3))
-    pending[1].resolve(downloadedPage)
-    pending[2].resolve(downloadedPage)
+    required(pending[1]).resolve(downloadedPage)
+    required(pending[2]).resolve(downloadedPage)
     await waitFor(() => expect(
       queue.getSnapshot().manifests.every(item => item.state === 'completed'),
     ).toBe(true))
@@ -211,9 +328,9 @@ describe('DownloadQueue', () => {
     ])
     await waitFor(() => expect(downloader.download).toHaveBeenCalledTimes(1))
 
-    pending[0].resolve(downloadedPage)
+    required(pending[0]).resolve(downloadedPage)
     await waitFor(() => expect(downloader.download).toHaveBeenCalledTimes(2))
-    pending[1].resolve(downloadedPage)
+    required(pending[1]).resolve(downloadedPage)
     await waitFor(() => expect(
       queue.getSnapshot().manifests.every(item => item.state === 'completed'),
     ).toBe(true))
@@ -251,7 +368,7 @@ describe('DownloadQueue', () => {
       const repository = new MemoryQueueRepository()
       const stored = createDownloadManifest(identity, manga('manga-1', 1))
       stored.state = state
-      stored.pages[0].state = state === 'completed' ? 'completed' : 'pending'
+      required(stored.pages[0]).state = state === 'completed' ? 'completed' : 'pending'
       repository.stored.set('manga-1', stored)
       const queue = makeQueue(repository, { download: jest.fn() })
       await queue.initialize()
@@ -277,13 +394,40 @@ describe('DownloadQueue', () => {
     expect(queue.getSnapshot().manifests).toHaveLength(0)
   })
 
+  it('waits for a native job to settle and suppresses its late publication after stop', async () => {
+    const repository = new MemoryQueueRepository()
+    const pending = deferred<DownloadedPage>()
+    const downloader = { download: jest.fn(() => pending.promise) }
+    const queue = makeQueue(repository, downloader)
+    await queue.initialize()
+    await queue.enqueue(manga('manga-1', 1))
+    await waitFor(() => expect(downloader.download).toHaveBeenCalledTimes(1))
+    const listener = jest.fn()
+    queue.subscribe(listener)
+
+    const stop = queue.stop()
+    listener.mockClear()
+    let stopped = false
+    void stop.then(() => { stopped = true })
+    await Promise.resolve()
+    expect(stopped).toBe(false)
+
+    pending.resolve(downloadedPage)
+    await stop
+
+    expect(repository.stored.get('manga-1')).toMatchObject({ state: 'paused' })
+    expect(queue.getSnapshot().manifests[0]?.state).toBe('downloading')
+    expect(listener).not.toHaveBeenCalled()
+  })
+
   it('keeps the old completed revision readable until its replacement commits', async () => {
     const repository = new MemoryQueueRepository()
     const originalManga = manga('manga-1', 1)
     const original = createDownloadManifest(identity, originalManga)
     original.state = 'completed'
+    const originalPage = required(original.pages[0])
     original.pages[0] = {
-      ...original.pages[0],
+      ...originalPage,
       state: 'completed',
       bytesWritten: 3,
       expectedBytes: 3,
@@ -319,7 +463,7 @@ describe('DownloadQueue', () => {
     const originalManga = manga('manga-1', 1)
     const original = createDownloadManifest(identity, originalManga)
     original.state = 'completed'
-    original.pages[0].state = 'completed'
+    required(original.pages[0]).state = 'completed'
     repository.stored.set(originalManga.uuid, original)
     const queue = makeQueue(repository, {
       download: jest.fn().mockRejectedValue(
@@ -338,6 +482,38 @@ describe('DownloadQueue', () => {
       manga: { updateAt: originalManga.updateAt },
     })
     expect(repository.replacements.size).toBe(0)
+  })
+
+  it('waits for an in-flight update and prevents its late result from committing', async () => {
+    const repository = new MemoryQueueRepository()
+    const originalManga = manga('manga-1', 1)
+    const original = createDownloadManifest(identity, originalManga)
+    original.state = 'completed'
+    required(original.pages[0]).state = 'completed'
+    repository.stored.set(originalManga.uuid, original)
+    const pending = deferred<DownloadedPage>()
+    const downloader = { download: jest.fn(() => pending.promise) }
+    const queue = makeQueue(repository, downloader)
+    await queue.initialize()
+    const listener = jest.fn()
+    queue.subscribe(listener)
+    const update = queue.update({
+      ...originalManga,
+      updateAt: '2026-07-28T00:00:00.000Z',
+    })
+    await waitFor(() => expect(downloader.download).toHaveBeenCalledTimes(1))
+
+    const stop = queue.stop()
+    listener.mockClear()
+    pending.resolve(downloadedPage)
+
+    await expect(update).rejects.toThrow('下载更新已暂停')
+    await stop
+    expect(repository.stored.get('manga-1')?.manga.updateAt).toBe(
+      originalManga.updateAt,
+    )
+    expect(repository.replacements.size).toBe(0)
+    expect(listener).not.toHaveBeenCalled()
   })
 })
 
@@ -395,6 +571,19 @@ function deferred<T>() {
   let resolve!: (value: T) => void
   const promise = new Promise<T>(nextResolve => { resolve = nextResolve })
   return { promise, resolve }
+}
+
+async function flushMicrotasks(iterations = 12) {
+  for (let index = 0; index < iterations; index += 1) await Promise.resolve()
+}
+
+function firstManifest(queue: DownloadQueue): DownloadManifestV1 {
+  return required(queue.getSnapshot().manifests[0])
+}
+
+function required<T>(value: T | undefined): T {
+  if (value === undefined) throw new Error('测试数据缺失')
+  return value
 }
 
 class MemoryQueueRepository {

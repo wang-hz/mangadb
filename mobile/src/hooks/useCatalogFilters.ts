@@ -24,9 +24,11 @@ export function useCatalogFilters(
       setResult({ identity: null, filters: { ...DEFAULT_CATALOG_FILTERS, tagUuids: [] } })
       return
     }
-    void loadCatalogFilters(serverUrl, userUuid).then(filters => {
-      if (active && revisionRef.current === revision) setResult({ identity, filters })
-    })
+    void loadCatalogFilters(serverUrl, userUuid)
+      .catch(() => ({ ...DEFAULT_CATALOG_FILTERS, tagUuids: [] }))
+      .then(filters => {
+        if (active && revisionRef.current === revision) setResult({ identity, filters })
+      })
     return () => { active = false }
   }, [identity, serverUrl, userUuid])
 

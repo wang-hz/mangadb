@@ -96,7 +96,7 @@ describe('reading progress storage', () => {
     releaseFirstWrite?.()
     await Promise.all([first, second])
     expect(AsyncStorage.setItem).toHaveBeenCalledTimes(2)
-    expect(JSON.parse(jest.mocked(AsyncStorage.setItem).mock.calls[1][1])).toMatchObject({
+    expect(JSON.parse(jest.mocked(AsyncStorage.setItem).mock.calls[1]![1])).toMatchObject({
       pageIndex: 9,
       mode: 'scroll',
     })
@@ -191,6 +191,22 @@ describe('reading progress storage', () => {
     )).resolves.toMatchObject({ state: 'reading' })
   })
 
+  it('writes completion state and its index together in one storage batch', async () => {
+    installStorageMap()
+    await saveReadingProgress('server', 'user', manga.uuid, 5, 2, 'paged', manga)
+    jest.mocked(AsyncStorage.multiSet).mockClear()
+
+    await markMangaCompleted('server', 'user', manga, 5, 'paged')
+
+    expect(AsyncStorage.multiSet).toHaveBeenCalledTimes(1)
+    const keys = jest.mocked(AsyncStorage.multiSet).mock.calls[0]![0]
+      .map(([key]) => key)
+    expect(keys).toEqual(expect.arrayContaining([
+      expect.stringContaining('readingProgress.v1'),
+      expect.stringContaining('readingProgressIndex.v2'),
+    ]))
+  })
+
   it('removes an item from recent history without deleting its position', async () => {
     installStorageMap()
     await saveReadingProgress('server', 'user', manga.uuid, 10, 3, 'scroll', manga)
@@ -199,7 +215,7 @@ describe('reading progress storage', () => {
 
     await expect(listRecentReading('server', 'user')).resolves.toEqual([])
     await expect(listReadingProgress('server', 'user')).resolves.toMatchObject([
-      { manga: { uuid: manga.uuid }, pageIndex: 3, hiddenFromRecent: true },
+      { mangaUuid: manga.uuid, pageIndex: 3, hiddenFromRecent: true },
     ])
     await expect(loadReadingProgress('server', 'user', manga.uuid, 10))
       .resolves.toMatchObject({ pageIndex: 3, mode: 'scroll' })
@@ -211,8 +227,46 @@ describe('reading progress storage', () => {
 
     await markMangaUnread('server', 'user', manga.uuid)
 
+    const tombstoneWrite = jest.mocked(AsyncStorage.multiSet).mock.calls.at(-1)?.[0]
+      .find(([key]) => key.includes('readingProgress.v1'))
+    expect(tombstoneWrite).toBeDefined()
+    expect(JSON.parse(tombstoneWrite?.[1] ?? '{}')).toEqual({
+      schemaVersion: 1,
+      deleted: true,
+    })
+
     await expect(listRecentReading('server', 'user')).resolves.toEqual([])
     await expect(loadReadingProgress('server', 'user', manga.uuid, 10)).resolves.toBeNull()
+  })
+
+  it('migrates every valid v1 entry to the lightweight index and caps summaries at 100', async () => {
+    const values = installStorageMap()
+    const entries = Object.fromEntries(Array.from({ length: 105 }, (_, index) => {
+      const uuid = `manga-${String(index).padStart(3, '0')}`
+      return [uuid, {
+        manga: { ...manga, uuid, displayTitle: uuid },
+        pageCount: 10,
+        pageIndex: index % 10,
+        mode: 'paged',
+        updatedAt: new Date(Date.UTC(2026, 0, 1, 0, 0, index)).toISOString(),
+        hiddenFromRecent: false,
+      }]
+    }))
+    values.set('mangadb.readingProgressIndex.v1:server:user', JSON.stringify({
+      schemaVersion: 1,
+      entries,
+    }))
+
+    await expect(listReadingProgress('server', 'user')).resolves.toHaveLength(105)
+    const recent = await listRecentReading('server', 'user')
+    expect(recent).toHaveLength(100)
+    expect(recent[0]?.manga.uuid).toBe('manga-104')
+    expect(recent.at(-1)?.manga.uuid).toBe('manga-005')
+    expect(AsyncStorage.setItem).toHaveBeenCalledTimes(1)
+    expect(values.has('mangadb.readingProgressIndex.v1:server:user')).toBe(false)
+
+    await listReadingProgress('server', 'user')
+    expect(AsyncStorage.setItem).toHaveBeenCalledTimes(1)
   })
 })
 

@@ -49,9 +49,13 @@ export class ExpoDownloadTransfer implements DownloadTransfer {
     let idleTimer: ReturnType<typeof setTimeout> | null = null
     let settled = false
     let cancelStarted = false
-    let rejectCancellation!: (error: unknown) => void
-    const cancellation = new Promise<never>((_, reject) => {
-      rejectCancellation = reject
+    let callbackGeneration = 0
+    const generation = callbackGeneration
+    let cancellationReason: unknown
+    let cancellationFlight: Promise<void> | null = null
+    let notifyCancellation!: () => void
+    const cancellationStarted = new Promise<void>(resolve => {
+      notifyCancellation = resolve
     })
 
     const task = createDownloadResumable(
@@ -62,6 +66,11 @@ export class ExpoDownloadTransfer implements DownloadTransfer {
         sessionType: FileSystemSessionType.FOREGROUND,
       },
       progress => {
+        if (
+          callbackGeneration !== generation ||
+          cancelStarted ||
+          settled
+        ) return
         resetIdleTimer()
         try {
           request.onProgress?.({
@@ -79,8 +88,13 @@ export class ExpoDownloadTransfer implements DownloadTransfer {
     const cancel = (error: unknown) => {
       if (cancelStarted || settled) return
       cancelStarted = true
-      rejectCancellation(error)
-      void task.cancelAsync().catch(() => {})
+      cancellationReason = error
+      callbackGeneration += 1
+      if (idleTimer) clearTimeout(idleTimer)
+      cancellationFlight = Promise.resolve()
+        .then(() => task.cancelAsync())
+        .then(() => undefined)
+      notifyCancellation()
     }
     const resetIdleTimer = () => {
       if (idleTimer) clearTimeout(idleTimer)
@@ -91,12 +105,42 @@ export class ExpoDownloadTransfer implements DownloadTransfer {
     const abort = () => { cancel(new DownloadTransferCancelledError()) }
     request.signal?.addEventListener('abort', abort, { once: true })
     resetIdleTimer()
+    if (request.signal?.aborted) abort()
+
+    let downloadFlight: ReturnType<typeof task.downloadAsync>
+    try {
+      downloadFlight = task.downloadAsync()
+    } catch (error) {
+      downloadFlight = Promise.reject(error)
+    }
+    const downloadOutcome = downloadFlight.then(
+      result => ({ type: 'result' as const, result }),
+      error => ({ type: 'error' as const, error }),
+    )
 
     try {
-      const result = await Promise.race([task.downloadAsync(), cancellation])
+      const outcome = await Promise.race([
+        downloadOutcome,
+        cancellationStarted.then(() => ({ type: 'cancelled' as const })),
+      ])
+      if (outcome.type === 'cancelled' || cancelStarted) {
+        await Promise.allSettled([
+          downloadFlight,
+          cancellationFlight ?? Promise.resolve(),
+        ])
+        settled = true
+        if (
+          request.signal?.aborted ||
+          cancellationReason instanceof DownloadTransferCancelledError
+        ) throw new DownloadTransferCancelledError()
+        throw cancellationReason
+      }
       settled = true
-      if (request.signal?.aborted || !result) throw new DownloadTransferCancelledError()
-      return result
+      if (outcome.type === 'error') throw outcome.error
+      if (request.signal?.aborted || !outcome.result) {
+        throw new DownloadTransferCancelledError()
+      }
+      return outcome.result
     } catch (error) {
       settled = true
       if (request.signal?.aborted || error instanceof DownloadTransferCancelledError) {
@@ -104,6 +148,7 @@ export class ExpoDownloadTransfer implements DownloadTransfer {
       }
       throw error
     } finally {
+      callbackGeneration += 1
       if (idleTimer) clearTimeout(idleTimer)
       request.signal?.removeEventListener('abort', abort)
     }

@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons'
-import { useState } from 'react'
-import { Alert } from 'react-native'
+import { useEffect, useState } from 'react'
+import { Alert, AppState, Share } from 'react-native'
 import {
   ActivityIndicator,
   Pressable,
@@ -14,11 +14,13 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { logout } from '@/api/auth'
 import { ReaderPreferencesControls } from '@/components/reader/ReaderPreferencesControls'
 import { useDownloads } from '@/downloads/DownloadContext'
+import { clearDiagnostics, loadDiagnostics } from '@/diagnostics/localDiagnostics'
 import { useSession } from '@/session/SessionContext'
 import { colors } from '@/theme/colors'
 
 type PendingAction = 'signout' | 'switch-server' | null
 type PendingDownloadAction = 'clear-current' | 'clear-all' | null
+type PendingDiagnosticAction = 'share' | 'clear' | null
 
 export default function SettingsScreen() {
   const session = useSession()
@@ -26,8 +28,33 @@ export default function SettingsScreen() {
   const [pendingAction, setPendingAction] = useState<PendingAction>(null)
   const [pendingDownloadAction, setPendingDownloadAction] =
     useState<PendingDownloadAction>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [pendingDiagnosticAction, setPendingDiagnosticAction] =
+    useState<PendingDiagnosticAction>(null)
+  const [wifiPending, setWifiPending] = useState(false)
+  const [diagnosticCount, setDiagnosticCount] = useState(0)
+  const [sessionError, setSessionError] = useState<string | null>(null)
+  const [downloadError, setDownloadError] = useState<string | null>(null)
+  const [diagnosticError, setDiagnosticError] = useState<string | null>(null)
   const account = session.auth?.user
+
+  useEffect(() => {
+    let active = true
+    const refresh = () => {
+      void loadDiagnostics().then(records => {
+        if (active) setDiagnosticCount(records.length)
+      }).catch(() => {
+        if (active) setDiagnosticError('无法读取本机诊断记录。')
+      })
+    }
+    refresh()
+    const subscription = AppState.addEventListener('change', state => {
+      if (state === 'active') refresh()
+    })
+    return () => {
+      active = false
+      subscription.remove()
+    }
+  }, [])
 
   const runAction = async (action: Exclude<PendingAction, null>) => {
     if (pendingAction) return
@@ -45,7 +72,7 @@ export default function SettingsScreen() {
     if (!confirmed) return
 
     setPendingAction(action)
-    setError(null)
+    setSessionError(null)
     const authenticatedApi = session.api
 
     try {
@@ -61,7 +88,7 @@ export default function SettingsScreen() {
       }
     } catch {
       setPendingAction(null)
-      setError(action === 'signout'
+      setSessionError(action === 'signout'
         ? '无法删除本机登录凭证，请重试。'
         : '无法清除本机服务器配置，请重试。')
     }
@@ -78,16 +105,47 @@ export default function SettingsScreen() {
     )
     if (!confirmed) return
     setPendingDownloadAction(scope)
-    setError(null)
+    setDownloadError(null)
     try {
       if (scope === 'clear-current') await downloads.clearCurrentDownloads()
       else await downloads.clearAllDownloads()
     } catch {
-      setError(scope === 'clear-current'
+      setDownloadError(scope === 'clear-current'
         ? '无法删除当前账号的本机下载，请重试。'
         : '无法清除全部离线内容，请重试。')
     } finally {
       setPendingDownloadAction(null)
+    }
+  }
+
+  const runDiagnosticAction = async (
+    action: Exclude<PendingDiagnosticAction, null>,
+  ) => {
+    if (pendingDiagnosticAction) return
+    setPendingDiagnosticAction(action)
+    setDiagnosticError(null)
+    try {
+      if (action === 'clear') {
+        await clearDiagnostics()
+        setDiagnosticCount(0)
+        return
+      }
+      const records = await loadDiagnostics()
+      await Share.share({
+        title: 'MangaDB 本机诊断记录',
+        message: JSON.stringify({
+          schemaVersion: 1,
+          generatedAt: new Date().toISOString(),
+          records,
+        }, null, 2),
+      })
+      setDiagnosticCount(records.length)
+    } catch {
+      setDiagnosticError(
+        action === 'share' ? '无法分享本机诊断记录。' : '无法清除本机诊断记录。',
+      )
+    } finally {
+      setPendingDiagnosticAction(null)
     }
   }
 
@@ -130,11 +188,16 @@ export default function SettingsScreen() {
             </View>
             <Switch
               accessibilityLabel="仅使用 Wi-Fi 下载"
+              disabled={wifiPending}
               onValueChange={value => {
-                setError(null)
-                void downloads.setWifiOnly(value).catch(() => {
-                  setError('无法保存下载网络设置，请重试。')
-                })
+                if (wifiPending) return
+                setWifiPending(true)
+                setDownloadError(null)
+                void downloads.setWifiOnly(value)
+                  .catch(() => {
+                    setDownloadError('无法保存下载网络设置，请重试。')
+                  })
+                  .finally(() => setWifiPending(false))
               }}
               trackColor={{ false: '#d1d5db', true: '#91caff' }}
               value={downloads.preferences.wifiOnly}
@@ -168,6 +231,36 @@ export default function SettingsScreen() {
             onPress={() => { void clearDownloads('clear-all') }}
             tone="danger"
           />
+          {downloadError
+            ? <Text accessibilityRole="alert" style={styles.error}>{downloadError}</Text>
+            : null}
+        </View>
+
+        <Text style={styles.sectionTitle}>稳定性诊断</Text>
+        <View style={styles.actionCard}>
+          <Text style={styles.explanation}>
+            本机最多保留 50 条脱敏记录，不包含账号、服务器地址、漫画标识或登录凭证。
+          </Text>
+          <Text style={styles.explanation}>当前共 {diagnosticCount} 条记录</Text>
+          <ActionButton
+            disabled={pendingDiagnosticAction !== null}
+            icon="share-outline"
+            label="分享诊断记录"
+            loading={pendingDiagnosticAction === 'share'}
+            onPress={() => { void runDiagnosticAction('share') }}
+            tone="brand"
+          />
+          <ActionButton
+            disabled={pendingDiagnosticAction !== null}
+            icon="trash-bin-outline"
+            label="清除诊断记录"
+            loading={pendingDiagnosticAction === 'clear'}
+            onPress={() => { void runDiagnosticAction('clear') }}
+            tone="danger"
+          />
+          {diagnosticError
+            ? <Text accessibilityRole="alert" style={styles.error}>{diagnosticError}</Text>
+            : null}
         </View>
 
         <Text style={styles.sectionTitle}>会话</Text>
@@ -175,7 +268,9 @@ export default function SettingsScreen() {
           <Text style={styles.explanation}>
             退出或切换服务器会清除登录凭证、查询缓存和图片缓存，不会删除本机阅读位置或离线下载；下载只会对原服务器和账号显示。
           </Text>
-          {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
+          {sessionError
+            ? <Text accessibilityRole="alert" style={styles.error}>{sessionError}</Text>
+            : null}
           <ActionButton
             disabled={pendingAction !== null}
             icon="log-out-outline"

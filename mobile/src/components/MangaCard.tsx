@@ -7,7 +7,7 @@ import type { ApiClient } from '@/api/client'
 import { useDownloadManifest } from '@/downloads/DownloadContext'
 import { mangaPageImageSource } from '@/media/images'
 import { colors } from '@/theme/colors'
-import type { RecentReadingEntry } from '@/storage/progress'
+import type { ReadingProgressEntry } from '@/storage/progress'
 
 interface MangaCardProps {
   manga: MangaSummary
@@ -16,7 +16,7 @@ interface MangaCardProps {
   userUuid: string
   width: number
   onPress?: (uuid: string) => void
-  progress?: RecentReadingEntry | null
+  progress?: Pick<ReadingProgressEntry, 'pageCount' | 'pageIndex' | 'state'> | null
   favorite?: boolean
 }
 

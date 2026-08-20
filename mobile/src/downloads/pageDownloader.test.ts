@@ -51,6 +51,23 @@ describe('DownloadPageDownloader', () => {
     expect(api.handleExternalResponse).toHaveBeenCalledWith(200)
   })
 
+  it('does not wait for external response handling before classifying the result', async () => {
+    const files = new MemoryPageFileStore()
+    const transfer = successfulTransfer(files, 1, { 'content-type': 'image/jpeg' }, 401)
+    const api = apiClient()
+    api.handleExternalResponse = jest.fn(() => new Promise<void>(() => {}))
+
+    await expect(downloaderWith(files, transfer).download({
+      api,
+      mangaUuid: 'manga-1',
+      pageIndex: 0,
+      paths,
+    })).rejects.toMatchObject({ code: 'unauthorized', retryable: false })
+
+    expect(api.handleExternalResponse).toHaveBeenCalledWith(401)
+    expect(files.deletes).toContain(paths.partialUri)
+  })
+
   it.each([
     [0, null, 'image/jpeg', '服务器返回了空页面'],
     [2, '3', 'image/jpeg', '页面长度不匹配'],

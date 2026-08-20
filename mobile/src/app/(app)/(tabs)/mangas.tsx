@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons'
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
+import { useInfiniteQuery, useQueries } from '@tanstack/react-query'
 import { router } from 'expo-router'
 import { useCallback, useMemo, useState } from 'react'
 import {
@@ -16,8 +16,8 @@ import {
 } from 'react-native'
 import { ApiError } from '@/api/client'
 import { getMangas, nextMangaPage, uniqueMangas } from '@/api/mangas'
-import { getAllTags } from '@/api/tags'
-import type { MangaSortBy, MangaSummary, SortOrder } from '@/api/types'
+import { getTag, getTags, nextTagPage, uniqueTags } from '@/api/tags'
+import type { MangaSortBy, MangaSummary, SortOrder, Tag } from '@/api/types'
 import { MangaCard } from '@/components/MangaCard'
 import { CatalogFilterSheet } from '@/components/catalog/CatalogFilterSheet'
 import { PrimaryButton } from '@/components/PrimaryButton'
@@ -48,18 +48,46 @@ export default function MangasScreen() {
   const { width } = useWindowDimensions()
   const { api, auth, serverUrl } = useSession()
   const [filtersVisible, setFiltersVisible] = useState(false)
+  const [tagSearch, setTagSearch] = useState('')
   const catalog = useCatalogFilters(serverUrl, auth?.user.uuid)
   const { filters } = catalog
   const debouncedSearch = useDebouncedValue(filters.search.trim(), 350)
+  const debouncedTagSearch = useDebouncedValue(tagSearch.trim(), 300)
   const recentReading = useRecentReading(serverUrl, auth?.user.uuid)
   const favorites = useFavorites(serverUrl, auth?.user.uuid)
   const downloadedUuids = useDownloadedMangaUuids()
-  const tagsQuery = useQuery({
-    queryKey: ['catalog-filter-tags', serverUrl, auth?.user.uuid],
-    queryFn: ({ signal }) => getAllTags(api!, signal),
+  const tagsQuery = useInfiniteQuery({
+    queryKey: ['catalog-filter-tags', serverUrl, auth?.user.uuid, debouncedTagSearch],
+    queryFn: ({ pageParam, signal }) => getTags(api!, {
+      page: pageParam,
+      search: debouncedTagSearch,
+    }, signal),
+    initialPageParam: 1,
+    getNextPageParam: nextTagPage,
     enabled: Boolean(api && auth && serverUrl && filtersVisible),
     staleTime: 5 * 60 * 1000,
   })
+  const selectedTagQueries = useQueries({
+    queries: filters.tagUuids.map(tagUuid => ({
+      queryKey: ['catalog-filter-tag', serverUrl, auth?.user.uuid, tagUuid],
+      queryFn: ({ signal }: { signal: AbortSignal }) => getTag(api!, tagUuid, signal),
+      enabled: Boolean(api && auth && serverUrl && filtersVisible),
+      staleTime: 5 * 60 * 1000,
+    })),
+  })
+  const pagedFilterTags = useMemo(
+    () => uniqueTags(tagsQuery.data?.pages ?? []),
+    [tagsQuery.data],
+  )
+  const filterTags = useMemo(
+    () => mergeSelectedTags(
+      filters.tagUuids,
+      selectedTagQueries.flatMap(result => result.data ? [result.data] : []),
+      pagedFilterTags,
+    ),
+    [filters.tagUuids, pagedFilterTags, selectedTagQueries],
+  )
+  const selectedTagError = selectedTagQueries.find(result => result.error)?.error
   const grid = useMemo(() => adaptiveGridLayout(width, {
     horizontalPadding: GRID_PADDING,
     gap: GRID_GAP,
@@ -98,7 +126,7 @@ export default function MangasScreen() {
     [query.data],
   )
   const progressByManga = useMemo(
-    () => new Map(recentReading.allEntries.map(entry => [entry.manga.uuid, entry])),
+    () => new Map(recentReading.allEntries.map(entry => [entry.mangaUuid, entry])),
     [recentReading.allEntries],
   )
   const mangas = useMemo(() => serverMangas.filter(manga =>
@@ -230,14 +258,43 @@ export default function MangasScreen() {
       />
       <CatalogFilterSheet
         filters={filters}
+        onChangeTagSearch={setTagSearch}
         onApply={catalog.updateFilters}
         onClose={() => setFiltersVisible(false)}
-        tags={tagsQuery.data ?? []}
+        onLoadMoreTags={() => { void tagsQuery.fetchNextPage() }}
+        onRetryTags={() => {
+          void tagsQuery.refetch()
+          selectedTagQueries.forEach(result => { void result.refetch() })
+        }}
+        tags={filterTags}
+        tagsError={tagQueryErrorMessage(tagsQuery.error ?? selectedTagError)}
+        tagsFetchingMore={tagsQuery.isFetchingNextPage}
+        tagsHasMore={Boolean(tagsQuery.hasNextPage)}
         tagsLoading={tagsQuery.isPending}
+        tagSearch={tagSearch}
         visible={filtersVisible}
       />
     </>
   )
+}
+
+export function mergeSelectedTags(
+  selectedTagUuids: readonly string[],
+  selectedTags: readonly Tag[],
+  pagedTags: readonly Tag[],
+): Tag[] {
+  const tagsByUuid = new Map(pagedTags.map(tag => [tag.uuid, tag]))
+  selectedTags.forEach(tag => tagsByUuid.set(tag.uuid, tag))
+  const selected = selectedTagUuids.flatMap(uuid => {
+    const tag = tagsByUuid.get(uuid)
+    return tag ? [tag] : []
+  })
+  const selectedUuids = new Set(selectedTagUuids)
+  return [...selected, ...pagedTags.filter(tag => !selectedUuids.has(tag.uuid))]
+}
+
+function tagQueryErrorMessage(error: unknown): string | null {
+  return error instanceof Error ? error.message : null
 }
 
 interface LibraryHeaderProps {

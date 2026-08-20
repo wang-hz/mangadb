@@ -1,4 +1,4 @@
-import type { ApiClient } from './client'
+import { ApiError, type ApiClient } from './client'
 import type {
   MangaSortBy,
   MangaSummary,
@@ -9,8 +9,15 @@ import type {
   TagType,
 } from './types'
 import { MANGA_PAGE_SIZE } from './mangas'
+import {
+  normalizeMangaSummary,
+  normalizePageResult,
+  normalizeTag,
+  normalizeTagType,
+} from './validation'
 
 export const TAG_PAGE_SIZE = 30
+const MAX_PAGINATION_PAGES = 100
 
 interface TagListParams {
   page: number
@@ -20,7 +27,7 @@ interface TagListParams {
   sortOrder?: SortOrder
 }
 
-export function getTags(
+export async function getTags(
   client: ApiClient,
   params: TagListParams,
   signal?: AbortSignal,
@@ -34,15 +41,17 @@ export function getTags(
   const search = params.search?.trim()
   if (search) query.set('search', search)
   if (params.tagTypeName) query.set('tagTypeName', params.tagTypeName)
-  return client.request<PageResult<Tag>>(`/api/mangadb/tags?${query}`, { signal })
+  const payload = await client.request<unknown>(`/api/mangadb/tags?${query}`, { signal })
+  return normalizePageResult(payload, normalizeTag, '标签')
 }
 
 export async function getAllTags(client: ApiClient, signal?: AbortSignal): Promise<Tag[]> {
   const tags: Tag[] = []
   const seen = new Set<string>()
   let page = 1
-  while (true) {
+  while (page <= MAX_PAGINATION_PAGES) {
     const response = await getTags(client, { page, sortBy: 'updateAt', sortOrder: 'desc' }, signal)
+    const previousSize = seen.size
     for (const tag of response.items) {
       if (!seen.has(tag.uuid)) {
         seen.add(tag.uuid)
@@ -50,8 +59,12 @@ export async function getAllTags(client: ApiClient, signal?: AbortSignal): Promi
       }
     }
     if (response.items.length < response.limit || seen.size >= response.total) return tags
+    if (response.page !== page || seen.size === previousSize) {
+      throw new ApiError('标签分页没有进展', 502)
+    }
     page += 1
   }
+  throw new ApiError(`标签分页超过 ${MAX_PAGINATION_PAGES} 页安全上限`, 502)
 }
 
 export async function getAllTagTypes(client: ApiClient, signal?: AbortSignal): Promise<TagType[]> {
@@ -59,11 +72,13 @@ export async function getAllTagTypes(client: ApiClient, signal?: AbortSignal): P
   const seen = new Set<string>()
   let page = 1
 
-  while (true) {
-    const response = await client.request<PageResult<TagType>>(
+  while (page <= MAX_PAGINATION_PAGES) {
+    const payload = await client.request<unknown>(
       `/api/mangadb/tag_types?page=${page}&limit=100`,
       { signal },
     )
+    const response = normalizePageResult(payload, normalizeTagType, '标签类型')
+    const previousSize = seen.size
     for (const tagType of response.items) {
       if (!seen.has(tagType.uuid)) {
         seen.add(tagType.uuid)
@@ -71,12 +86,20 @@ export async function getAllTagTypes(client: ApiClient, signal?: AbortSignal): P
       }
     }
     if (response.items.length < response.limit || seen.size >= response.total) return tagTypes
+    if (response.page !== page || seen.size === previousSize) {
+      throw new ApiError('标签类型分页没有进展', 502)
+    }
     page += 1
   }
+  throw new ApiError(`标签类型分页超过 ${MAX_PAGINATION_PAGES} 页安全上限`, 502)
 }
 
-export function getTag(client: ApiClient, uuid: string, signal?: AbortSignal): Promise<Tag> {
-  return client.request<Tag>(`/api/mangadb/tags/${encodeURIComponent(uuid)}`, { signal })
+export async function getTag(client: ApiClient, uuid: string, signal?: AbortSignal): Promise<Tag> {
+  const payload = await client.request<unknown>(
+    `/api/mangadb/tags/${encodeURIComponent(uuid)}`,
+    { signal },
+  )
+  return normalizeTag(payload)
 }
 
 interface TagMangaListParams {
@@ -87,7 +110,7 @@ interface TagMangaListParams {
   sortOrder?: SortOrder
 }
 
-export function getMangasByTag(
+export async function getMangasByTag(
   client: ApiClient,
   params: TagMangaListParams,
   signal?: AbortSignal,
@@ -101,18 +124,25 @@ export function getMangasByTag(
   })
   const search = params.search?.trim()
   if (search) query.set('search', search)
-  return client.request<PageResult<MangaSummary>>(
+  const payload = await client.request<unknown>(
     `/api/mangadb/tags/${encodeURIComponent(params.tagUuid)}/mangas?${query}`,
     { signal },
   )
+  return normalizePageResult(payload, normalizeMangaSummary, '标签漫画')
 }
 
 export function nextTagPage(lastPage: PageResult<Tag>, allPages: PageResult<Tag>[]): number | undefined {
   const loaded = new Set(allPages.flatMap(page => page.items.map(item => item.uuid))).size
+  const previouslyLoaded = new Set(
+    allPages.slice(0, -1).flatMap(page => page.items.map(item => item.uuid)),
+  )
+  const madeProgress = lastPage.items.some(item => !previouslyLoaded.has(item.uuid))
   if (
+    lastPage.page >= MAX_PAGINATION_PAGES ||
     lastPage.items.length === 0 ||
     lastPage.items.length < lastPage.limit ||
-    loaded >= lastPage.total
+    loaded >= lastPage.total ||
+    !madeProgress
   ) return undefined
   return lastPage.page + 1
 }

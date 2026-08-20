@@ -67,7 +67,9 @@ describe('reader preferences storage', () => {
     releaseFirstWrite?.()
     await Promise.all([first, second])
     expect(AsyncStorage.setItem).toHaveBeenCalledTimes(2)
-    expect(JSON.parse(jest.mocked(AsyncStorage.setItem).mock.calls[1][1])).toMatchObject({
+    const secondWrite = jest.mocked(AsyncStorage.setItem).mock.calls[1]
+    if (!secondWrite) throw new Error('missing queued storage write')
+    expect(JSON.parse(secondWrite[1])).toMatchObject({
       defaultMode: 'scroll',
     })
   })

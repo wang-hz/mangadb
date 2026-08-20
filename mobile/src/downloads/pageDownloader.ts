@@ -106,7 +106,7 @@ export class DownloadPageDownloader {
           this.assertStorage(remaining)
         },
       })
-      await api.handleExternalResponse(result.status)
+      void api.handleExternalResponse(result.status)
       if (result.status < 200 || result.status >= 300) throw classifyStatus(result.status)
       if (signal?.aborted) throw new DownloadPageCancelledError()
 

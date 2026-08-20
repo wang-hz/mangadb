@@ -8,7 +8,6 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  useWindowDimensions,
   View,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -24,6 +23,7 @@ import {
 } from '@/components/reader/telemetry'
 import { localPageImageSource, mangaPageImageSource } from '@/media/images'
 import { useScreenReaderEnabled } from '@/hooks/useScreenReaderEnabled'
+import type { StableViewport } from '@/hooks/useStableViewport'
 import type { ReaderPreferences } from '@/storage/readerPreferences'
 import { colors } from '@/theme/colors'
 import {
@@ -50,6 +50,7 @@ interface ScrollingReaderProps {
   completed: boolean
   onMarkCompleted: () => Promise<void>
   onReturnToDetail: () => void
+  viewport: StableViewport
 }
 
 export function ScrollingReader({
@@ -70,18 +71,17 @@ export function ScrollingReader({
   completed,
   onMarkCompleted,
   onReturnToDetail,
+  viewport,
 }: ScrollingReaderProps) {
-  const { width, height } = useWindowDimensions()
+  const { width, height, scale, epoch } = viewport
   const insets = useSafeAreaInsets()
   const screenReaderEnabled = useScreenReaderEnabled()
   const listRef = useRef<FlatList<string>>(null)
   const callbackRef = useRef(onPageChange)
-  const retryCountRef = useRef(0)
-  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const initializationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const initializingRef = useRef(pageIndex > 0)
-  const previousWidthRef = useRef(width)
+  const mountedRef = useRef(true)
+  const epochRef = useRef(epoch)
+  epochRef.current = epoch
+  const userInteractingRef = useRef(false)
   const scrollOffsetRef = useRef(0)
   const firstPageReportedRef = useRef(false)
   const visiblePageRef = useRef(pageIndex)
@@ -91,6 +91,10 @@ export function ScrollingReader({
   const [aspectRatios, setAspectRatios] = useState<Record<number, number>>({})
   const [controlsVisible, setControlsVisible] = useState(true)
   const [zoomedPageIndex, setZoomedPageIndex] = useState<number | null>(null)
+  const isCurrentEpoch = useCallback(
+    (callbackEpoch: number) => mountedRef.current && epochRef.current === callbackEpoch,
+    [],
+  )
   const imageWidth = Math.min(width, 900)
   const layouts = useMemo(() => buildScrollingPageLayouts(
     manga.pages.map((_, index) => aspectRatios[index] ?? 2 / 3),
@@ -100,12 +104,29 @@ export function ScrollingReader({
   const layoutsRef = useRef(layouts)
   layoutsRef.current = layouts
   const recordPageLoad = useCallback((index: number, durationMs: number) => {
+    if (!isCurrentEpoch(epoch)) return
     if (index !== visiblePageRef.current) return
     reportVisiblePageLoad('scroll', index, durationMs, !firstPageReportedRef.current)
     firstPageReportedRef.current = true
-  }, [])
+  }, [epoch, isCurrentEpoch])
 
   useEffect(() => { callbackRef.current = onPageChange }, [onPageChange])
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      if (aspectRatioFrameRef.current !== null) cancelAnimationFrame(aspectRatioFrameRef.current)
+      aspectRatioFrameRef.current = null
+      pendingAspectRatiosRef.current = {}
+    }
+  }, [])
+
+  useEffect(() => {
+    setZoomedPageIndex(null)
+    userInteractingRef.current = false
+    scrollOffsetRef.current = layouts[pageIndex]?.offset ?? 0
+  }, [epoch])
 
   useEffect(() => {
     if (!controlsVisible || settingsVisible) return
@@ -114,60 +135,26 @@ export function ScrollingReader({
     return () => clearTimeout(timeout)
   }, [controlsVisible, settingsVisible, pageIndex, preferences.controlsAutoHideMs])
 
-  useEffect(() => {
-    if (previousWidthRef.current === width) return
-    previousWidthRef.current = width
-    initializingRef.current = true
-    retryCountRef.current = 0
-    const frame = requestAnimationFrame(() => {
-      listRef.current?.scrollToIndex({ index: pageIndex, animated: false })
-      finishInitializationAfterDelay()
-    })
-    return () => cancelAnimationFrame(frame)
-  }, [width, pageIndex])
-
-  useEffect(() => () => {
-    if (retryTimerRef.current) clearTimeout(retryTimerRef.current)
-    if (initializationTimerRef.current) clearTimeout(initializationTimerRef.current)
-    if (settleTimerRef.current) clearTimeout(settleTimerRef.current)
-    if (aspectRatioFrameRef.current !== null) {
-      cancelAnimationFrame(aspectRatioFrameRef.current)
-    }
-  }, [])
-
-  const finishInitializationAfterDelay = () => {
-    if (initializationTimerRef.current) clearTimeout(initializationTimerRef.current)
-    initializationTimerRef.current = setTimeout(() => {
-      initializingRef.current = false
-    }, 500)
-  }
-
-  useEffect(() => {
-    finishInitializationAfterDelay()
-  }, [])
-
-  const cancelSettle = () => {
-    if (settleTimerRef.current) clearTimeout(settleTimerRef.current)
-    settleTimerRef.current = null
-  }
-
   const settleVisiblePage = () => {
-    cancelSettle()
-    settleTimerRef.current = setTimeout(() => {
-      if (initializingRef.current) return
-      callbackRef.current(pageIndexAtViewportCenter(
-        layoutsRef.current,
-        scrollOffsetRef.current,
-        height,
-      ))
-    }, 250)
+    if (!isCurrentEpoch(epoch) || !userInteractingRef.current) return
+    callbackRef.current(pageIndexAtViewportCenter(
+      layoutsRef.current,
+      scrollOffsetRef.current,
+      height,
+    ))
   }
 
   const updateAspectRatio = useCallback((index: number, ratio: number) => {
+    const callbackEpoch = epoch
+    if (!isCurrentEpoch(callbackEpoch)) return
     pendingAspectRatiosRef.current[index] = ratio
     if (aspectRatioFrameRef.current !== null) return
     aspectRatioFrameRef.current = requestAnimationFrame(() => {
       aspectRatioFrameRef.current = null
+      if (!isCurrentEpoch(callbackEpoch)) {
+        pendingAspectRatiosRef.current = {}
+        return
+      }
       const pending = pendingAspectRatiosRef.current
       pendingAspectRatiosRef.current = {}
       setAspectRatios(current => {
@@ -182,16 +169,19 @@ export function ScrollingReader({
         return changed ? next : current
       })
     })
-  }, [])
+  }, [epoch, isCurrentEpoch])
   const toggleControls = useCallback(() => {
+    if (!isCurrentEpoch(epoch)) return
     setControlsVisible(visible => !visible)
-  }, [])
+  }, [epoch, isCurrentEpoch])
   const updateZoomedPage = useCallback((index: number, zoomed: boolean) => {
+    const callbackEpoch = epoch
+    if (!isCurrentEpoch(callbackEpoch)) return
     setZoomedPageIndex(current => {
       if (zoomed) return index
       return current === index ? null : current
     })
-  }, [])
+  }, [epoch, isCurrentEpoch])
 
   return (
     <View style={styles.root}>
@@ -199,9 +189,14 @@ export function ScrollingReader({
       <FlatList
         data={manga.pages}
         extraData={layouts}
-        getItemLayout={(_, index) => layouts[index]}
+        getItemLayout={(_, index) => layouts[index] ?? {
+          index,
+          length: 0,
+          offset: 0,
+        }}
         initialNumToRender={1}
         initialScrollIndex={pageIndex}
+        key={`scroll:${epoch}`}
         keyExtractor={(_, index) => String(index)}
         ListFooterComponent={(
           <View style={[
@@ -212,6 +207,7 @@ export function ScrollingReader({
               completed={completed}
               onMarkCompleted={onMarkCompleted}
               onReread={() => {
+                if (!isCurrentEpoch(epoch)) return
                 onPageChange(0)
                 listRef.current?.scrollToIndex({ index: 0, animated: true })
               }}
@@ -219,34 +215,19 @@ export function ScrollingReader({
             />
           </View>
         )}
-        maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
         maxToRenderPerBatch={1}
         onScrollBeginDrag={() => {
-          initializingRef.current = false
-          cancelSettle()
+          if (!isCurrentEpoch(epoch)) return
+          userInteractingRef.current = true
           setControlsVisible(false)
         }}
-        onMomentumScrollBegin={cancelSettle}
         onMomentumScrollEnd={settleVisiblePage}
-        onScroll={event => { scrollOffsetRef.current = event.nativeEvent.contentOffset.y }}
-        onScrollEndDrag={settleVisiblePage}
-        onScrollToIndexFailed={info => {
-          const estimatedLayout = layoutsRef.current[info.index]
-          listRef.current?.scrollToOffset({
-            offset: estimatedLayout?.offset ?? Math.max(0, info.averageItemLength * info.index),
-            animated: false,
-          })
-          if (retryCountRef.current < 4) {
-            retryCountRef.current += 1
-            if (retryTimerRef.current) clearTimeout(retryTimerRef.current)
-            retryTimerRef.current = setTimeout(() => {
-              listRef.current?.scrollToIndex({ index: info.index, animated: false })
-              finishInitializationAfterDelay()
-            }, 80)
-          } else {
-            finishInitializationAfterDelay()
+        onScroll={event => {
+          if (isCurrentEpoch(epoch)) {
+            scrollOffsetRef.current = event.nativeEvent.contentOffset.y
           }
         }}
+        onScrollEndDrag={settleVisiblePage}
         ref={listRef}
         removeClippedSubviews={Platform.OS === 'android'}
         renderItem={({ index }) => (
@@ -264,14 +245,17 @@ export function ScrollingReader({
             onTap={toggleControls}
             onZoomChange={updateZoomedPage}
             pageGap={index === manga.pages.length - 1 ? 0 : preferences.scrollGap}
+            pixelScale={scale}
             serverUrl={serverUrl}
             userUuid={userUuid}
             viewportWidth={width}
+            viewportEpoch={epoch}
           />
         )}
         scrollEventThrottle={16}
         scrollEnabled={zoomedPageIndex === null}
         showsVerticalScrollIndicator={false}
+        testID={`scrolling-reader-list-${epoch}`}
         windowSize={3}
       />
       <ReaderDimmer level={preferences.readerDimLevel} />
@@ -314,6 +298,8 @@ interface ScrollingPageProps {
   onRefreshMetadata: () => Promise<void>
   pageGap: number
   localUri?: string
+  pixelScale: number
+  viewportEpoch: number
 }
 
 const ScrollingPage = memo(function ScrollingPage({
@@ -333,11 +319,15 @@ const ScrollingPage = memo(function ScrollingPage({
   onRefreshMetadata,
   pageGap,
   localUri,
+  pixelScale,
+  viewportEpoch,
 }: ScrollingPageProps) {
   const [loading, setLoading] = useState(true)
   const [failed, setFailed] = useState(false)
   const [attempt, setAttempt] = useState(0)
   const [refreshingMetadata, setRefreshingMetadata] = useState(false)
+  const [metadataRefreshError, setMetadataRefreshError] = useState(false)
+  const mountedRef = useRef(true)
   const loadStartedAtRef = useRef(Date.now())
   const imageWidth = Math.min(viewportWidth, 900)
   const imageHeight = imageWidth / aspectRatio
@@ -351,12 +341,26 @@ const ScrollingPage = memo(function ScrollingPage({
         index,
         manga.updateAt,
       )
+  const requestKey = `${source.cacheKey ?? source.uri ?? ''}:${attempt}:${viewportEpoch}`
+  const requestGenerationRef = useRef({ key: requestKey, generation: 0 })
+  if (requestGenerationRef.current.key !== requestKey) {
+    requestGenerationRef.current = {
+      key: requestKey,
+      generation: requestGenerationRef.current.generation + 1,
+    }
+  }
+  const requestGeneration = requestGenerationRef.current.generation
 
   useEffect(() => {
     setLoading(true)
     setFailed(false)
     loadStartedAtRef.current = Date.now()
-  }, [source.cacheKey, attempt])
+  }, [requestKey])
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
+  }, [])
 
   return (
     <View style={[styles.scrollPage, { width: viewportWidth, paddingBottom: pageGap }]}>
@@ -373,6 +377,10 @@ const ScrollingPage = memo(function ScrollingPage({
               enforceEarlyResizing={Platform.OS === 'ios'}
               key={attempt}
               onError={() => {
+                if (
+                  !mountedRef.current ||
+                  requestGeneration !== requestGenerationRef.current.generation
+                ) return
                 setLoading(false)
                 setFailed(true)
                 reportReaderTelemetry({
@@ -383,6 +391,10 @@ const ScrollingPage = memo(function ScrollingPage({
                 })
               }}
               onLoad={event => {
+                if (
+                  !mountedRef.current ||
+                  requestGeneration !== requestGenerationRef.current.generation
+                ) return
                 const { width, height } = event.source
                 if (width > 0 && height > 0) {
                   const nextAspectRatio = Math.min(4, Math.max(0.05, width / height))
@@ -391,7 +403,9 @@ const ScrollingPage = memo(function ScrollingPage({
                 setLoading(false)
                 onPageLoad(index, Date.now() - loadStartedAtRef.current)
               }}
-              recyclingKey={`${manga.uuid}:${index}:${manga.updateAt}`}
+              recyclingKey={`${manga.uuid}:${index}:${manga.updateAt}:${viewportEpoch}`}
+              pixelScale={pixelScale}
+              resetKey={viewportEpoch}
               source={source}
               onTap={() => onTap()}
               onZoomChange={zoomed => onZoomChange(index, zoomed)}
@@ -417,6 +431,7 @@ const ScrollingPage = memo(function ScrollingPage({
                   })
                   setAttempt(value => value + 1)
                   setFailed(false)
+                  setMetadataRefreshError(false)
                 }}
               >
                 <Text style={styles.failureAction}>点击重试</Text>
@@ -427,13 +442,23 @@ const ScrollingPage = memo(function ScrollingPage({
                 onPress={event => {
                   event.stopPropagation()
                   setRefreshingMetadata(true)
-                  void onRefreshMetadata().finally(() => setRefreshingMetadata(false))
+                  setMetadataRefreshError(false)
+                  void onRefreshMetadata()
+                    .catch(() => {
+                      if (mountedRef.current) setMetadataRefreshError(true)
+                    })
+                    .finally(() => {
+                      if (mountedRef.current) setRefreshingMetadata(false)
+                    })
                 }}
               >
                 <Text style={styles.metadataRefreshAction}>
                   {refreshingMetadata ? '正在刷新页面信息' : '刷新页面信息'}
                 </Text>
               </Pressable>
+              {metadataRefreshError
+                ? <Text style={styles.metadataRefreshError}>刷新失败，请检查网络后重试</Text>
+                : null}
             </Pressable>
           )}
       {loading && !failed
@@ -478,6 +503,10 @@ const styles = StyleSheet.create({
   },
   metadataRefreshAction: {
     color: '#a3a3a3',
+    fontSize: 12,
+  },
+  metadataRefreshError: {
+    color: '#fca5a5',
     fontSize: 12,
   },
   pageBadge: {

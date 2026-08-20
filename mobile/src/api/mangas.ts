@@ -1,12 +1,16 @@
-import { ApiError, type ApiClient } from './client'
+import type { ApiClient } from './client'
 import type {
   MangaDetail,
   MangaSortBy,
   MangaSummary,
-  MangaTagItem,
   PageResult,
   SortOrder,
 } from './types'
+import {
+  normalizeMangaDetail,
+  normalizeMangaSummary,
+  normalizePageResult,
+} from './validation'
 
 export const MANGA_PAGE_SIZE = 24
 
@@ -21,7 +25,7 @@ export interface MangaListParams {
   sortOrder: SortOrder
 }
 
-export function getMangas(
+export async function getMangas(
   client: ApiClient,
   params: MangaListParams,
   signal?: AbortSignal,
@@ -42,7 +46,8 @@ export function getMangas(
   if (params.publishYearTo !== undefined) {
     query.set('publishYearTo', String(params.publishYearTo))
   }
-  return client.request<PageResult<MangaSummary>>(`/api/mangadb/mangas?${query}`, { signal })
+  const payload = await client.request<unknown>(`/api/mangadb/mangas?${query}`, { signal })
+  return normalizePageResult(payload, normalizeMangaSummary, '漫画')
 }
 
 export async function getManga(client: ApiClient, uuid: string, signal?: AbortSignal): Promise<MangaDetail> {
@@ -51,55 +56,6 @@ export async function getManga(client: ApiClient, uuid: string, signal?: AbortSi
     { signal },
   )
   return normalizeMangaDetail(payload)
-}
-
-function normalizeMangaDetail(payload: unknown): MangaDetail {
-  if (!isRecord(payload)) throw new ApiError('服务器返回了无效的漫画详情', 502, payload)
-  const requiredStrings = ['uuid', 'fullname', 'displayTitle', 'originalTitle', 'createAt', 'updateAt'] as const
-  if (requiredStrings.some(field => typeof payload[field] !== 'string')) {
-    throw new ApiError('服务器返回了无效的漫画详情', 502, payload)
-  }
-
-  const publishDate = payload.publishDate
-  const cover = payload.cover
-  if (
-    !(publishDate === null || typeof publishDate === 'string') ||
-    !(cover === null || (typeof cover === 'number' && Number.isInteger(cover)))
-  ) {
-    throw new ApiError('服务器返回了无效的漫画详情', 502, payload)
-  }
-
-  const pages = Array.isArray(payload.pages) && payload.pages.every(page => typeof page === 'string')
-    ? payload.pages
-    : []
-  const mangaTags = Array.isArray(payload.mangaTags)
-    ? payload.mangaTags.filter(isMangaTagItem)
-    : []
-
-  return {
-    uuid: payload.uuid as string,
-    fullname: payload.fullname as string,
-    displayTitle: payload.displayTitle as string,
-    originalTitle: payload.originalTitle as string,
-    publishDate,
-    pages,
-    cover,
-    createAt: payload.createAt as string,
-    updateAt: payload.updateAt as string,
-    mangaTags,
-  }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-function isMangaTagItem(value: unknown): value is MangaTagItem {
-  if (!isRecord(value) || !isRecord(value.tag) || !isRecord(value.tag.tagType)) return false
-  return typeof value.tag.uuid === 'string' &&
-    typeof value.tag.name === 'string' &&
-    typeof value.tag.tagType.uuid === 'string' &&
-    typeof value.tag.tagType.name === 'string'
 }
 
 export function nextMangaPage(

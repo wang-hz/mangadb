@@ -85,6 +85,10 @@ export function pageIndexAtViewportCenter(
   while (low < high) {
     const middle = Math.floor((low + high) / 2)
     const layout = layouts[middle]
+    if (layout === undefined) {
+      high = middle
+      continue
+    }
     if (center < layout.offset + layout.length) high = middle
     else low = middle + 1
   }

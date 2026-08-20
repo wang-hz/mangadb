@@ -58,7 +58,7 @@ describe('manga API', () => {
     expect(request.mock.calls[0][0]).toContain('publishYearTo=2026')
   })
 
-  it('treats an invalid pages JSON array as empty without shifting indices', async () => {
+  it('rejects invalid page and tag arrays instead of passing them to the reader', async () => {
     const request = jest.fn().mockResolvedValue({
       uuid: 'manga-1',
       fullname: '/data/manga',
@@ -73,9 +73,21 @@ describe('manga API', () => {
     })
     const client = { request } as unknown as ApiClient
 
-    const manga = await getManga(client, 'manga-1')
-    expect(manga.pages).toEqual([])
-    expect(manga.mangaTags).toHaveLength(1)
+    await expect(getManga(client, 'manga-1')).rejects.toMatchObject({
+      name: 'ApiError',
+      status: 502,
+    })
+  })
+
+  it('rejects a malformed successful manga page', async () => {
+    const request = jest.fn().mockResolvedValue({ items: null, total: 1, page: 1, limit: 24 })
+    const client = { request } as unknown as ApiClient
+
+    await expect(getMangas(client, {
+      page: 1,
+      sortBy: 'updateAt',
+      sortOrder: 'desc',
+    })).rejects.toMatchObject({ status: 502 })
   })
 
   it('continues until all reported items are loaded and stops on an empty page', () => {
@@ -100,8 +112,10 @@ describe('manga API', () => {
       { items: [manga('one'), manga('two')], total: 3, page: 1, limit: 2 },
       { items: [manga('two'), manga('three')], total: 3, page: 2, limit: 2 },
     ]
+    const lastPage = pages[1]
+    if (!lastPage) throw new Error('missing test page')
 
     expect(uniqueMangas(pages).map(item => item.uuid)).toEqual(['one', 'two', 'three'])
-    expect(nextMangaPage(pages[1], pages)).toBeUndefined()
+    expect(nextMangaPage(lastPage, pages)).toBeUndefined()
   })
 })

@@ -1,6 +1,6 @@
 import { Image, type ImageProps } from 'expo-image'
 import { useCallback, useEffect, useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { PixelRatio, Pressable, StyleSheet, Text, View } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, {
   runOnJS,
@@ -13,6 +13,7 @@ import Animated, {
 
 const MIN_SCALE = 1
 const MAX_SCALE = 4
+export const READER_IMAGE_TARGET_PIXEL_BUDGET = 8_000_000
 
 interface ZoomableReaderImageProps extends Pick<
   ImageProps,
@@ -32,6 +33,8 @@ interface ZoomableReaderImageProps extends Pick<
   doubleTapScale: 2 | 3 | null
   onTap: (x: number) => void
   onZoomChange?: (zoomed: boolean) => void
+  pixelScale?: number
+  resetKey?: string | number
 }
 
 function clamp(value: number, minimum: number, maximum: number) {
@@ -47,6 +50,8 @@ export function ZoomableReaderImage({
   doubleTapScale,
   onTap,
   onZoomChange,
+  pixelScale = PixelRatio.get(),
+  resetKey,
   ...imageProps
 }: ZoomableReaderImageProps) {
   const [zoomed, setZoomed] = useState(false)
@@ -57,6 +62,7 @@ export function ZoomableReaderImage({
   const savedTranslateX = useSharedValue(0)
   const savedTranslateY = useSharedValue(0)
   const reduceMotion = useReducedMotion()
+  const decodeLayout = readerImageDecodeLayout(width, height, pixelScale)
 
   const notifyZoomChange = useCallback((zoomed: boolean) => {
     setZoomed(zoomed)
@@ -94,7 +100,7 @@ export function ZoomableReaderImage({
   useEffect(() => {
     reset()
     return () => onZoomChange?.(false)
-  }, [imageProps.recyclingKey, width, height])
+  }, [imageProps.recyclingKey, width, height, resetKey])
 
   useAnimatedReaction(
     () => scale.value > MIN_SCALE + 0.01,
@@ -198,7 +204,16 @@ export function ZoomableReaderImage({
           }}
           style={[styles.imageWrapper, { width, height }, animatedStyle]}
         >
-          <Image {...imageProps} style={{ width, height }} />
+          <Image
+            {...imageProps}
+            style={{
+              width: decodeLayout.width,
+              height: decodeLayout.height,
+              transform: decodeLayout.displayScale === 1
+                ? undefined
+                : [{ scale: decodeLayout.displayScale }],
+            }}
+          />
         </Animated.View>
       </GestureDetector>
       {zoomed
@@ -218,6 +233,31 @@ export function ZoomableReaderImage({
         : null}
     </View>
   )
+}
+
+export function readerImageDecodeLayout(
+  width: number,
+  height: number,
+  pixelScale: number,
+  targetPixelBudget = READER_IMAGE_TARGET_PIXEL_BUDGET,
+): { width: number; height: number; displayScale: number } {
+  const safeWidth = Number.isFinite(width) ? Math.max(0, width) : 0
+  const safeHeight = Number.isFinite(height) ? Math.max(0, height) : 0
+  const safePixelScale = Number.isFinite(pixelScale) && pixelScale > 0 ? pixelScale : 1
+  const safeBudget = Number.isFinite(targetPixelBudget) && targetPixelBudget > 0
+    ? targetPixelBudget
+    : READER_IMAGE_TARGET_PIXEL_BUDGET
+  const targetPixels = safeWidth * safeHeight * safePixelScale * safePixelScale
+  if (targetPixels <= safeBudget || targetPixels === 0) {
+    return { width: safeWidth, height: safeHeight, displayScale: 1 }
+  }
+
+  const decodeScale = Math.sqrt(safeBudget / targetPixels)
+  return {
+    width: safeWidth * decodeScale,
+    height: safeHeight * decodeScale,
+    displayScale: 1 / decodeScale,
+  }
 }
 
 const styles = StyleSheet.create({

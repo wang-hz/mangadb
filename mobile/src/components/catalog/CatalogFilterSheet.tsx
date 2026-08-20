@@ -1,9 +1,11 @@
 import { Ionicons } from '@expo/vector-icons'
 import { useEffect, useState } from 'react'
 import {
+  ActivityIndicator,
+  AppState,
+  FlatList,
   Modal,
   Pressable,
-  ScrollView,
   StyleSheet,
   Switch,
   Text,
@@ -24,10 +26,19 @@ interface CatalogFilterSheetProps {
   filters: CatalogFilters
   tags: readonly Tag[]
   tagsLoading: boolean
+  tagsFetchingMore?: boolean
+  tagsHasMore?: boolean
+  tagsError?: string | null
+  tagSearch?: string
   visible: boolean
+  onChangeTagSearch?: (value: string) => void
+  onLoadMoreTags?: () => void
+  onRetryTags?: () => void
   onApply: (filters: CatalogFilters) => void
   onClose: () => void
 }
+
+export const MAX_CATALOG_TAG_SELECTION = 20
 
 const READING_STATES: Array<{ label: string; value: ReadingStateFilter }> = [
   { label: '全部', value: 'all' },
@@ -40,7 +51,14 @@ export function CatalogFilterSheet({
   filters,
   tags,
   tagsLoading,
+  tagsFetchingMore = false,
+  tagsHasMore = false,
+  tagsError = null,
+  tagSearch = '',
   visible,
+  onChangeTagSearch,
+  onLoadMoreTags,
+  onRetryTags,
   onApply,
   onClose,
 }: CatalogFilterSheetProps) {
@@ -49,6 +67,7 @@ export function CatalogFilterSheet({
   const [yearFrom, setYearFrom] = useState(yearText(filters.publishYearFrom))
   const [yearTo, setYearTo] = useState(yearText(filters.publishYearTo))
   const [yearError, setYearError] = useState<string | null>(null)
+  const [tagSelectionError, setTagSelectionError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!visible) return
@@ -56,7 +75,16 @@ export function CatalogFilterSheet({
     setYearFrom(yearText(filters.publishYearFrom))
     setYearTo(yearText(filters.publishYearTo))
     setYearError(null)
+    setTagSelectionError(null)
   }, [filters, visible])
+
+  useEffect(() => {
+    if (!visible) return
+    const subscription = AppState.addEventListener('change', nextState => {
+      if (nextState !== 'active') onClose()
+    })
+    return () => subscription.remove()
+  }, [onClose, visible])
 
   const apply = () => {
     const from = parseYear(yearFrom)
@@ -84,6 +112,22 @@ export function CatalogFilterSheet({
     setYearFrom('')
     setYearTo('')
     setYearError(null)
+    setTagSelectionError(null)
+  }
+
+  const toggleTag = (tagUuid: string) => {
+    const active = draft.tagUuids.includes(tagUuid)
+    if (!active && draft.tagUuids.length >= MAX_CATALOG_TAG_SELECTION) {
+      setTagSelectionError(`最多可同时选择 ${MAX_CATALOG_TAG_SELECTION} 个标签`)
+      return
+    }
+    setTagSelectionError(null)
+    setDraft(current => ({
+      ...current,
+      tagUuids: active
+        ? current.tagUuids.filter(uuid => uuid !== tagUuid)
+        : [...current.tagUuids, tagUuid],
+    }))
   }
 
   return (
@@ -91,6 +135,12 @@ export function CatalogFilterSheet({
       animationType="slide"
       onRequestClose={onClose}
       statusBarTranslucent
+      supportedOrientations={[
+        'portrait',
+        'portrait-upside-down',
+        'landscape-left',
+        'landscape-right',
+      ]}
       transparent
       visible={visible}
     >
@@ -110,107 +160,147 @@ export function CatalogFilterSheet({
               <Ionicons color={colors.text} name="close" size={24} />
             </Pressable>
           </View>
-          <ScrollView
+          <FlatList
             contentContainerStyle={styles.content}
+            data={tags}
+            initialNumToRender={20}
+            keyExtractor={tag => tag.uuid}
             keyboardShouldPersistTaps="handled"
-          >
-            <FilterSection title="阅读状态">
-              <View accessibilityRole="radiogroup" style={styles.chips}>
-                {READING_STATES.map(item => (
-                  <FilterChip
-                    active={draft.readingState === item.value}
-                    key={item.value}
-                    label={item.label}
-                    onPress={() => setDraft(current => ({
+            ListEmptyComponent={tagsLoading
+              ? <ActivityIndicator color={colors.brand} style={styles.tagState} />
+              : tagsError
+                ? (
+                    <View style={styles.tagState}>
+                      <Text style={styles.error}>{tagsError}</Text>
+                      {onRetryTags ? (
+                        <Pressable accessibilityRole="button" onPress={onRetryTags}>
+                          <Text style={styles.retryText}>重试</Text>
+                        </Pressable>
+                      ) : null}
+                    </View>
+                  )
+                : <Text style={styles.help}>服务器中暂无匹配标签</Text>}
+            ListFooterComponent={tagsFetchingMore
+              ? <ActivityIndicator color={colors.brand} style={styles.tagState} />
+              : tagsError && tags.length > 0
+                ? (
+                    <View style={styles.tagState}>
+                      <Text style={styles.error}>{tagsError}</Text>
+                      {onRetryTags ? (
+                        <Pressable accessibilityRole="button" onPress={onRetryTags}>
+                          <Text style={styles.retryText}>重试</Text>
+                        </Pressable>
+                      ) : null}
+                    </View>
+                  )
+              : tagsHasMore
+                ? <Text style={styles.help}>继续滚动加载更多标签</Text>
+                : tags.length > 0
+                  ? <Text style={styles.help}>已加载全部匹配标签</Text>
+                  : null}
+            ListHeaderComponent={(
+              <View style={styles.formHeader}>
+                <FilterSection title="阅读状态">
+                  <View accessibilityRole="radiogroup" style={styles.chips}>
+                    {READING_STATES.map(item => (
+                      <FilterChip
+                        active={draft.readingState === item.value}
+                        key={item.value}
+                        label={item.label}
+                        onPress={() => setDraft(current => ({
+                          ...current,
+                          readingState: item.value,
+                        }))}
+                        role="radio"
+                      />
+                    ))}
+                  </View>
+                </FilterSection>
+
+                <FilterSection title="本机状态">
+                  <SwitchRow
+                    label="仅看收藏"
+                    onValueChange={favoriteOnly => setDraft(current => ({
                       ...current,
-                      readingState: item.value,
+                      favoriteOnly,
                     }))}
-                    role="radio"
+                    value={draft.favoriteOnly}
                   />
-                ))}
+                  <SwitchRow
+                    label="仅看已完整下载"
+                    onValueChange={downloadedOnly => setDraft(current => ({
+                      ...current,
+                      downloadedOnly,
+                    }))}
+                    value={draft.downloadedOnly}
+                  />
+                </FilterSection>
+
+                <FilterSection title="出版年份">
+                  <View style={styles.yearRow}>
+                    <TextInput
+                      accessibilityLabel="起始出版年份"
+                      keyboardType="number-pad"
+                      maxLength={4}
+                      onChangeText={value => {
+                        setYearFrom(value)
+                        setYearError(null)
+                      }}
+                      placeholder="起始年份"
+                      placeholderTextColor={colors.muted}
+                      style={styles.yearInput}
+                      value={yearFrom}
+                    />
+                    <Text style={styles.yearSeparator}>至</Text>
+                    <TextInput
+                      accessibilityLabel="结束出版年份"
+                      keyboardType="number-pad"
+                      maxLength={4}
+                      onChangeText={value => {
+                        setYearTo(value)
+                        setYearError(null)
+                      }}
+                      placeholder="结束年份"
+                      placeholderTextColor={colors.muted}
+                      style={styles.yearInput}
+                      value={yearTo}
+                    />
+                  </View>
+                  {yearError ? <Text style={styles.error}>{yearError}</Text> : null}
+                </FilterSection>
+
+                <FilterSection title={`同时包含标签（最多 ${MAX_CATALOG_TAG_SELECTION} 个）`}>
+                  <TextInput
+                    accessibilityLabel="搜索标签"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    onChangeText={onChangeTagSearch}
+                    placeholder="搜索服务器标签"
+                    placeholderTextColor={colors.muted}
+                    style={styles.tagSearch}
+                    value={tagSearch}
+                  />
+                  {tagSelectionError ? <Text style={styles.error}>{tagSelectionError}</Text> : null}
+                </FilterSection>
               </View>
-            </FilterSection>
-
-            <FilterSection title="本机状态">
-              <SwitchRow
-                label="仅看收藏"
-                onValueChange={favoriteOnly => setDraft(current => ({
-                  ...current,
-                  favoriteOnly,
-                }))}
-                value={draft.favoriteOnly}
-              />
-              <SwitchRow
-                label="仅看已完整下载"
-                onValueChange={downloadedOnly => setDraft(current => ({
-                  ...current,
-                  downloadedOnly,
-                }))}
-                value={draft.downloadedOnly}
-              />
-            </FilterSection>
-
-            <FilterSection title="出版年份">
-              <View style={styles.yearRow}>
-                <TextInput
-                  accessibilityLabel="起始出版年份"
-                  keyboardType="number-pad"
-                  maxLength={4}
-                  onChangeText={value => {
-                    setYearFrom(value)
-                    setYearError(null)
-                  }}
-                  placeholder="起始年份"
-                  placeholderTextColor={colors.muted}
-                  style={styles.yearInput}
-                  value={yearFrom}
-                />
-                <Text style={styles.yearSeparator}>至</Text>
-                <TextInput
-                  accessibilityLabel="结束出版年份"
-                  keyboardType="number-pad"
-                  maxLength={4}
-                  onChangeText={value => {
-                    setYearTo(value)
-                    setYearError(null)
-                  }}
-                  placeholder="结束年份"
-                  placeholderTextColor={colors.muted}
-                  style={styles.yearInput}
-                  value={yearTo}
+            )}
+            onEndReached={() => {
+              if (tagsHasMore && !tagsFetchingMore) onLoadMoreTags?.()
+            }}
+            onEndReachedThreshold={0.4}
+            renderItem={({ item: tag }) => (
+              <View style={styles.tagRow}>
+                <FilterChip
+                  active={draft.tagUuids.includes(tag.uuid)}
+                  label={`${tag.tagType.name} · ${tag.name}`}
+                  onPress={() => toggleTag(tag.uuid)}
+                  role="checkbox"
                 />
               </View>
-              {yearError ? <Text style={styles.error}>{yearError}</Text> : null}
-            </FilterSection>
-
-            <FilterSection title="同时包含标签">
-              {tagsLoading
-                ? <Text style={styles.help}>正在加载标签…</Text>
-                : tags.length === 0
-                  ? <Text style={styles.help}>服务器中暂无可用标签</Text>
-                  : (
-                      <View style={styles.chips}>
-                        {tags.map(tag => {
-                          const active = draft.tagUuids.includes(tag.uuid)
-                          return (
-                            <FilterChip
-                              active={active}
-                              key={tag.uuid}
-                              label={`${tag.tagType.name} · ${tag.name}`}
-                              onPress={() => setDraft(current => ({
-                                ...current,
-                                tagUuids: active
-                                  ? current.tagUuids.filter(uuid => uuid !== tag.uuid)
-                                  : [...current.tagUuids, tag.uuid],
-                              }))}
-                              role="checkbox"
-                            />
-                          )
-                        })}
-                      </View>
-                    )}
-            </FilterSection>
-          </ScrollView>
+            )}
+            style={styles.tagList}
+            windowSize={7}
+          />
           <View style={styles.actions}>
             <Pressable accessibilityRole="button" onPress={reset} style={styles.clear}>
               <Text style={styles.clearText}>清除筛选</Text>
@@ -330,8 +420,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   content: {
-    gap: 22,
+    gap: 8,
     padding: 18,
+  },
+  tagList: {
+    flexShrink: 1,
+  },
+  formHeader: {
+    gap: 22,
+    marginBottom: 2,
   },
   section: {
     gap: 10,
@@ -402,6 +499,28 @@ const styles = StyleSheet.create({
   help: {
     color: colors.muted,
     fontSize: 13,
+  },
+  tagSearch: {
+    minHeight: 44,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 10,
+    color: colors.text,
+    backgroundColor: colors.surface,
+  },
+  tagRow: {
+    alignItems: 'flex-start',
+  },
+  tagState: {
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 14,
+  },
+  retryText: {
+    color: colors.brand,
+    fontSize: 13,
+    fontWeight: '700',
   },
   actions: {
     flexDirection: 'row',

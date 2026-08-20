@@ -72,6 +72,8 @@ export class DownloadQueue {
   private readonly updateFlights = new Map<string, Promise<DownloadManifestV1>>()
   private readonly updateControllers = new Map<string, AbortController>()
   private readonly listeners = new Set<() => void>()
+  private initializeFlight: Promise<void> | null = null
+  private stopFlight: Promise<void> | null = null
   private initialized = false
   private eligible = true
   private stopped = false
@@ -101,9 +103,21 @@ export class DownloadQueue {
     return () => this.listeners.delete(listener)
   }
 
-  async initialize(): Promise<void> {
-    if (this.initialized) return
+  initialize(): Promise<void> {
+    if (this.stopped) return Promise.reject(new Error('下载服务已停止'))
+    if (this.initialized) return Promise.resolve()
+    if (this.initializeFlight) return this.initializeFlight
+    const operation = this.initializeOnce()
+    this.initializeFlight = operation
+    void operation.finally(() => {
+      if (this.initializeFlight === operation) this.initializeFlight = null
+    }).catch(() => {})
+    return operation
+  }
+
+  private async initializeOnce(): Promise<void> {
     const manifests = await this.repository.reconcile(this.serverUrl, this.userUuid)
+    if (this.stopped) return
     this.manifests.clear()
     manifests.forEach(manifest => this.manifests.set(manifest.manga.uuid, manifest))
     this.initialized = true
@@ -250,24 +264,52 @@ export class DownloadQueue {
     this.pump()
   }
 
-  async stop(): Promise<void> {
-    if (this.stopped) return
+  stop(): Promise<void> {
+    if (this.stopFlight) return this.stopFlight
     this.stopped = true
     this.eligible = false
-    this.publish()
-    this.updateControllers.forEach(controller => controller.abort())
-    const jobs = [...this.activeJobs.values()]
-    jobs.forEach(job => {
-      job.reason = 'session'
-      job.controller.abort()
-    })
-    await Promise.all(jobs.map(job => job.promise))
-    await Promise.allSettled([...this.updateFlights.values()])
+    const operation = Promise.resolve().then(() => this.stopOnce())
+    this.stopFlight = operation
+    this.publish(true)
+    return operation
+  }
+
+  private async stopOnce(): Promise<void> {
+    while (true) {
+      this.updateControllers.forEach(controller => controller.abort())
+      for (const job of this.activeJobs.values()) {
+        job.reason = 'session'
+        job.controller.abort()
+      }
+      const flights = [
+        ...(this.initializeFlight ? [this.initializeFlight] : []),
+        ...this.enqueueFlights.values(),
+        ...this.updateFlights.values(),
+        ...[...this.activeJobs.values()].map(job => job.promise),
+      ]
+      if (flights.length === 0) break
+      await Promise.allSettled(flights)
+    }
     this.listeners.clear()
   }
 
   async localPageUris(mangaUuid: string): Promise<string[] | null> {
-    return this.repository.localPageUris(this.serverUrl, this.userUuid, mangaUuid)
+    const uris = await this.repository.localPageUris(
+      this.serverUrl,
+      this.userUuid,
+      mangaUuid,
+    )
+    const manifest = this.manifests.get(mangaUuid)
+    if (
+      !uris &&
+      manifest &&
+      (manifest.state === 'completed' || manifest.state === 'stale') &&
+      manifest.pages.every(page => page.state === 'completed')
+    ) {
+      this.manifests.delete(mangaUuid)
+      this.publish()
+    }
+    return uris
   }
 
   private async enqueueOnce(manga: MangaDetail): Promise<DownloadManifestV1> {
@@ -279,6 +321,7 @@ export class DownloadQueue {
       manga,
       this.now(),
     )
+    if (this.stopped) return manifest
     this.manifests.set(manga.uuid, manifest)
     this.publish()
     this.pump()
@@ -305,23 +348,28 @@ export class DownloadQueue {
       updatedAt: this.timestamp(),
       failure: null,
     }
-    await this.persist(stale)
-    let replacement = await this.repository.createReplacement(
-      this.serverUrl,
-      this.userUuid,
-      manga,
-      this.now(),
-    )
-    const controller = new AbortController()
-    this.updateControllers.set(manga.uuid, controller)
-    this.publish()
+    let replacement: DownloadManifestV1 | null = null
+    let controller: AbortController | null = null
     try {
+      await this.persist(stale)
+      this.assertUpdateActive()
+      replacement = await this.repository.createReplacement(
+        this.serverUrl,
+        this.userUuid,
+        manga,
+        this.now(),
+      )
+      this.assertUpdateActive()
+      controller = new AbortController()
+      this.updateControllers.set(manga.uuid, controller)
+      this.publish()
       for (const page of replacement.pages) {
         let lastFailure: DownloadPageError | null = null
         for (let attempt = 1; attempt <= this.maxAttempts; attempt += 1) {
-          if (controller.signal.aborted) throw new DownloadPageCancelledError()
+          this.assertUpdateActive(controller)
+          const replacementPage = requiredPage(replacement, page.index)
           replacement = replacePage(replacement, {
-            ...replacement.pages[page.index],
+            ...replacementPage,
             state: 'downloading',
             attempts: attempt,
           }, {
@@ -330,6 +378,7 @@ export class DownloadQueue {
             failure: null,
           })
           await this.repository.saveReplacement(replacement)
+          this.assertUpdateActive(controller)
           try {
             const paths = await this.repository.replacementPagePaths(
               this.serverUrl,
@@ -337,6 +386,7 @@ export class DownloadQueue {
               manga.uuid,
               page.index,
             )
+            this.assertUpdateActive(controller)
             const result = await this.downloader.download({
               api: this.api,
               mangaUuid: manga.uuid,
@@ -344,8 +394,10 @@ export class DownloadQueue {
               paths,
               signal: controller.signal,
             })
+            this.assertUpdateActive(controller)
+            const currentReplacementPage = requiredPage(replacement, page.index)
             replacement = replacePage(replacement, {
-              ...replacement.pages[page.index],
+              ...currentReplacementPage,
               state: 'completed',
               bytesWritten: result.bytesWritten,
               expectedBytes: result.expectedBytes,
@@ -357,6 +409,7 @@ export class DownloadQueue {
               failure: null,
             })
             await this.repository.saveReplacement(replacement)
+            this.assertUpdateActive(controller)
             lastFailure = null
             break
           } catch (error) {
@@ -366,6 +419,7 @@ export class DownloadQueue {
               : new DownloadPageError('页面更新失败', 'unknown', false, error)
             if (!lastFailure.retryable || attempt >= this.maxAttempts) break
             await this.waitForRetry(retryDelayMs(attempt), controller.signal)
+            this.assertUpdateActive(controller)
           }
         }
         if (lastFailure) throw lastFailure
@@ -378,21 +432,30 @@ export class DownloadQueue {
         failure: null,
       }
       await this.repository.commitReplacement(replacement)
+      this.assertUpdateActive(controller)
       this.manifests.set(manga.uuid, replacement)
       this.publish()
       return replacement
     } catch (error) {
-      await this.repository.discardReplacement(
-        this.serverUrl,
-        this.userUuid,
-        manga.uuid,
-      ).catch(() => {})
-      if (error instanceof DownloadPageCancelledError || controller.signal.aborted) {
+      if (replacement) {
+        await this.repository.discardReplacement(
+          this.serverUrl,
+          this.userUuid,
+          manga.uuid,
+        ).catch(() => {})
+      }
+      if (
+        error instanceof DownloadPageCancelledError ||
+        controller?.signal.aborted ||
+        this.stopped
+      ) {
         throw new Error('下载更新已暂停，旧版本仍可阅读')
       }
       throw error
     } finally {
-      this.updateControllers.delete(manga.uuid)
+      if (controller && this.updateControllers.get(manga.uuid) === controller) {
+        this.updateControllers.delete(manga.uuid)
+      }
       this.publish()
       this.pump()
     }
@@ -408,6 +471,7 @@ export class DownloadQueue {
   }
 
   private startJob(mangaUuid: string): void {
+    if (this.stopped) return
     const controller = new AbortController()
     const active: ActiveJob = {
       controller,
@@ -418,7 +482,7 @@ export class DownloadQueue {
       .catch(error => this.failUnexpectedly(mangaUuid, error))
       .finally(() => {
         if (this.activeJobs.get(mangaUuid) === active) this.activeJobs.delete(mangaUuid)
-        this.publish()
+        if (!this.stopped) this.publish()
         this.pump()
       })
     this.activeJobs.set(mangaUuid, active)
@@ -426,7 +490,7 @@ export class DownloadQueue {
   }
 
   private async runJob(mangaUuid: string, active: ActiveJob): Promise<void> {
-    while (!active.controller.signal.aborted) {
+    while (!active.controller.signal.aborted && !this.stopped) {
       const manifest = this.manifests.get(mangaUuid)
       if (!manifest) return
       const page = manifest.pages.find(item => item.state !== 'completed')
@@ -461,6 +525,10 @@ export class DownloadQueue {
           mangaUuid,
           page.index,
         )
+        if (active.controller.signal.aborted || this.stopped) {
+          await this.handleCancellation(mangaUuid, page.index, active.reason)
+          return
+        }
         const result = await this.downloader.download({
           api: this.api,
           mangaUuid,
@@ -468,10 +536,15 @@ export class DownloadQueue {
           paths,
           signal: active.controller.signal,
         })
+        if (active.controller.signal.aborted || this.stopped) {
+          await this.handleCancellation(mangaUuid, page.index, active.reason)
+          return
+        }
         const current = this.manifests.get(mangaUuid)
         if (!current) return
+        const currentPage = requiredPage(current, page.index)
         await this.persist(replacePage(current, {
-          ...current.pages[page.index],
+          ...currentPage,
           state: 'completed',
           bytesWritten: result.bytesWritten,
           expectedBytes: result.expectedBytes,
@@ -492,7 +565,7 @@ export class DownloadQueue {
           : new DownloadPageError('页面下载失败', 'unknown', false, error)
         const current = this.manifests.get(mangaUuid)
         if (!current) return
-        const currentPage = current.pages[page.index]
+        const currentPage = requiredPage(current, page.index)
         if (
           failure.retryable &&
           currentPage.attempts < this.maxAttempts &&
@@ -560,6 +633,7 @@ export class DownloadQueue {
   }
 
   private async failUnexpectedly(mangaUuid: string, error: unknown): Promise<void> {
+    if (this.stopped) return
     const manifest = this.manifests.get(mangaUuid)
     if (!manifest) return
     const pageIndex = manifest.pages.find(page => page.state === 'downloading')?.index
@@ -590,11 +664,13 @@ export class DownloadQueue {
 
   private async persist(manifest: DownloadManifestV1): Promise<void> {
     await this.repository.save(manifest)
+    if (this.stopped) return
     this.manifests.set(manifest.manga.uuid, manifest)
     this.publish()
   }
 
-  private publish(): void {
+  private publish(force = false): void {
+    if (this.stopped && !force) return
     this.snapshot = {
       initialized: this.initialized,
       eligible: this.eligible,
@@ -611,6 +687,12 @@ export class DownloadQueue {
   private timestamp(): string {
     return this.now().toISOString()
   }
+
+  private assertUpdateActive(controller?: AbortController | null): void {
+    if (this.stopped || controller?.signal.aborted) {
+      throw new DownloadPageCancelledError()
+    }
+  }
 }
 
 function replacePage(
@@ -623,6 +705,17 @@ function replacePage(
     ...patch,
     pages: manifest.pages.map(item => item.index === page.index ? page : item),
   }
+}
+
+function requiredPage(
+  manifest: DownloadManifestV1,
+  pageIndex: number,
+): DownloadPageRecord {
+  const page = manifest.pages[pageIndex]
+  if (!page || page.index !== pageIndex) {
+    throw new Error('下载清单页面索引不一致')
+  }
+  return page
 }
 
 function toFailure(error: DownloadPageError, pageIndex: number): DownloadFailure {
@@ -643,10 +736,21 @@ function defaultRetryWait(delayMs: number, signal: AbortSignal): Promise<void> {
       reject(new DownloadPageCancelledError())
       return
     }
-    const timeout = setTimeout(resolve, delayMs)
-    signal.addEventListener('abort', () => {
+    let settled = false
+    const cleanup = () => signal.removeEventListener('abort', abort)
+    const timeout = setTimeout(() => {
+      if (settled) return
+      settled = true
+      cleanup()
+      resolve()
+    }, delayMs)
+    const abort = () => {
+      if (settled) return
+      settled = true
       clearTimeout(timeout)
+      cleanup()
       reject(new DownloadPageCancelledError())
-    }, { once: true })
+    }
+    signal.addEventListener('abort', abort, { once: true })
   })
 }

@@ -52,9 +52,14 @@ export class ReadingProgressWriter {
     const write = this.pending
     this.pending = null
     if (!write) return this.writeQueue.then(() => {})
-    const operation = this.writeQueue
-      .catch(() => {})
-      .then(() => this.save(
+    let saveOutcome: Promise<
+      | { ok: true; value: ReadingProgress }
+      | { ok: false; error: unknown }
+    >
+    try {
+      // Invoke the storage API synchronously so it registers this write in the
+      // shared identity queue before a remount can begin reading old progress.
+      saveOutcome = this.save(
         write.serverUrl,
         write.userUuid,
         write.mangaUuid,
@@ -62,7 +67,20 @@ export class ReadingProgressWriter {
         write.pageIndex,
         write.mode,
         write.manga,
-      ))
+      ).then(
+        value => ({ ok: true as const, value }),
+        error => ({ ok: false as const, error }),
+      )
+    } catch (error) {
+      saveOutcome = Promise.resolve({ ok: false, error })
+    }
+    const operation = this.writeQueue
+      .catch(() => {})
+      .then(async () => {
+        const outcome = await saveOutcome
+        if (!outcome.ok) throw outcome.error
+        return outcome.value
+      })
     this.writeQueue = operation
     return operation.then(() => {})
   }

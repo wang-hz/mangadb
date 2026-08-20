@@ -15,6 +15,7 @@ import {
 import { clearSessionCaches } from '@/session/cleanup'
 import { SessionProvider } from '@/session/SessionContext'
 import { ReaderPreferencesProvider } from './ReaderPreferencesContext'
+import { installLocalDiagnosticReporters } from '@/diagnostics/localDiagnostics'
 
 export function AppProviders({ children }: PropsWithChildren) {
   useState(() => {
@@ -23,6 +24,7 @@ export function AppProviders({ children }: PropsWithChildren) {
   })
   useEffect(() => installNativeQueryStateListeners(), [])
   useEffect(() => installImageCacheLifecycle(), [])
+  useEffect(() => installLocalDiagnosticReporters(), [])
 
   const [queryClient] = useState(createMobileQueryClient)
   const onSessionCleanup = useCallback(async () => {

@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native'
 import { useKeepAwake } from 'expo-keep-awake'
+import { AppState, type NativeEventSubscription } from 'react-native'
 import type { ApiClient } from '@/api/client'
 import type { MangaDetail } from '@/api/types'
 import { DEFAULT_READER_PREFERENCES } from '@/storage/readerPreferences'
@@ -7,6 +8,19 @@ import { ReaderExperience } from './ReaderExperience'
 
 const mockSaveReadingProgress = jest.fn()
 const mockMarkMangaCompleted = jest.fn()
+let mockPagedMounts = 0
+let mockViewport = {
+  width: 390,
+  height: 844,
+  scale: 3,
+  fontScale: 1,
+  epoch: 0,
+  isTransitioning: false,
+}
+
+jest.mock('@/hooks/useStableViewport', () => ({
+  useStableViewport: () => mockViewport,
+}))
 
 jest.mock('@/storage/progress', () => ({
   markMangaCompleted: (...args: unknown[]) => mockMarkMangaCompleted(...args),
@@ -14,35 +28,52 @@ jest.mock('@/storage/progress', () => ({
 }))
 
 jest.mock('@/components/reader/ReaderSettingsModal', () => ({
-  ReaderSettingsModal: () => null,
+  ReaderSettingsModal: ({ visible }: { visible: boolean }) => {
+    const React = require('react')
+    const { Text } = require('react-native')
+    return visible ? React.createElement(Text, null, 'settings-open') : null
+  },
 }))
 
 jest.mock('@/components/reader/PagedReader', () => {
   const React = require('react')
   const { Pressable, Text, View } = require('react-native')
   return {
-    PagedReader: ({ pageIndex, onPageChange, onModeChange, onMarkCompleted }: {
+    PagedReader: ({ pageIndex, onPageChange, onModeChange, onMarkCompleted, onOpenSettings, viewport }: {
       pageIndex: number
       onPageChange: (pageIndex: number) => void
       onModeChange: (mode: 'scroll') => void
       onMarkCompleted: () => Promise<void>
-    }) => React.createElement(
-      View,
-      null,
-      React.createElement(Text, null, `paged:${pageIndex}`),
-      React.createElement(Pressable, {
-        accessibilityLabel: '翻页模式更新页码',
-        onPress: () => onPageChange(pageIndex + 2),
-      }),
-      React.createElement(Pressable, {
-        accessibilityLabel: '切换到滚动模式',
-        onPress: () => onModeChange('scroll'),
-      }),
-      React.createElement(Pressable, {
-        accessibilityLabel: '保存完成状态',
-        onPress: () => { void onMarkCompleted() },
-      }),
-    ),
+      onOpenSettings: () => void
+      viewport: { epoch: number }
+    }) => {
+      const mount = React.useState(() => {
+        mockPagedMounts += 1
+        return mockPagedMounts
+      })[0]
+      return React.createElement(
+        View,
+        null,
+        React.createElement(Text, null, `paged:${pageIndex}`),
+        React.createElement(Text, { accessibilityLabel: `paged-mount-${mount}-epoch-${viewport.epoch}` }),
+        React.createElement(Pressable, {
+          accessibilityLabel: '翻页模式更新页码',
+          onPress: () => onPageChange(pageIndex + 2),
+        }),
+        React.createElement(Pressable, {
+          accessibilityLabel: '切换到滚动模式',
+          onPress: () => onModeChange('scroll'),
+        }),
+        React.createElement(Pressable, {
+          accessibilityLabel: '保存完成状态',
+          onPress: () => { void onMarkCompleted() },
+        }),
+        React.createElement(Pressable, {
+          accessibilityLabel: '打开阅读设置',
+          onPress: onOpenSettings,
+        }),
+      )
+    },
   }
 })
 
@@ -84,8 +115,20 @@ const manga: MangaDetail = {
 }
 
 describe('ReaderExperience', () => {
-  afterEach(() => jest.useRealTimers())
+  afterEach(() => {
+    jest.useRealTimers()
+    jest.restoreAllMocks()
+  })
   beforeEach(() => {
+    mockPagedMounts = 0
+    mockViewport = {
+      width: 390,
+      height: 844,
+      scale: 3,
+      fontScale: 1,
+      epoch: 0,
+      isTransitioning: false,
+    }
     mockSaveReadingProgress.mockResolvedValue({
       pageIndex: 3,
       mode: 'paged',
@@ -213,5 +256,114 @@ describe('ReaderExperience', () => {
       10,
       'paged',
     ))
+  })
+
+  it('shows black during a viewport transition and remounts at the current page', () => {
+    const element = () => (
+      <ReaderExperience
+        api={{} as ApiClient}
+        initialMode="paged"
+        initialPageIndex={3}
+        manga={manga}
+        onBack={jest.fn()}
+        onRefreshMetadata={jest.fn().mockResolvedValue(undefined)}
+        onReaderReady={jest.fn()}
+        onReturnToDetail={jest.fn()}
+        preferences={DEFAULT_READER_PREFERENCES}
+        serverUrl="https://example.com"
+        userUuid="user-1"
+      />
+    )
+    const view = render(element())
+    fireEvent.press(screen.getByLabelText('翻页模式更新页码'))
+    expect(screen.getByText('paged:5')).toBeOnTheScreen()
+    expect(screen.getByLabelText('paged-mount-1-epoch-0')).toBeOnTheScreen()
+
+    mockViewport = { ...mockViewport, isTransitioning: true }
+    view.rerender(element())
+    expect(screen.queryByText('paged:5')).toBeNull()
+    expect(screen.getByTestId('reader-viewport-transition')).toBeOnTheScreen()
+
+    mockViewport = {
+      ...mockViewport,
+      width: 844,
+      height: 390,
+      epoch: 1,
+      isTransitioning: false,
+    }
+    view.rerender(element())
+    expect(screen.getByText('paged:5')).toBeOnTheScreen()
+    expect(screen.getByLabelText('paged-mount-2-epoch-1')).toBeOnTheScreen()
+  })
+
+  it('initializes once when refreshed metadata replaces the manga object', async () => {
+    jest.useFakeTimers()
+    const onReaderReady = jest.fn()
+    const element = (value: MangaDetail) => (
+      <ReaderExperience
+        api={{} as ApiClient}
+        initialMode="paged"
+        initialPageIndex={1}
+        manga={value}
+        onBack={jest.fn()}
+        onRefreshMetadata={jest.fn().mockResolvedValue(undefined)}
+        onReaderReady={onReaderReady}
+        onReturnToDetail={jest.fn()}
+        preferences={DEFAULT_READER_PREFERENCES}
+        serverUrl="https://example.com"
+        userUuid="user-1"
+      />
+    )
+    const view = render(element(manga))
+    await waitFor(() => expect(onReaderReady).toHaveBeenCalledTimes(1))
+    mockSaveReadingProgress.mockClear()
+
+    fireEvent.press(screen.getByLabelText('翻页模式更新页码'))
+    view.rerender(element({ ...manga, pages: [...manga.pages] }))
+    expect(screen.getByText('paged:3')).toBeOnTheScreen()
+    const shortenedManga = { ...manga, pages: manga.pages.slice(0, 3) }
+    view.rerender(element(shortenedManga))
+    expect(screen.getByText('paged:2')).toBeOnTheScreen()
+    await act(async () => { jest.advanceTimersByTime(400) })
+
+    expect(onReaderReady).toHaveBeenCalledTimes(1)
+    expect(mockSaveReadingProgress).toHaveBeenCalledTimes(1)
+    expect(mockSaveReadingProgress).toHaveBeenLastCalledWith(
+      'https://example.com',
+      'user-1',
+      'manga-1',
+      3,
+      2,
+      'paged',
+      shortenedManga,
+    )
+  })
+
+  it('closes reader settings whenever the app leaves the active state', () => {
+    let appStateListener: ((state: 'background') => void) | undefined
+    jest.spyOn(AppState, 'addEventListener').mockImplementation(((_event, listener) => {
+      appStateListener = listener as (state: 'background') => void
+      return { remove: jest.fn() } as NativeEventSubscription
+    }) as typeof AppState.addEventListener)
+    render(
+      <ReaderExperience
+        api={{} as ApiClient}
+        initialMode="paged"
+        initialPageIndex={0}
+        manga={manga}
+        onBack={jest.fn()}
+        onRefreshMetadata={jest.fn().mockResolvedValue(undefined)}
+        onReaderReady={jest.fn()}
+        onReturnToDetail={jest.fn()}
+        preferences={DEFAULT_READER_PREFERENCES}
+        serverUrl="https://example.com"
+        userUuid="user-1"
+      />,
+    )
+
+    fireEvent.press(screen.getByLabelText('打开阅读设置'))
+    expect(screen.getByText('settings-open')).toBeOnTheScreen()
+    act(() => appStateListener?.('background'))
+    expect(screen.queryByText('settings-open')).toBeNull()
   })
 })

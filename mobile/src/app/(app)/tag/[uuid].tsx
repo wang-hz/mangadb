@@ -69,7 +69,7 @@ export default function TagMangasScreen() {
   const total = mangasQuery.data?.pages[0]?.total ?? 0
   const cardWidth = grid.cardWidth
   const progressByManga = useMemo(
-    () => new Map(recentReading.allEntries.map(entry => [entry.manga.uuid, entry])),
+    () => new Map(recentReading.allEntries.map(entry => [entry.mangaUuid, entry])),
     [recentReading.allEntries],
   )
   const gridAnchor = useAdaptiveGridAnchor<MangaSummary>(grid.columns, mangas.length)

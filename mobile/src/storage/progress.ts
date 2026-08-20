@@ -3,7 +3,10 @@ import type { MangaSummary } from '@/api/types'
 import { clampPageIndex, type ReaderMode } from '@/utils/reader'
 
 const PROGRESS_KEY_PREFIX = 'mangadb.readingProgress.v1'
-const PROGRESS_INDEX_KEY_PREFIX = 'mangadb.readingProgressIndex.v1'
+const PROGRESS_INDEX_V1_KEY_PREFIX = 'mangadb.readingProgressIndex.v1'
+const PROGRESS_INDEX_V2_KEY_PREFIX = 'mangadb.readingProgressIndex.v2'
+const PROGRESS_DELETION_TOMBSTONE = JSON.stringify({ schemaVersion: 1, deleted: true })
+export const RECENT_READING_LIMIT = 100
 const identityWriteQueues = new Map<string, Promise<unknown>>()
 
 export type ReadingState = 'reading' | 'completed'
@@ -15,15 +18,41 @@ export interface ReadingProgress {
   updatedAt: string
 }
 
+export interface ReadingProgressEntry extends ReadingProgress {
+  mangaUuid: string
+  pageCount: number
+  hiddenFromRecent: boolean
+}
+
 export interface RecentReadingEntry extends ReadingProgress {
   manga: MangaSummary
   pageCount: number
   hiddenFromRecent: boolean
 }
 
+interface StoredProgressEntryV2 extends ReadingProgress {
+  pageCount: number
+  hiddenFromRecent: boolean
+}
+
+interface ProgressIndexV2 {
+  schemaVersion: 2
+  entries: Record<string, StoredProgressEntryV2>
+  recentMangas: Record<string, MangaSummary>
+}
+
+interface LegacyRecentReadingEntry extends Omit<RecentReadingEntry, 'state' | 'hiddenFromRecent'> {
+  state?: ReadingState
+  hiddenFromRecent?: boolean
+}
+
+interface RestoredReadingProgress extends Omit<ReadingProgress, 'state'> {
+  state?: ReadingState
+}
+
 interface ProgressIndexV1 {
   schemaVersion: 1
-  entries: Record<string, RecentReadingEntry>
+  entries: Record<string, LegacyRecentReadingEntry>
 }
 
 export async function loadReadingProgress(
@@ -43,8 +72,23 @@ export async function loadReadingProgress(
   if (pageIndex !== value.pageIndex) {
     const clamped = { ...value, pageIndex }
     try {
-      await enqueueIdentityWrite(identity, () =>
-        AsyncStorage.setItem(key, JSON.stringify(clamped)))
+      await enqueueIdentityWrite(identity, async () => {
+        const index = await loadProgressIndex(serverUrl, userUuid)
+        const indexed = index.entries[mangaUuid]
+        if (indexed) {
+          index.entries[mangaUuid] = {
+            ...indexed,
+            pageIndex,
+            pageCount: Math.max(0, Math.trunc(pageCount)),
+          }
+          await AsyncStorage.multiSet([
+            [key, JSON.stringify(clamped)],
+            [progressIndexV2Key(serverUrl, userUuid), JSON.stringify(index)],
+          ])
+        } else {
+          await AsyncStorage.setItem(key, JSON.stringify(clamped))
+        }
+      })
     } catch {}
     return clamped
   }
@@ -77,13 +121,14 @@ export async function saveReadingProgress(
     if (manga && index) {
       index.entries[mangaUuid] = {
         ...progress,
-        manga: cloneMangaSummary(manga),
         pageCount: Math.max(0, Math.trunc(pageCount)),
         hiddenFromRecent: false,
       }
+      index.recentMangas[mangaUuid] = cloneMangaSummary(manga)
+      pruneRecentMangas(index)
       await AsyncStorage.multiSet([
         [progressStorageKey, JSON.stringify(progress)],
-        [progressIndexKey(serverUrl, userUuid), JSON.stringify(index)],
+        [progressIndexV2Key(serverUrl, userUuid), JSON.stringify(index)],
       ])
     } else {
       await AsyncStorage.setItem(progressStorageKey, JSON.stringify(progress))
@@ -99,27 +144,24 @@ export async function listRecentReading(
   const identity = progressIdentity(serverUrl, userUuid)
   await identityWriteQueues.get(identity)?.catch(() => {})
   const index = await loadProgressIndex(serverUrl, userUuid)
-  return Object.values(index.entries)
-    .filter(entry => !entry.hiddenFromRecent)
-    .map(entry => ({
-      ...entry,
-      manga: cloneMangaSummary(entry.manga),
-    }))
+  return Object.entries(index.recentMangas)
+    .flatMap(([mangaUuid, manga]) => {
+      const entry = index.entries[mangaUuid]
+      if (!entry || entry.hiddenFromRecent) return []
+      return [{ ...entry, manga: cloneMangaSummary(manga) }]
+    })
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
 }
 
 export async function listReadingProgress(
   serverUrl: string,
   userUuid: string,
-): Promise<RecentReadingEntry[]> {
+): Promise<ReadingProgressEntry[]> {
   const identity = progressIdentity(serverUrl, userUuid)
   await identityWriteQueues.get(identity)?.catch(() => {})
   const index = await loadProgressIndex(serverUrl, userUuid)
-  return Object.values(index.entries)
-    .map(entry => ({
-      ...entry,
-      manga: cloneMangaSummary(entry.manga),
-    }))
+  return Object.entries(index.entries)
+    .map(([mangaUuid, entry]) => ({ ...entry, mangaUuid }))
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
 }
 
@@ -143,12 +185,16 @@ export async function markMangaCompleted(
       updatedAt: now,
       hiddenFromRecent: false,
     }
-    await AsyncStorage.setItem(
-      progressKey(serverUrl, userUuid, manga.uuid),
-      JSON.stringify(readingProgressFromEntry(entry)),
-    )
-    index.entries[manga.uuid] = entry
-    await saveProgressIndex(serverUrl, userUuid, index)
+    index.entries[manga.uuid] = progressEntryFromRecent(entry)
+    index.recentMangas[manga.uuid] = cloneMangaSummary(manga)
+    pruneRecentMangas(index)
+    await AsyncStorage.multiSet([
+      [
+        progressKey(serverUrl, userUuid, manga.uuid),
+        JSON.stringify(readingProgressFromEntry(entry)),
+      ],
+      [progressIndexV2Key(serverUrl, userUuid), JSON.stringify(index)],
+    ])
     return entry
   })
 }
@@ -162,8 +208,11 @@ export async function markMangaUnread(
   await enqueueIdentityWrite(identity, async () => {
     const index = await loadProgressIndex(serverUrl, userUuid)
     delete index.entries[mangaUuid]
-    await AsyncStorage.removeItem(progressKey(serverUrl, userUuid, mangaUuid))
-    await saveProgressIndex(serverUrl, userUuid, index)
+    delete index.recentMangas[mangaUuid]
+    await AsyncStorage.multiSet([
+      [progressKey(serverUrl, userUuid, mangaUuid), PROGRESS_DELETION_TOMBSTONE],
+      [progressIndexV2Key(serverUrl, userUuid), JSON.stringify(index)],
+    ])
   })
 }
 
@@ -178,6 +227,7 @@ export async function removeFromRecentReading(
     const entry = index.entries[mangaUuid]
     if (!entry) return
     index.entries[mangaUuid] = { ...entry, hiddenFromRecent: true }
+    delete index.recentMangas[mangaUuid]
     await saveProgressIndex(serverUrl, userUuid, index)
   })
 }
@@ -199,47 +249,114 @@ function enqueueIdentityWrite<T>(
 async function loadProgressIndex(
   serverUrl: string,
   userUuid: string,
-): Promise<ProgressIndexV1> {
-  const stored = await AsyncStorage.getItem(progressIndexKey(serverUrl, userUuid))
-  if (!stored) return emptyProgressIndex()
+): Promise<ProgressIndexV2> {
+  const storedV2 = await AsyncStorage.getItem(progressIndexV2Key(serverUrl, userUuid))
+  if (storedV2) {
+    try {
+      const normalized = normalizeProgressIndexV2(JSON.parse(storedV2))
+      if (normalized) return normalized
+    } catch {}
+  }
+
+  const storedV1 = await AsyncStorage.getItem(progressIndexV1Key(serverUrl, userUuid))
+  if (!storedV1) return emptyProgressIndex()
   let value: unknown
   try {
-    value = JSON.parse(stored)
+    value = JSON.parse(storedV1)
   } catch {
     return emptyProgressIndex()
   }
-  return normalizeProgressIndex(value)
+  const migrated = migrateProgressIndexV1(value)
+  if (!migrated) return emptyProgressIndex()
+  await saveProgressIndex(serverUrl, userUuid, migrated)
+  try {
+    await AsyncStorage.removeItem(progressIndexV1Key(serverUrl, userUuid))
+  } catch {}
+  return migrated
 }
 
 async function saveProgressIndex(
   serverUrl: string,
   userUuid: string,
-  index: ProgressIndexV1,
+  index: ProgressIndexV2,
 ): Promise<void> {
   await AsyncStorage.setItem(
-    progressIndexKey(serverUrl, userUuid),
+    progressIndexV2Key(serverUrl, userUuid),
     JSON.stringify(index),
   )
 }
 
-function emptyProgressIndex(): ProgressIndexV1 {
-  return { schemaVersion: 1, entries: {} }
+function emptyProgressIndex(): ProgressIndexV2 {
+  return { schemaVersion: 2, entries: {}, recentMangas: {} }
 }
 
-function normalizeProgressIndex(value: unknown): ProgressIndexV1 {
-  if (!isRecord(value) || value.schemaVersion !== 1 || !isRecord(value.entries)) {
-    return emptyProgressIndex()
-  }
-  const entries: Record<string, RecentReadingEntry> = {}
+function normalizeProgressIndexV2(value: unknown): ProgressIndexV2 | null {
+  if (
+    !isRecord(value) ||
+    value.schemaVersion !== 2 ||
+    !isRecord(value.entries) ||
+    !isRecord(value.recentMangas)
+  ) return null
+  const index = emptyProgressIndex()
   for (const [mangaUuid, entry] of Object.entries(value.entries)) {
-    if (isRecentReadingEntry(entry) && entry.manga.uuid === mangaUuid) {
-      entries[mangaUuid] = {
-        ...entry,
-        hiddenFromRecent: entry.hiddenFromRecent ?? false,
-      }
+    if (mangaUuid && isStoredProgressEntryV2(entry)) index.entries[mangaUuid] = { ...entry }
+  }
+  for (const [mangaUuid, manga] of Object.entries(value.recentMangas)) {
+    if (
+      index.entries[mangaUuid] &&
+      !index.entries[mangaUuid].hiddenFromRecent &&
+      isMangaSummary(manga) &&
+      manga.uuid === mangaUuid
+    ) index.recentMangas[mangaUuid] = cloneMangaSummary(manga)
+  }
+  pruneRecentMangas(index)
+  return index
+}
+
+function migrateProgressIndexV1(value: unknown): ProgressIndexV2 | null {
+  if (!isRecord(value) || value.schemaVersion !== 1 || !isRecord(value.entries)) return null
+  const legacy: ProgressIndexV1 = { schemaVersion: 1, entries: {} }
+  for (const [mangaUuid, entry] of Object.entries(value.entries)) {
+    if (isRecentReadingEntryV1(entry) && entry.manga.uuid === mangaUuid) {
+      legacy.entries[mangaUuid] = entry
     }
   }
-  return { schemaVersion: 1, entries }
+  const migrated = emptyProgressIndex()
+  Object.entries(legacy.entries).forEach(([mangaUuid, entry]) => {
+    migrated.entries[mangaUuid] = {
+      pageIndex: entry.pageIndex,
+      mode: entry.mode,
+      state: entry.state ?? 'reading',
+      updatedAt: entry.updatedAt,
+      pageCount: entry.pageCount,
+      hiddenFromRecent: entry.hiddenFromRecent ?? false,
+    }
+    if (!entry.hiddenFromRecent) {
+      migrated.recentMangas[mangaUuid] = cloneMangaSummary(entry.manga)
+    }
+  })
+  pruneRecentMangas(migrated)
+  return migrated
+}
+
+function pruneRecentMangas(index: ProgressIndexV2): void {
+  const retained = Object.keys(index.recentMangas)
+    .filter(mangaUuid => {
+      const entry = index.entries[mangaUuid]
+      return Boolean(entry && !entry.hiddenFromRecent)
+    })
+    .sort((a, b) => {
+      const updated = (index.entries[b]?.updatedAt ?? '')
+        .localeCompare(index.entries[a]?.updatedAt ?? '')
+      return updated || a.localeCompare(b)
+    })
+    .slice(0, RECENT_READING_LIMIT)
+  const recentMangas: Record<string, MangaSummary> = {}
+  retained.forEach(mangaUuid => {
+    const manga = index.recentMangas[mangaUuid]
+    if (manga) recentMangas[mangaUuid] = cloneMangaSummary(manga)
+  })
+  index.recentMangas = recentMangas
 }
 
 function parseReadingProgress(stored: string | null): ReadingProgress | null {
@@ -250,19 +367,8 @@ function parseReadingProgress(stored: string | null): ReadingProgress | null {
   } catch {
     return null
   }
-  if (!isRecord(value)) return null
-  if (
-    !Number.isInteger(value.pageIndex) ||
-    Number(value.pageIndex) < 0 ||
-    (value.mode !== 'paged' && value.mode !== 'scroll') ||
-    typeof value.updatedAt !== 'string' ||
-    !Number.isFinite(Date.parse(value.updatedAt)) ||
-    (
-      value.state !== undefined &&
-      value.state !== 'reading' &&
-      value.state !== 'completed'
-    )
-  ) return null
+  if (isProgressDeletionTombstone(value)) return null
+  if (!isReadingProgress(value)) return null
   return {
     pageIndex: Number(value.pageIndex),
     mode: value.mode,
@@ -271,13 +377,40 @@ function parseReadingProgress(stored: string | null): ReadingProgress | null {
   }
 }
 
-function isRecentReadingEntry(value: unknown): value is RecentReadingEntry {
+function isProgressDeletionTombstone(value: unknown): boolean {
+  return isRecord(value) && value.schemaVersion === 1 && value.deleted === true
+}
+
+function isReadingProgress(value: unknown): value is RestoredReadingProgress {
+  return isRecord(value) &&
+    Number.isInteger(value.pageIndex) &&
+    Number(value.pageIndex) >= 0 &&
+    (value.mode === 'paged' || value.mode === 'scroll') &&
+    typeof value.updatedAt === 'string' &&
+    Number.isFinite(Date.parse(value.updatedAt)) &&
+    (
+      value.state === undefined ||
+      value.state === 'reading' ||
+      value.state === 'completed'
+    )
+}
+
+function isStoredProgressEntryV2(value: unknown): value is StoredProgressEntryV2 {
+  return isRecord(value) &&
+    isReadingProgress(value) &&
+    (value.state === 'reading' || value.state === 'completed') &&
+    Number.isInteger(value.pageCount) &&
+    Number(value.pageCount) >= 0 &&
+    typeof value.hiddenFromRecent === 'boolean'
+}
+
+function isRecentReadingEntryV1(value: unknown): value is LegacyRecentReadingEntry {
   if (!isRecord(value) || !isMangaSummary(value.manga)) return false
   if (!Number.isInteger(value.pageCount) || Number(value.pageCount) < 0) return false
   if (value.hiddenFromRecent !== undefined && typeof value.hiddenFromRecent !== 'boolean') {
     return false
   }
-  return parseReadingProgress(JSON.stringify(value)) !== null
+  return isReadingProgress(value)
 }
 
 function isMangaSummary(value: unknown): value is MangaSummary {
@@ -292,13 +425,24 @@ function isMangaSummary(value: unknown): value is MangaSummary {
 }
 
 function keepCompletedState(
-  previous: RecentReadingEntry | undefined,
+  previous: StoredProgressEntryV2 | undefined,
   pageCount: number,
   pageIndex: number,
 ): boolean {
   return previous?.state === 'completed' &&
     previous.pageCount === pageCount &&
     pageIndex >= Math.max(0, pageCount - 1)
+}
+
+function progressEntryFromRecent(entry: RecentReadingEntry): StoredProgressEntryV2 {
+  return {
+    pageIndex: entry.pageIndex,
+    mode: entry.mode,
+    state: entry.state,
+    updatedAt: entry.updatedAt,
+    pageCount: entry.pageCount,
+    hiddenFromRecent: entry.hiddenFromRecent,
+  }
 }
 
 function readingProgressFromEntry(entry: RecentReadingEntry): ReadingProgress {
@@ -334,8 +478,12 @@ function progressKey(serverUrl: string, userUuid: string, mangaUuid: string): st
   ].join(':')
 }
 
-function progressIndexKey(serverUrl: string, userUuid: string): string {
-  return [PROGRESS_INDEX_KEY_PREFIX, progressIdentity(serverUrl, userUuid)].join(':')
+function progressIndexV1Key(serverUrl: string, userUuid: string): string {
+  return [PROGRESS_INDEX_V1_KEY_PREFIX, progressIdentity(serverUrl, userUuid)].join(':')
+}
+
+function progressIndexV2Key(serverUrl: string, userUuid: string): string {
+  return [PROGRESS_INDEX_V2_KEY_PREFIX, progressIdentity(serverUrl, userUuid)].join(':')
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

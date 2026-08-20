@@ -1,16 +1,19 @@
 import { fireEvent, render, screen } from '@testing-library/react-native'
 import { ApiError } from '@/api/client'
-import MangasScreen from '@/app/(app)/(tabs)/mangas'
+import MangasScreen, { mergeSelectedTags } from '@/app/(app)/(tabs)/mangas'
 import TagsScreen from '@/app/(app)/(tabs)/tags'
 
 const mockUseInfiniteQuery = jest.fn()
 const mockUseQuery = jest.fn()
+const mockUseQueries = jest.fn()
 const mockMangaRefetch = jest.fn()
 const mockTagRefetch = jest.fn()
 const mockTagTypesRefetch = jest.fn()
+let mockCatalogTagUuids: string[] = []
 
 jest.mock('@tanstack/react-query', () => ({
   useInfiniteQuery: (...args: unknown[]) => mockUseInfiniteQuery(...args),
+  useQueries: (...args: unknown[]) => mockUseQueries(...args),
   useQuery: (...args: unknown[]) => mockUseQuery(...args),
 }))
 
@@ -48,7 +51,7 @@ jest.mock('@/hooks/useCatalogFilters', () => ({
       search: '',
       sortBy: 'updateAt',
       sortOrder: 'desc',
-      tagUuids: [],
+      tagUuids: mockCatalogTagUuids,
       publishYearFrom: null,
       publishYearTo: null,
       readingState: 'all',
@@ -67,7 +70,32 @@ jest.mock('@/downloads/DownloadContext', () => ({
 }))
 
 jest.mock('@/components/catalog/CatalogFilterSheet', () => ({
-  CatalogFilterSheet: () => null,
+  CatalogFilterSheet: ({ visible, tags, filters, onApply }: {
+    visible: boolean
+    tags: Array<{ uuid: string; name: string }>
+    filters: { tagUuids: string[] }
+    onApply: (filters: { tagUuids: string[] }) => void
+  }) => {
+    if (!visible) return null
+    const React = require('react')
+    const { Pressable, Text, View } = require('react-native')
+    return React.createElement(
+      View,
+      null,
+      ...tags.map(tag => React.createElement(
+        Pressable,
+        {
+          accessibilityLabel: `筛选标签 ${tag.uuid}`,
+          key: tag.uuid,
+          onPress: () => onApply({
+            ...filters,
+            tagUuids: filters.tagUuids.filter(uuid => uuid !== tag.uuid),
+          }),
+        },
+        React.createElement(Text, null, tag.name),
+      )),
+    )
+  },
 }))
 
 jest.mock('@/session/SessionContext', () => ({
@@ -80,6 +108,8 @@ jest.mock('@/session/SessionContext', () => ({
 
 describe('catalog empty and failure states', () => {
   beforeEach(() => {
+    mockCatalogTagUuids = []
+    mockUseQueries.mockReturnValue([])
     mockUseInfiniteQuery.mockReturnValue(emptyInfiniteQuery(mockMangaRefetch))
     mockUseQuery.mockReturnValue({
       data: [],
@@ -129,6 +159,53 @@ describe('catalog empty and failure states', () => {
     expect(screen.getByText('标签加载失败')).toBeTruthy()
     fireEvent.press(screen.getByText('重试'))
     expect(mockTagRefetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps fetched selected tags ahead of and deduplicated from search pages', () => {
+    const selected = {
+      uuid: 'selected',
+      name: '已选标签',
+      createAt: '2026-08-20T00:00:00.000Z',
+      updateAt: '2026-08-20T00:00:00.000Z',
+      tagType: { uuid: 'type', name: '题材' },
+    }
+    const searched = {
+      ...selected,
+      uuid: 'searched',
+      name: '搜索结果',
+    }
+
+    expect(mergeSelectedTags(
+      ['selected'],
+      [selected],
+      [searched, { ...selected, name: '分页中的旧值' }],
+    )).toEqual([selected, searched])
+  })
+
+  it('fetches a selected tag missing from search pages and lets the sheet remove it', () => {
+    const selected = {
+      uuid: 'selected',
+      name: '已选标签',
+      createAt: '2026-08-20T00:00:00.000Z',
+      updateAt: '2026-08-20T00:00:00.000Z',
+      tagType: { uuid: 'type', name: '题材' },
+    }
+    mockCatalogTagUuids = [selected.uuid]
+    mockUseQueries.mockReturnValue([{
+      data: selected,
+      error: null,
+      refetch: jest.fn(),
+    }])
+
+    render(<MangasScreen />)
+    fireEvent.press(screen.getByLabelText('筛选，已启用 1 项'))
+
+    expect(screen.getByLabelText('筛选标签 selected')).toBeOnTheScreen()
+    expect(mockUseQueries.mock.calls.some(([options]) =>
+      options.queries[0]?.queryKey.at(-1) === 'selected' &&
+      options.queries[0]?.enabled === true)).toBe(true)
+    fireEvent.press(screen.getByLabelText('筛选标签 selected'))
+    expect(screen.queryByLabelText('筛选标签 selected')).toBeNull()
   })
 })
 

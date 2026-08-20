@@ -10,7 +10,9 @@ describe('favorites storage', () => {
   it('keeps favorites isolated by server and user identity', async () => {
     await setMangaFavorite('https://one.example', 'user-1', 'manga-1', true)
 
-    const [key, value] = jest.mocked(AsyncStorage.setItem).mock.calls[0]
+    const firstWrite = jest.mocked(AsyncStorage.setItem).mock.calls[0]
+    if (!firstWrite) throw new Error('missing storage write')
+    const [key, value] = firstWrite
     expect(key).toContain(encodeURIComponent('https://one.example'))
     expect(key).toContain('user-1')
     expect(JSON.parse(value)).toEqual(['manga-1'])

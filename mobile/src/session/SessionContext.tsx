@@ -25,6 +25,11 @@ import {
 import { isLanHttpEnabled } from '@/server/connectionPolicy'
 import { validateServerUrl } from '@/server/serverUrl'
 import { userFromToken } from './token'
+import {
+  clearAccessTokenLogoutTombstone,
+  loadAccessTokenLogoutTombstone,
+  markAccessTokenLogoutTombstone,
+} from './logoutTombstone'
 
 type SessionStatus = 'loading' | 'needs-server' | 'needs-login' | 'authenticated'
 
@@ -88,12 +93,27 @@ export function SessionProvider({
 
   const signOut = useCallback((): Promise<SessionCleanupResult> => {
     if (signOutInFlightRef.current) return signOutInFlightRef.current
-    authVersionRef.current += 1
     const operation = runSessionTransition(async () => {
-      await removeAccessToken()
+      let tombstoneStored = false
+      try {
+        await markAccessTokenLogoutTombstone()
+        tombstoneStored = true
+      } catch {}
+      authVersionRef.current += 1
       authRef.current = null
       setAuth(null)
-      return { cacheCleared: await cleanupCaches() }
+      const [tokenRemoval, cacheCleanup] = await Promise.allSettled([
+        removeAccessToken(),
+        cleanupCaches(),
+      ])
+      if (tokenRemoval.status === 'fulfilled') {
+        try { await clearAccessTokenLogoutTombstone() } catch {}
+      } else if (!tombstoneStored) {
+        throw tokenRemoval.reason
+      }
+      return {
+        cacheCleared: cacheCleanup.status === 'fulfilled' && cacheCleanup.value,
+      }
     })
     signOutInFlightRef.current = operation
     void operation.finally(() => {
@@ -104,9 +124,11 @@ export function SessionProvider({
 
   useEffect(() => {
     let active = true
-    Promise.all([loadServerUrl(), loadAccessToken()])
-      .then(async ([storedServerUrl, token]) => {
+    Promise.allSettled([loadServerUrl(), loadAccessToken()])
+      .then(async ([serverResult, tokenResult]) => {
         if (!active) return
+        const storedServerUrl = serverResult.status === 'fulfilled' ? serverResult.value : null
+        const token = tokenResult.status === 'fulfilled' ? tokenResult.value : null
         let acceptedServerUrl: string | null = null
         if (storedServerUrl) {
           try {
@@ -117,7 +139,23 @@ export function SessionProvider({
         }
         serverUrlRef.current = acceptedServerUrl
         setServerUrl(acceptedServerUrl)
-        if (acceptedServerUrl && token) {
+        let logoutTombstone = false
+        if (token) {
+          try {
+            logoutTombstone = await loadAccessTokenLogoutTombstone()
+          } catch {
+            // Never revive a credential if its logout marker cannot be checked.
+            logoutTombstone = true
+          }
+          if (!active) return
+        }
+        if (token && logoutTombstone) {
+          try {
+            await removeAccessToken()
+            await clearAccessTokenLogoutTombstone()
+          } catch {}
+          await cleanupCaches()
+        } else if (acceptedServerUrl && token) {
           const user = userFromToken(token)
           if (user) {
             const storedAuth = { token, user }
@@ -161,6 +199,12 @@ export function SessionProvider({
     await runSessionTransition(async () => {
       if (!serverUrlRef.current) throw new Error('请先配置服务器')
       await saveAccessToken(token)
+      try {
+        await clearAccessTokenLogoutTombstone()
+      } catch (error) {
+        try { await removeAccessToken() } catch {}
+        throw error
+      }
       if (authVersionRef.current === authVersion) {
         authRef.current = nextAuth
         setAuth(nextAuth)
@@ -191,14 +235,31 @@ export function SessionProvider({
 
   const clearServer = useCallback((): Promise<SessionCleanupResult> => {
     if (clearServerInFlightRef.current) return clearServerInFlightRef.current
-    authVersionRef.current += 1
     const operation = runSessionTransition(async () => {
-      await Promise.all([removeAccessToken(), removeServerUrl()])
+      let tombstoneStored = false
+      try {
+        await markAccessTokenLogoutTombstone()
+        tombstoneStored = true
+      } catch {}
+      authVersionRef.current += 1
       authRef.current = null
       serverUrlRef.current = null
       setAuth(null)
       setServerUrl(null)
-      return { cacheCleared: await cleanupCaches() }
+      const [tokenRemoval, serverRemoval, cacheCleanup] = await Promise.allSettled([
+        removeAccessToken(),
+        removeServerUrl(),
+        cleanupCaches(),
+      ])
+      if (tokenRemoval.status === 'fulfilled') {
+        try { await clearAccessTokenLogoutTombstone() } catch {}
+      } else if (!tombstoneStored) {
+        throw tokenRemoval.reason
+      }
+      if (serverRemoval.status === 'rejected') throw serverRemoval.reason
+      return {
+        cacheCleared: cacheCleanup.status === 'fulfilled' && cacheCleanup.value,
+      }
     })
     clearServerInFlightRef.current = operation
     void operation.finally(() => {

@@ -12,7 +12,9 @@ describe('DownloadsScreen', () => {
       userUuid: 'user-1',
     }, manga())
     manifest.state = 'downloading'
-    manifest.pages[0].state = 'completed'
+    const firstPage = manifest.pages[0]
+    if (!firstPage) throw new Error('missing test page')
+    firstPage.state = 'completed'
     const pause = jest.fn().mockResolvedValue(undefined)
     jest.mocked(useDownloads).mockReturnValue(downloadContext([manifest], {
       eligible: false,
@@ -54,6 +56,23 @@ describe('DownloadsScreen', () => {
     render(<DownloadsScreen />)
     expect(screen.getByText('还没有离线漫画')).toBeOnTheScreen()
     expect(screen.getByText('在漫画详情中选择“下载到本机”。')).toBeOnTheScreen()
+  })
+
+  it('shows a recoverable row error when an async action rejects', async () => {
+    const manifest = createDownloadManifest({
+      serverUrl: 'https://example.com',
+      userUuid: 'user-1',
+    }, manga())
+    manifest.state = 'downloading'
+    const pause = jest.fn().mockRejectedValue(new Error('filesystem unavailable'))
+    jest.mocked(useDownloads).mockReturnValue(downloadContext([manifest], { pause }))
+
+    render(<DownloadsScreen />)
+    fireEvent.press(screen.getByText('暂停'), { stopPropagation: jest.fn() })
+
+    expect(await screen.findByText('下载操作失败，请检查本机存储后重试。')).toBeOnTheScreen()
+    expect(pause).toHaveBeenCalledTimes(1)
+    expect(screen.getByText('暂停')).not.toBeDisabled()
   })
 })
 

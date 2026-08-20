@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -175,8 +176,10 @@ function MangaMetadata({
           {coverSource && !coverFailed
             ? (
                 <Image
-                  cachePolicy="memory-disk"
+                  allowDownscaling
+                  cachePolicy={localPageUris?.[coverIndex] ? 'none' : 'memory-disk'}
                   contentFit="cover"
+                  enforceEarlyResizing={Platform.OS === 'ios'}
                   onError={() => setCoverFailed(true)}
                   recyclingKey={`${manga.uuid}:${coverIndex}:${manga.updateAt}`}
                   source={coverSource}

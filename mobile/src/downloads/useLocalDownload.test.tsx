@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react-native'
+import { act, render, screen, waitFor } from '@testing-library/react-native'
 import { Text } from 'react-native'
 import type { MangaDetail } from '@/api/types'
 import {
@@ -8,9 +8,20 @@ import {
 import { createDownloadManifest } from '@/downloads/types'
 import { useLocalDownload } from '@/downloads/useLocalDownload'
 
+let mockAppActive = true
+const mockAppStateListeners = new Set<() => void>()
+
 jest.mock('@/downloads/DownloadContext', () => ({
   useDownloadActions: jest.fn(),
   useDownloadManifest: jest.fn(),
+}))
+
+jest.mock('@/query/nativeState', () => ({
+  getNativeAppActive: () => mockAppActive,
+  subscribeNativeAppState: (listener: () => void) => {
+    mockAppStateListeners.add(listener)
+    return () => mockAppStateListeners.delete(listener)
+  },
 }))
 
 const manga: MangaDetail = {
@@ -27,6 +38,11 @@ const manga: MangaDetail = {
 }
 
 describe('useLocalDownload', () => {
+  beforeEach(() => {
+    mockAppActive = true
+    mockAppStateListeners.clear()
+  })
+
   it('exposes downloaded metadata only after every local page is verified', async () => {
     const manifest = completedManifest()
     const localPagesFor = jest.fn().mockResolvedValue([
@@ -67,7 +83,47 @@ describe('useLocalDownload', () => {
 
     expect(screen.getByText('unavailable')).toBeOnTheScreen()
   })
+
+  it('revalidates completed page files whenever the app returns to the foreground', async () => {
+    const manifest = completedManifest()
+    const secondVerification = deferred<string[]>()
+    const verifiedPages = [
+      'file:///downloads/000000.page',
+      'file:///downloads/000001.page',
+    ]
+    const localPagesFor = jest.fn()
+      .mockResolvedValueOnce(verifiedPages)
+      .mockImplementationOnce(() => secondVerification.promise)
+    mockDownloads({ manifest, localPagesFor })
+    render(<Probe />)
+
+    await waitFor(() => expect(screen.getByText(
+      'available:离线漫画:file:///downloads/000000.page',
+    )).toBeOnTheScreen())
+    setAppActive(false)
+    expect(screen.getByText('loading:离线漫画')).toBeOnTheScreen()
+    setAppActive(true)
+    expect(screen.getByText('loading:离线漫画')).toBeOnTheScreen()
+    await waitFor(() => expect(localPagesFor).toHaveBeenCalledTimes(2))
+    secondVerification.resolve(verifiedPages)
+    await waitFor(() => expect(screen.getByText(
+      'available:离线漫画:file:///downloads/000000.page',
+    )).toBeOnTheScreen())
+  })
 })
+
+function setAppActive(active: boolean) {
+  act(() => {
+    mockAppActive = active
+    mockAppStateListeners.forEach(listener => listener())
+  })
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>(nextResolve => { resolve = nextResolve })
+  return { promise, resolve }
+}
 
 function Probe() {
   const local = useLocalDownload('manga-1')
