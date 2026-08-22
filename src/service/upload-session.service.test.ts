@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
+import crypto from 'crypto';
 import { describe, it } from 'node:test';
 import { IMPORT_CHUNK_SIZE, IMPORT_MAX_TOTAL_SIZE } from './import.constants';
 import { UploadSessionService, manifestHash, validateUploadRequest } from './upload-session.service';
@@ -43,6 +44,35 @@ describe('upload sessions', () => {
     assert.equal(completed.state, 'uploading');
     assert.equal(completed.files[0].chunkCount, 1);
     await assert.rejects(() => service.getSession(session.uploadId, '33333333-3333-4333-8333-333333333333'));
+    await fs.rm(root, { recursive: true, force: true });
+  });
+
+  it('writes chunks at fixed offsets and makes retries idempotent', async () => {
+    const root = await tempDir();
+    const service = new UploadSessionService(root);
+    const body = Buffer.from('large enough for a chunk test');
+    const files = [{ index: 0, clientKey: 'book.zip', name: 'book.zip', size: body.length, lastModified: 1 }];
+    const session = await service.createSession({
+      ownerUuid: uuid,
+      mangaUuid,
+      mode: 'zip',
+      metadata: { fullname: 'book', displayTitle: 'Book', originalTitle: 'Book', tagUuids: [], pendingTags: [] },
+      expectedFileCount: 1,
+      totalBytes: body.length,
+      manifestSha256: manifestHash(files),
+    });
+    await service.saveManifestBatch(session.uploadId, uuid, 0, files);
+    await service.completeManifest(session.uploadId, uuid);
+    const sha256 = crypto.createHash('sha256').update(body).digest('hex');
+    const first = await service.writeChunk({ uploadId: session.uploadId, ownerUuid: uuid, fileIndex: 0, chunkIndex: 0, body, sha256 });
+    const duplicate = await service.writeChunk({ uploadId: session.uploadId, ownerUuid: uuid, fileIndex: 0, chunkIndex: 0, body, sha256 });
+    assert.equal(first.duplicate, false);
+    assert.equal(duplicate.duplicate, true);
+    const received = await service.getReceived(session.uploadId, uuid, true);
+    assert.deepEqual(received.files[0].receivedChunks, [0]);
+    assert.equal(received.files[0].hashes?.[0], sha256);
+    await service.queue(session.uploadId, uuid);
+    assert.equal((await service.getSession(session.uploadId)).state, 'queued');
     await fs.rm(root, { recursive: true, force: true });
   });
 });

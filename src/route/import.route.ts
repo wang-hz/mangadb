@@ -5,6 +5,8 @@ import os from 'os';
 import path from 'path';
 import { ImportController } from '@/controller/import.controller';
 import { IMPORT_MAX_FILE_SIZE } from '@/service/import.constants';
+import { uploadController } from '@/controller/upload.controller';
+import express from 'express';
 
 const router = Router();
 const importController = new ImportController();
@@ -47,5 +49,16 @@ router.post('/upload', (req, res, next) => {
     importController.upload(req, res).catch(next);
   });
 });
+
+router.get('/uploads', (req, res) => { void uploadController.list(req, res); });
+router.post('/uploads', (req, res) => { void uploadController.create(req, res); });
+router.put('/uploads/:uploadId/manifest/:batchIndex', (req, res) => { void uploadController.manifestBatch(req, res); });
+router.post('/uploads/:uploadId/manifest/complete', (req, res) => { void uploadController.manifestComplete(req, res); });
+router.get('/uploads/:uploadId', (req, res) => { void uploadController.status(req, res); });
+router.put('/uploads/:uploadId/files/:fileIndex/chunks/:chunkIndex',
+  express.raw({ type: 'application/octet-stream', limit: '768kb' }),
+  (req, res) => { void uploadController.chunk(req, res); });
+router.post('/uploads/:uploadId/complete', (req, res) => { void uploadController.complete(req, res); });
+router.delete('/uploads/:uploadId', (req, res) => { void uploadController.remove(req, res); });
 
 export default router;

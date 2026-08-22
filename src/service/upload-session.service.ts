@@ -114,6 +114,8 @@ export function validateUploadRequest(input: {
 }
 
 export class UploadSessionService {
+  private readonly locks = new Map<string, Promise<void>>();
+
   constructor(
     private readonly rootDir = path.join(DATA_DIR, '.uploads'),
     private readonly clock: () => number = () => Date.now(),
@@ -142,6 +144,21 @@ export class UploadSessionService {
   private async saveSession(session: UploadSession): Promise<void> {
     session.updatedAt = nowIso(this.clock);
     await this.writeJsonAtomic(this.sessionPath(session.uploadId), session);
+  }
+
+  private async withLock<T>(uploadId: string, fn: () => Promise<T>): Promise<T> {
+    const previous = this.locks.get(uploadId) ?? Promise.resolve();
+    let release!: () => void;
+    const next = new Promise<void>(resolve => { release = resolve; });
+    const queued = previous.then(() => next);
+    this.locks.set(uploadId, queued);
+    await previous;
+    try {
+      return await fn();
+    } finally {
+      release();
+      if (this.locks.get(uploadId) === queued) this.locks.delete(uploadId);
+    }
   }
 
   async createSession(input: {
@@ -226,10 +243,169 @@ export class UploadSessionService {
   }
 
   async updateState(uploadId: string, ownerUuid: string, state: UploadState): Promise<UploadSession> {
+    return this.withLock(uploadId, async () => {
+      const session = await this.getSession(uploadId, ownerUuid);
+      session.state = state;
+      await this.saveSession(session);
+      return session;
+    });
+  }
+
+  private dataPath(uploadId: string, fileIndex: number): string {
+    return path.join(this.sessionDir(uploadId), 'files', `${fileIndex}.data`);
+  }
+
+  private markerPath(uploadId: string, fileIndex: number, suffix: 'received' | 'hashes'): string {
+    return path.join(this.sessionDir(uploadId), 'files', `${fileIndex}.${suffix}`);
+  }
+
+  private async readByte(filePath: string, offset: number): Promise<number> {
+    try {
+      const handle = await fs.open(filePath, 'r');
+      try {
+        const buffer = Buffer.alloc(1);
+        const result = await handle.read(buffer, 0, 1, offset);
+        return result.bytesRead === 1 ? buffer[0] : 0;
+      } finally {
+        await handle.close();
+      }
+    } catch (error: any) {
+      if (error.code === 'ENOENT') return 0;
+      throw error;
+    }
+  }
+
+  private async readHash(filePath: string, offset: number): Promise<string | null> {
+    try {
+      const handle = await fs.open(filePath, 'r');
+      try {
+        const buffer = Buffer.alloc(32);
+        const result = await handle.read(buffer, 0, 32, offset);
+        return result.bytesRead === 32 ? buffer.toString('hex') : null;
+      } finally {
+        await handle.close();
+      }
+    } catch (error: any) {
+      if (error.code === 'ENOENT') return null;
+      throw error;
+    }
+  }
+
+  private async writeAt(filePath: string, data: Buffer, offset: number): Promise<void> {
+    let handle;
+    try {
+      handle = await fs.open(filePath, 'r+');
+    } catch (error: any) {
+      if (error.code !== 'ENOENT') throw error;
+      handle = await fs.open(filePath, 'w+');
+    }
+    try {
+      await handle.write(data, 0, data.length, offset);
+    } finally {
+      await handle.close();
+    }
+  }
+
+  async writeChunk(input: {
+    uploadId: string;
+    ownerUuid: string;
+    fileIndex: number;
+    chunkIndex: number;
+    body: Buffer;
+    sha256: string;
+  }): Promise<{ duplicate: boolean; session: UploadSession }> {
+    return this.withLock(input.uploadId, async () => {
+      const session = await this.getSession(input.uploadId, input.ownerUuid);
+      if (session.state !== 'uploading') throw new Error('Upload is not accepting chunks');
+      const file = session.files[input.fileIndex];
+      if (!file || file.index !== input.fileIndex) throw new Error('Invalid file index');
+      if (!Number.isSafeInteger(input.chunkIndex) || input.chunkIndex < 0 || input.chunkIndex >= (file.chunkCount ?? 0)) {
+        throw new Error('Invalid chunk index');
+      }
+      if (!/^[0-9a-f]{64}$/i.test(input.sha256)) throw new Error('Invalid chunk hash');
+      const expectedSize = Math.min(session.chunkSize, file.size - input.chunkIndex * session.chunkSize);
+      if (input.body.length !== expectedSize) throw new Error('Invalid chunk size');
+      const actualHash = crypto.createHash('sha256').update(input.body).digest('hex');
+      if (actualHash !== input.sha256.toLowerCase()) throw new Error('Chunk hash mismatch');
+
+      const receivedPath = this.markerPath(input.uploadId, input.fileIndex, 'received');
+      const hashPath = this.markerPath(input.uploadId, input.fileIndex, 'hashes');
+      if (await this.readByte(receivedPath, input.chunkIndex)) {
+        const storedHash = await this.readHash(hashPath, input.chunkIndex * 32);
+        if (storedHash !== actualHash) throw new Error('Chunk already exists with different content');
+        return { duplicate: true, session };
+      }
+
+      await this.writeAt(this.dataPath(input.uploadId, input.fileIndex), input.body, input.chunkIndex * session.chunkSize);
+      await this.writeAt(hashPath, Buffer.from(actualHash, 'hex'), input.chunkIndex * 32);
+      await this.writeAt(receivedPath, Buffer.from([1]), input.chunkIndex);
+      session.receivedBytes += input.body.length;
+      session.receivedChunks++;
+      session.expiresAt = new Date(this.clock() + IMPORT_UPLOAD_TTL_MS).toISOString();
+      await this.saveSession(session);
+      return { duplicate: false, session };
+    });
+  }
+
+  async getReceived(uploadId: string, ownerUuid: string, includeHashes = false) {
     const session = await this.getSession(uploadId, ownerUuid);
-    session.state = state;
-    await this.saveSession(session);
-    return session;
+    const files = [] as Array<{ index: number; receivedChunks: number[]; hashes?: Record<number, string> }>;
+    for (const file of session.files) {
+      const receivedChunks: number[] = [];
+      const hashes: Record<number, string> = {};
+      for (let index = 0; index < (file.chunkCount ?? 0); index++) {
+        if (await this.readByte(this.markerPath(uploadId, file.index, 'received'), index)) {
+          receivedChunks.push(index);
+          if (includeHashes) {
+            const hash = await this.readHash(this.markerPath(uploadId, file.index, 'hashes'), index * 32);
+            if (hash) hashes[index] = hash;
+          }
+        }
+      }
+      if (receivedChunks.length > 0 || includeHashes) files.push({ index: file.index, receivedChunks, ...(includeHashes ? { hashes } : {}) });
+    }
+    return { session, files };
+  }
+
+  async queue(uploadId: string, ownerUuid: string): Promise<UploadSession> {
+    return this.withLock(uploadId, async () => {
+      const session = await this.getSession(uploadId, ownerUuid);
+      if (session.state === 'queued' || session.state === 'processing') return session;
+      if (session.state === 'completed') return session;
+      if (session.state !== 'uploading' && session.state !== 'failed') throw new Error('Upload is not ready to complete');
+      for (const file of session.files) {
+        for (let index = 0; index < (file.chunkCount ?? 0); index++) {
+          if (!(await this.readByte(this.markerPath(uploadId, file.index, 'received'), index))) throw new Error('Upload is missing chunks');
+        }
+      }
+      session.state = 'queued';
+      await this.saveSession(session);
+      return session;
+    });
+  }
+
+  async listSessions(ownerUuid: string): Promise<UploadSession[]> {
+    await fs.mkdir(this.rootDir, { recursive: true });
+    const entries = await fs.readdir(this.rootDir, { withFileTypes: true });
+    const sessions: UploadSession[] = [];
+    for (const entry of entries) {
+      if (!entry.isDirectory() || !UUID_RE.test(entry.name)) continue;
+      try {
+        const session = await this.getSession(entry.name, ownerUuid);
+        sessions.push(session);
+      } catch {
+        // Ignore sessions owned by another user or incomplete directories.
+      }
+    }
+    return sessions.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  }
+
+  async remove(uploadId: string, ownerUuid: string): Promise<void> {
+    await this.withLock(uploadId, async () => {
+      const session = await this.getSession(uploadId, ownerUuid);
+      if (session.state === 'processing') throw new Error('Upload is being processed');
+      await fs.rm(this.sessionDir(session.uploadId), { recursive: true, force: true });
+    });
   }
 
   async cleanupExpired(): Promise<number> {
