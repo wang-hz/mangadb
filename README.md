@@ -173,6 +173,12 @@ Simulator builds do not require an Apple Developer account. Physical iPhone inst
 
 Manga image files are served directly from `DATA_DIR`. The `pages` field on each manga record stores the relative paths to page images within that directory.
 
+### Large web imports
+
+The web importer uses resumable upload sessions under `DATA_DIR/.uploads`, so archives larger than a reverse proxy's usual 1 MiB request limit do not need a larger Nginx body limit. ZIP/CBZ files and image folders are uploaded as 768 KiB chunks with four chunks in flight; a session is retained for 24 hours and can be resumed after a refresh or process restart. Each manga is limited to 10 GiB and 10,000 pages, and ZIP extraction is limited to 20 GiB. After all chunks arrive, import runs asynchronously and the page polls the session until it completes.
+
+The existing `POST /api/admin/import/upload` multipart endpoint remains available for older clients and keeps its original fields and response. It is synchronous and is still subject to the configured proxy request-size and timeout limits; new web uploads use the session endpoints instead. Failed sessions retain their source chunks for retry or cancellation. Ensure `DATA_DIR` is persistent when running the application in a container.
+
 ## Docker
 
 Pushing a `v*` tag runs the Docker-only release workflow and publishes the combined Web/API image to GitHub Container Registry for `linux/amd64`. Both the version tag and `latest` are updated:

@@ -154,13 +154,34 @@ export class ImportService {
       if (imageEntries.length === 0) {
         throw new Error('No image files found in archive');
       }
+      if (imageEntries.length > IMPORT_MAX_PAGE_COUNT) {
+        throw new Error(`Archive exceeds ${IMPORT_MAX_PAGE_COUNT} pages`);
+      }
+      const declaredSize = imageEntries.reduce(
+        (sum, entry) => sum + Number(entry.uncompressedSize ?? 0),
+        0,
+      );
+      if (declaredSize > IMPORT_MAX_EXTRACTED_SIZE) {
+        throw new Error('Archive exceeds the 20 GiB extracted size limit');
+      }
 
       const rawNames = imageEntries.map(e => sanitizeFilename(e.path));
       const safeNames = deduplicateNames(rawNames);
 
+      let extractedSize = 0;
       for (let i = 0; i < imageEntries.length; i++) {
         const destPath = path.join(tempExtractDir, safeNames[i]);
-        await pipeline(imageEntries[i].stream(), fs.createWriteStream(destPath));
+        const limiter = new Transform({
+          transform(chunk, _encoding, callback) {
+            extractedSize += chunk.length;
+            if (extractedSize > IMPORT_MAX_EXTRACTED_SIZE) {
+              callback(new Error('Archive exceeds the 20 GiB extracted size limit'));
+            } else {
+              callback(null, chunk);
+            }
+          },
+        });
+        await pipeline(imageEntries[i].stream(), limiter, fs.createWriteStream(destPath));
       }
 
       const entries = imageEntries.map((_, i) => ({ name: safeNames[i] }));
@@ -174,10 +195,10 @@ export class ImportService {
         await moveFile(path.join(tempExtractDir, name), path.join(destDir, name));
       }
 
-      const result = await this.createMangaRecord(uuid, fullname, displayTitle, originalTitle, publishDate, sortedNames);
-      const pendingUuids = await this.resolveOrCreateTags(pendingTags);
-      await this.createMangaTags(uuid, [...tagUuids, ...pendingUuids]);
-      return result;
+      return this.createMangaAndTags(
+        uuid, fullname, displayTitle, originalTitle, publishDate, sortedNames,
+        tagUuids, pendingTags,
+      );
     } catch (e) {
       await fsPromises.rm(destDir, { recursive: true, force: true });
       throw e;
@@ -204,6 +225,9 @@ export class ImportService {
     if (validFiles.length === 0) {
       throw new Error('No valid image files');
     }
+    if (validFiles.length > IMPORT_MAX_PAGE_COUNT) {
+      throw new Error(`Import exceeds ${IMPORT_MAX_PAGE_COUNT} pages`);
+    }
 
     const rawNames = validFiles.map(f => sanitizeFilename(f.originalname));
     const safeNames = deduplicateNames(rawNames);
@@ -217,13 +241,10 @@ export class ImportService {
       for (const { tempPath, name } of files) {
         await moveFile(tempPath, path.join(destDir, name));
       }
-      const result = await this.createMangaRecord(
+      return this.createMangaAndTags(
         uuid, fullname, displayTitle, originalTitle, publishDate,
-        files.map(f => f.name),
+        files.map(f => f.name), tagUuids, pendingTags,
       );
-      const pendingUuids = await this.resolveOrCreateTags(pendingTags);
-      await this.createMangaTags(uuid, [...tagUuids, ...pendingUuids]);
-      return result;
     } catch (e) {
       await fsPromises.rm(destDir, { recursive: true, force: true });
       throw e;
