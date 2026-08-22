@@ -202,9 +202,19 @@ export class UploadSessionService {
   }
 
   async getSession(uploadId: string, ownerUuid?: string): Promise<UploadSession> {
-    const session = await this.readSession(uploadId);
+    let session: UploadSession;
+    try {
+      session = await this.readSession(uploadId);
+    } catch (error: any) {
+      if (error.code === 'ENOENT') throw new Error('Upload not found');
+      throw error;
+    }
     if (ownerUuid !== undefined && session.ownerUuid !== ownerUuid) throw new Error('Upload not found');
     return session;
+  }
+
+  sessionDirectory(uploadId: string): string {
+    return this.sessionDir(uploadId);
   }
 
   async saveManifestBatch(uploadId: string, ownerUuid: string, batchIndex: number, files: UploadFileManifest[]): Promise<void> {
@@ -398,6 +408,55 @@ export class UploadSessionService {
       }
     }
     return sessions.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  }
+
+  async listAllSessions(): Promise<UploadSession[]> {
+    await fs.mkdir(this.rootDir, { recursive: true });
+    const entries = await fs.readdir(this.rootDir, { withFileTypes: true });
+    const sessions: UploadSession[] = [];
+    for (const entry of entries) {
+      if (!entry.isDirectory() || !UUID_RE.test(entry.name)) continue;
+      try { sessions.push(await this.getSession(entry.name)); } catch { /* ignore incomplete dirs */ }
+    }
+    return sessions;
+  }
+
+  async markProcessing(uploadId: string): Promise<UploadSession> {
+    return this.withLock(uploadId, async () => {
+      const session = await this.getSession(uploadId);
+      session.state = 'processing';
+      await this.saveSession(session);
+      return session;
+    });
+  }
+
+  async markCompleted(uploadId: string, result: UploadSession['result']): Promise<UploadSession> {
+    return this.withLock(uploadId, async () => {
+      const session = await this.getSession(uploadId);
+      session.state = 'completed';
+      session.result = result;
+      session.error = undefined;
+      session.expiresAt = new Date(this.clock() + IMPORT_UPLOAD_TTL_MS).toISOString();
+      await this.saveSession(session);
+      return session;
+    });
+  }
+
+  async markFailed(uploadId: string, code: string, message: string): Promise<UploadSession> {
+    return this.withLock(uploadId, async () => {
+      const session = await this.getSession(uploadId);
+      session.state = 'failed';
+      session.error = { code, message: message.slice(0, 1000) };
+      session.expiresAt = new Date(this.clock() + IMPORT_UPLOAD_TTL_MS).toISOString();
+      await this.saveSession(session);
+      return session;
+    });
+  }
+
+  async cleanupPayload(uploadId: string): Promise<void> {
+    const dir = this.sessionDir(uploadId);
+    const entries = await fs.readdir(dir, { withFileTypes: true });
+    await Promise.all(entries.filter(entry => entry.name !== 'session.json').map(entry => fs.rm(path.join(dir, entry.name), { recursive: true, force: true })));
   }
 
   async remove(uploadId: string, ownerUuid: string): Promise<void> {

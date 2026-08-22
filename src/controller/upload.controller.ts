@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { UploadSessionService, type UploadFileManifest, type UploadMetadata, type UploadMode } from '@/service/upload-session.service';
+import { uploadWorker } from '@/service/upload-worker.service';
 
 const uploadService = new UploadSessionService();
 
@@ -113,7 +114,8 @@ export class UploadController {
   async complete(req: Request, res: Response) {
     try {
       const session = await uploadService.queue(req.params.uploadId, userUuid(req));
-      res.status(session.state === 'completed' ? 200 : 202).json(session);
+      if (session.state === 'queued') uploadWorker.enqueue(session.uploadId);
+      res.status(session.state === 'completed' ? 200 : 202).json({ uploadId: session.uploadId, state: session.state, result: session.result });
     } catch (error) { respondError(res, error); }
   }
 

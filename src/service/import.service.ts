@@ -3,11 +3,14 @@ import fs from 'fs';
 import fsPromises from 'fs/promises';
 import os from 'os';
 import path from 'path';
+import { Transform } from 'stream';
 import { pipeline } from 'stream/promises';
 import unzipper from 'unzipper';
 import { Prisma } from '@/generated/prisma/client';
 import prisma from '@/config/database';
 import { DATA_DIR } from '@/config/env';
+import { IMPORT_MAX_EXTRACTED_SIZE, IMPORT_MAX_PAGE_COUNT } from '@/service/import.constants';
+import type { UploadSession } from '@/service/upload-session.service';
 
 const IMAGE_EXT = /\.(jpe?g|png|webp|gif|avif)$/i;
 
@@ -58,6 +61,75 @@ export interface ImportResult {
 }
 
 export class ImportService {
+  async importFromUploadSession(session: UploadSession, sessionDir: string): Promise<ImportResult> {
+    const destDir = path.join(DATA_DIR, session.mangaUuid);
+    const preparedDir = path.join(sessionDir, 'prepared');
+    const sourceDir = path.join(sessionDir, 'files');
+
+    await fsPromises.rm(preparedDir, { recursive: true, force: true });
+    await fsPromises.mkdir(preparedDir, { recursive: true });
+    let pages: string[];
+
+    if (session.mode === 'zip') {
+      const sourcePath = path.join(sourceDir, '0.data');
+      const directory = await unzipper.Open.file(sourcePath);
+      const imageEntries = directory.files.filter(
+        entry => entry.type !== 'Directory' && IMAGE_EXT.test(path.basename(entry.path)),
+      );
+      if (imageEntries.length === 0) throw new Error('No image files found in archive');
+      if (imageEntries.length > IMPORT_MAX_PAGE_COUNT) throw new Error(`Archive exceeds ${IMPORT_MAX_PAGE_COUNT} pages`);
+      const declaredSize = imageEntries.reduce((sum, entry) => sum + Number(entry.uncompressedSize ?? 0), 0);
+      if (declaredSize > IMPORT_MAX_EXTRACTED_SIZE) throw new Error('Archive exceeds the 20 GiB extracted size limit');
+
+      const safeNames = deduplicateNames(imageEntries.map(entry => sanitizeFilename(entry.path)));
+      let extractedSize = 0;
+      for (let i = 0; i < imageEntries.length; i++) {
+        const limiter = new Transform({
+          transform(chunk, _encoding, callback) {
+            extractedSize += chunk.length;
+            if (extractedSize > IMPORT_MAX_EXTRACTED_SIZE) callback(new Error('Archive exceeds the 20 GiB extracted size limit'));
+            else callback(null, chunk);
+          },
+        });
+        await pipeline(imageEntries[i].stream(), limiter, fs.createWriteStream(path.join(preparedDir, safeNames[i])));
+      }
+      pages = naturalSort(safeNames);
+    } else {
+      if (session.files.length > IMPORT_MAX_PAGE_COUNT) throw new Error(`Import exceeds ${IMPORT_MAX_PAGE_COUNT} pages`);
+      const safeNames = deduplicateNames(session.files.map(file => sanitizeFilename(file.name)));
+      for (let i = 0; i < session.files.length; i++) {
+        const sourcePath = path.join(sourceDir, `${session.files[i].index}.data`);
+        const destPath = path.join(preparedDir, safeNames[i]);
+        try {
+          await fsPromises.link(sourcePath, destPath);
+        } catch (error: any) {
+          if (error.code !== 'EXDEV') throw error;
+          await fsPromises.copyFile(sourcePath, destPath);
+        }
+      }
+      pages = naturalSort(safeNames);
+    }
+
+    await fsPromises.rm(destDir, { recursive: true, force: true });
+    await fsPromises.rename(preparedDir, destDir);
+    try {
+      const result = await this.createMangaAndTags(
+        session.mangaUuid,
+        session.metadata.fullname,
+        session.metadata.displayTitle,
+        session.metadata.originalTitle,
+        session.metadata.publishDate,
+        pages,
+        session.metadata.tagUuids,
+        session.metadata.pendingTags,
+      );
+      return result;
+    } catch (error) {
+      await fsPromises.rm(destDir, { recursive: true, force: true });
+      throw error;
+    }
+  }
+
   async importFromZip(
     tempFilePath: string,
     fullname: string,
@@ -196,24 +268,70 @@ export class ImportService {
     throw new Error('Could not create manga record: fullname conflict after 5 attempts');
   }
 
-  private async resolveOrCreateTags(pendingTags: PendingTagInput[]): Promise<string[]> {
+  private async createMangaAndTags(
+    uuid: string,
+    fullname: string,
+    displayTitle: string,
+    originalTitle: string,
+    publishDate: string | undefined,
+    pages: string[],
+    tagUuids: string[],
+    pendingTags: PendingTagInput[],
+  ): Promise<ImportResult> {
+    await prisma.$transaction(async tx => {
+      let candidate = fullname;
+      for (let attempt = 0; attempt < 5; attempt++) {
+        try {
+          await tx.manga.create({
+            data: {
+              uuid,
+              fullname: candidate,
+              displayTitle,
+              originalTitle,
+              publishDate: publishDate ? new Date(publishDate) : null,
+              pages,
+              cover: 0,
+            },
+          });
+          break;
+        } catch (error) {
+          if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002' && attempt < 4) {
+            candidate = `${fullname}_${attempt + 2}`;
+            continue;
+          }
+          throw error;
+        }
+      }
+      const pendingUuids = await this.resolveOrCreateTags(pendingTags, tx);
+      await tx.mangaTag.createMany({
+        data: [...tagUuids, ...pendingUuids].map(tagUuid => ({ mangaUuid: uuid, tagUuid })),
+        skipDuplicates: true,
+      });
+    });
+    return { uuid, displayTitle, pageCount: pages.length };
+  }
+
+  private async resolveOrCreateTags(
+    pendingTags: PendingTagInput[],
+    db: Pick<Prisma.TransactionClient, 'tag' | 'tagType'> = prisma,
+  ): Promise<string[]> {
     const uuids: string[] = [];
     for (const { name, tagTypeName } of pendingTags) {
       const trimName = name.trim();
       const trimType = tagTypeName.trim();
       if (!trimName || !trimType) continue;
 
-      let tag = await prisma.tag.findUnique({ where: { name: trimName } });
+      let tag = await db.tag.findUnique({ where: { name: trimName } });
       if (!tag) {
-        let tagType = await prisma.tagType.findFirst({
+        let tagType = await db.tagType.findFirst({
           where: { name: { equals: trimType, mode: 'insensitive' } },
         });
         if (!tagType) {
           try {
-            tagType = await prisma.tagType.create({ data: { name: trimType } });
+            tagType = await db.tagType.create({ data: { name: trimType } });
           } catch (e) {
             if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
-              tagType = await prisma.tagType.findFirst({
+              tagType = await db.tagType.findFirst({
                 where: { name: { equals: trimType, mode: 'insensitive' } },
               });
             } else {
@@ -223,10 +341,10 @@ export class ImportService {
         }
         if (!tagType) continue;
         try {
-          tag = await prisma.tag.create({ data: { name: trimName, tagTypeUuid: tagType.uuid } });
+          tag = await db.tag.create({ data: { name: trimName, tagTypeUuid: tagType.uuid } });
         } catch (e) {
           if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
-            tag = await prisma.tag.findUnique({ where: { name: trimName } });
+            tag = await db.tag.findUnique({ where: { name: trimName } });
           } else {
             throw e;
           }

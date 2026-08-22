@@ -13,6 +13,7 @@ import express, { NextFunction, Request, Response } from 'express';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import path from 'path';
+import { uploadWorker } from '@/service/upload-worker.service';
 
 const app = express();
 
@@ -71,6 +72,8 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 const webDistPath = path.resolve(process.cwd(), 'web/dist');
 app.use(express.static(webDistPath));
 app.get('/{*path}', (_req, res) => res.sendFile(path.join(webDistPath, 'index.html')));
+
+uploadWorker.start();
 
 const server = app.listen(PORT, '0.0.0.0', () => {
   logger.info(`Server is running on port ${PORT}`);
