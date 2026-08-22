@@ -1,6 +1,7 @@
 import { GithubOutlined } from '@ant-design/icons'
 import { Modal, Space, Typography } from 'antd'
 import { useTranslation } from 'react-i18next'
+import { formatAppVersion } from '../utils/version'
 
 const { Text, Link } = Typography
 
@@ -27,7 +28,7 @@ export default function AboutModal({ open, onClose }: Props) {
           <img src="/favicon.svg" style={{ width: 48, height: 48 }} />
           <div>
             <div style={{ fontWeight: 700, fontSize: 20, lineHeight: 1.3 }}>MangaDB</div>
-            <Text type="secondary" style={{ fontSize: 13 }}>v{__APP_VERSION__}</Text>
+            <Text type="secondary" style={{ fontSize: 13 }}>{formatAppVersion(__APP_VERSION__)}</Text>
           </div>
         </Space>
 
