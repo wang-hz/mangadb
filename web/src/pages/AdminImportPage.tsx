@@ -10,6 +10,7 @@ import {
 import {
   Alert,
   Button,
+  Card,
   Collapse,
   DatePicker,
   Empty,
@@ -18,6 +19,7 @@ import {
   Progress,
   Select,
   Space,
+  Statistic,
   Tag,
   Typography,
   message,
@@ -31,6 +33,8 @@ import type { ImportResult, PendingTagInput, UploadSessionSummary } from '../api
 import { cancelUpload, getUploadSession, listUploadSessions, resumeUpload, uploadImport } from '../api/import'
 import type { Tag as TagData, TagType } from '../types'
 import { parseFilename, stripArchiveExtension } from '../utils/importParser'
+import { summarizeImportStatuses } from '../utils/importStats'
+import type { ImportStatus } from '../utils/importStats'
 
 const { Text } = Typography
 
@@ -49,8 +53,6 @@ interface PendingTag {
 type TagListItem =
   | { kind: 'existing'; tag: TagData }
   | { kind: 'pending'; data: PendingTag }
-
-type ImportStatus = 'pending' | 'uploading' | 'paused' | 'processing' | 'done' | 'error'
 
 interface ImportItem {
   id: string
@@ -123,7 +125,11 @@ function makeFolderItem(name: string, images: File[]): ImportItem {
 
 function makeRestoredItem(session: UploadSessionSummary): ImportItem {
   const parsedDate = session.metadata.publishDate ? dayjs(session.metadata.publishDate) : null
-  const status: ImportStatus = session.state === 'completed' ? 'done' : session.state === 'processing' || session.state === 'queued' ? 'processing' : 'paused'
+  const status: ImportStatus = session.state === 'completed'
+    ? 'done'
+    : session.state === 'failed'
+      ? 'error'
+      : session.state === 'processing' || session.state === 'queued' ? 'processing' : 'paused'
   return {
     id: `upload-${session.uploadId}`,
     kind: session.mode === 'zip' ? 'zip' : 'folder',
@@ -414,6 +420,7 @@ export default function AdminImportPage() {
 
   const pendingCount = items.filter(i => i.status === 'pending').length
   const doneCount = items.filter(i => i.status === 'done').length
+  const statusSummary = summarizeImportStatuses(items.map(item => item.status))
 
   const collapseItems = items.map(item => ({
     key: item.id,
@@ -444,6 +451,16 @@ export default function AdminImportPage() {
           {pendingCount > 0 ? t('import.importAllWithCount', { count: pendingCount }) : t('import.importAll')}
         </Button>
       </div>
+
+      <Card size="small" style={{ marginBottom: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 16 }}>
+          <Statistic title={t('import.summaryTotal')} value={statusSummary.total} />
+          <Statistic title={t('import.summaryPending')} value={statusSummary.pending} valueStyle={{ color: '#d48806' }} />
+          <Statistic title={t('import.summaryActive')} value={statusSummary.active} valueStyle={{ color: '#1677ff' }} />
+          <Statistic title={t('import.summarySuccess')} value={statusSummary.success} valueStyle={{ color: '#389e0d' }} />
+          <Statistic title={t('import.summaryFailed')} value={statusSummary.failed} valueStyle={{ color: '#cf1322' }} />
+        </div>
+      </Card>
 
       <input ref={zipInputRef} type="file" multiple accept=".zip,.cbz" style={{ display: 'none' }} onChange={handleZipInputChange} />
       <input ref={folderInputRef} type="file"
