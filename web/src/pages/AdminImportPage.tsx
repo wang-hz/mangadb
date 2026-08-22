@@ -27,8 +27,8 @@ import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
-import type { ImportResult, PendingTagInput } from '../api/import'
-import { uploadImages, uploadZip } from '../api/import'
+import type { ImportResult, PendingTagInput, UploadSessionSummary } from '../api/import'
+import { cancelUpload, getUploadSession, listUploadSessions, resumeUpload, uploadImport } from '../api/import'
 import type { Tag as TagData, TagType } from '../types'
 import { parseFilename, stripArchiveExtension } from '../utils/importParser'
 
@@ -50,7 +50,7 @@ type TagListItem =
   | { kind: 'existing'; tag: TagData }
   | { kind: 'pending'; data: PendingTag }
 
-type ImportStatus = 'pending' | 'uploading' | 'done' | 'error'
+type ImportStatus = 'pending' | 'uploading' | 'paused' | 'processing' | 'done' | 'error'
 
 interface ImportItem {
   id: string
@@ -62,6 +62,8 @@ interface ImportItem {
   tagItems: TagListItem[]
   status: ImportStatus
   progress: number
+  totalBytes?: number
+  uploadId?: string
   result?: ImportResult
   errorMsg?: string
 }
@@ -79,7 +81,7 @@ function formatFileSize(bytes: number): string {
 
 function getItemFileSize(item: ImportItem): number {
   if (item.file) return item.file.size
-  return item.folderFiles?.reduce((total, file) => total + file.size, 0) ?? 0
+  return item.folderFiles?.reduce((total, file) => total + file.size, 0) ?? item.totalBytes ?? 0
 }
 
 function applyParsed(name: string): { form: FormState; initialTags: TagListItem[] } {
@@ -111,12 +113,30 @@ function extractUploadTags(items: TagListItem[]): { tagUuids: string[]; pendingT
 function makeZipItem(file: File): ImportItem {
   const name = stripArchiveExtension(file.name)
   const { form, initialTags } = applyParsed(name)
-  return { id: uid(), kind: 'zip', file, fullname: name, form, tagItems: initialTags, status: 'pending', progress: 0 }
+  return { id: uid(), kind: 'zip', file, fullname: name, totalBytes: file.size, form, tagItems: initialTags, status: 'pending', progress: 0 }
 }
 
 function makeFolderItem(name: string, images: File[]): ImportItem {
   const { form, initialTags } = applyParsed(name)
-  return { id: uid(), kind: 'folder', folderFiles: images, fullname: name, form, tagItems: initialTags, status: 'pending', progress: 0 }
+  return { id: uid(), kind: 'folder', folderFiles: images, fullname: name, totalBytes: images.reduce((sum, file) => sum + file.size, 0), form, tagItems: initialTags, status: 'pending', progress: 0 }
+}
+
+function makeRestoredItem(session: UploadSessionSummary): ImportItem {
+  const parsedDate = session.metadata.publishDate ? dayjs(session.metadata.publishDate) : null
+  const status: ImportStatus = session.state === 'completed' ? 'done' : session.state === 'processing' || session.state === 'queued' ? 'processing' : 'paused'
+  return {
+    id: `upload-${session.uploadId}`,
+    kind: session.mode === 'zip' ? 'zip' : 'folder',
+    fullname: session.metadata.fullname,
+    totalBytes: session.totalBytes,
+    uploadId: session.uploadId,
+    form: { displayTitle: session.metadata.displayTitle, originalTitle: session.metadata.originalTitle, publishDate: parsedDate },
+    tagItems: [],
+    status,
+    progress: session.totalBytes > 0 ? Math.round((session.receivedBytes / session.totalBytes) * 100) : 0,
+    result: session.result,
+    errorMsg: session.error?.message,
+  }
 }
 
 function TagsSection({ items, onChange, tagTypes }: { items: TagListItem[]; onChange: (items: TagListItem[]) => void; tagTypes: TagType[] }) {
@@ -195,6 +215,8 @@ function ItemHeader({ item, onRemove }: { item: ImportItem; onRemove: () => void
   const STATUS_ICON: Record<ImportStatus, React.ReactNode> = {
     pending: <Tag style={{ margin: 0 }}>{t('import.pending')}</Tag>,
     uploading: <LoadingOutlined style={{ color: '#1677ff' }} />,
+    paused: <Tag color="orange" style={{ margin: 0 }}>{t('import.paused')}</Tag>,
+    processing: <LoadingOutlined style={{ color: '#722ed1' }} />,
     done: <CheckCircleOutlined style={{ color: '#52c41a' }} />,
     error: <CloseCircleOutlined style={{ color: '#ff4d4f' }} />,
   }
@@ -203,28 +225,49 @@ function ItemHeader({ item, onRemove }: { item: ImportItem; onRemove: () => void
       {item.kind === 'zip' ? <FileZipOutlined /> : <FolderOpenOutlined />}
       <Text style={{ flex: 1, minWidth: 0 }} ellipsis>{item.fullname}</Text>
       {STATUS_ICON[item.status]}
-      {item.status !== 'uploading' && item.status !== 'done' && (
+      {item.status !== 'uploading' && item.status !== 'processing' && item.status !== 'done' && (
         <Button size="small" type="text" icon={<CloseOutlined />} onClick={e => { e.stopPropagation(); onRemove() }} />
       )}
     </div>
   )
 }
 
-function ItemBody({ item, tagTypes, onFormChange, onTagsChange, onFullnameChange }: {
+function ItemBody({ item, tagTypes, onFormChange, onTagsChange, onFullnameChange, onPause, onCancel, onResume }: {
   item: ImportItem; tagTypes: TagType[]
   onFormChange: (form: FormState) => void
   onTagsChange: (tags: TagListItem[]) => void
   onFullnameChange: (fullname: string) => void
+  onPause: () => void
+  onCancel: () => void
+  onResume: () => void
 }) {
   const { t } = useTranslation()
-  const disabled = item.status === 'uploading' || item.status === 'done'
+  const disabled = item.status === 'uploading' || item.status === 'processing' || item.status === 'done' || Boolean(item.uploadId)
   const { form } = item
 
   if (item.status === 'done' && item.result) {
     return <Alert type="success" message={t('import.successResult', { pages: item.result.pageCount, size: formatFileSize(getItemFileSize(item)) })} showIcon />
   }
   if (item.status === 'error') {
-    return <Alert type="error" message={item.errorMsg ?? t('import.errorResult')} showIcon />
+    return <Space direction="vertical" style={{ width: '100%' }}>
+      <Alert type="error" message={item.errorMsg ?? t('import.errorResult')} showIcon />
+      <Space>
+        {(item.file || item.folderFiles || item.uploadId) && <Button onClick={onResume}>{t('import.retry')}</Button>}
+        <Button onClick={onCancel}>{t('common.delete')}</Button>
+      </Space>
+    </Space>
+  }
+  if (item.status === 'paused') {
+    return <Space direction="vertical" style={{ width: '100%' }}>
+      <Alert type="warning" message={item.file || item.folderFiles ? t('import.paused') : t('import.selectFilesToResume')} showIcon />
+      <Space>
+        <Button type="primary" onClick={onResume}>{item.file || item.folderFiles ? t('import.resume') : t('import.selectFiles')}</Button>
+        <Button onClick={onCancel}>{t('common.delete')}</Button>
+      </Space>
+    </Space>
+  }
+  if (item.status === 'processing') {
+    return <Alert type="info" message={t('import.processing')} description={t('import.processingDescription')} showIcon />
   }
 
   return (
@@ -242,7 +285,10 @@ function ItemBody({ item, tagTypes, onFormChange, onTagsChange, onFullnameChange
         <DatePicker value={form.publishDate} disabled={disabled} style={{ width: '100%' }} onChange={v => onFormChange({ ...form, publishDate: v })} />
       </Form.Item>
       <TagsSection items={item.tagItems} onChange={onTagsChange} tagTypes={tagTypes} />
-      {item.status === 'uploading' && <Progress percent={item.progress} size="small" style={{ marginTop: 8, marginBottom: 0 }} />}
+      {item.status === 'uploading' && <>
+        <Progress percent={item.progress} size="small" style={{ marginTop: 8, marginBottom: 0 }} />
+        <Space style={{ marginTop: 8 }}><Button onClick={onPause}>{t('import.pause')}</Button><Button onClick={onCancel}>{t('common.delete')}</Button></Space>
+      </>}
     </Form>
   )
 }
@@ -252,21 +298,87 @@ export default function AdminImportPage() {
   const { t } = useTranslation()
   const zipInputRef = useRef<HTMLInputElement>(null)
   const folderInputRef = useRef<HTMLInputElement>(null)
+  const controllers = useRef(new Map<string, AbortController>())
+  const pauseRequested = useRef(new Set<string>())
+  const cancelRequested = useRef(new Set<string>())
+  const resumeTarget = useRef<string | null>(null)
   const [tagTypes, setTagTypes] = useState<TagType[]>([])
   const [items, setItems] = useState<ImportItem[]>([])
   const [importing, setImporting] = useState(false)
 
   useEffect(() => {
     api.getTagTypes({ page: 1, limit: 100 }).then(r => setTagTypes(r.items)).catch(() => {})
+    listUploadSessions().then(sessions => {
+      setItems(prev => {
+        const existing = new Set(prev.map(item => item.uploadId))
+        return [...prev, ...sessions.filter(session => !existing.has(session.uploadId)).map(makeRestoredItem)]
+      })
+    }).catch(() => {})
   }, [])
 
   function addItems(newItems: ImportItem[]) { setItems(prev => [...prev, ...newItems]) }
   function updateItem(id: string, patch: Partial<ImportItem>) { setItems(prev => prev.map(item => item.id === id ? { ...item, ...patch } : item)) }
-  function removeItem(id: string) { setItems(prev => prev.filter(item => item.id !== id)) }
+  async function removeItem(id: string) {
+    const item = items.find(candidate => candidate.id === id)
+    cancelRequested.current.add(id)
+    controllers.current.get(id)?.abort()
+    if (item?.uploadId) { try { await cancelUpload(item.uploadId) } catch { /* best effort cleanup */ } }
+    setItems(prev => prev.filter(candidate => candidate.id !== id))
+  }
+
+  async function runUpload(item: ImportItem, selectedFiles: File[], existingSession?: UploadSessionSummary) {
+    const controller = new AbortController()
+    controllers.current.set(item.id, controller)
+    pauseRequested.current.delete(item.id)
+    cancelRequested.current.delete(item.id)
+    updateItem(item.id, { status: 'uploading', progress: existingSession?.receivedBytes ? Math.round(existingSession.receivedBytes / existingSession.totalBytes * 100) : 0, totalBytes: existingSession?.totalBytes ?? selectedFiles.reduce((sum, file) => sum + file.size, 0) })
+    const { tagUuids, pendingTags } = extractUploadTags(item.tagItems)
+    const metadata = {
+      fullname: item.fullname,
+      displayTitle: item.form.displayTitle.trim(),
+      originalTitle: item.form.originalTitle.trim() || item.form.displayTitle.trim(),
+      publishDate: item.form.publishDate?.format('YYYY-MM-DD') ?? null,
+      tagUuids: existingSession?.metadata.tagUuids ?? tagUuids,
+      pendingTags: existingSession?.metadata.pendingTags ?? pendingTags,
+    }
+    try {
+      const result = existingSession
+        ? await resumeUpload(existingSession, selectedFiles, progress => updateItem(item.id, { progress }), controller.signal)
+        : await uploadImport(item.kind === 'zip' ? 'zip' : 'images', selectedFiles, metadata, progress => updateItem(item.id, { progress }), controller.signal, uploadId => updateItem(item.id, { uploadId }))
+      updateItem(item.id, { status: 'done', result, progress: 100 })
+    } catch (error: any) {
+      if (cancelRequested.current.has(item.id)) return
+      if (pauseRequested.current.has(item.id) || controller.signal.aborted) updateItem(item.id, { status: 'paused', errorMsg: undefined })
+      else updateItem(item.id, { status: 'error', errorMsg: error.message ?? t('import.errorResult') })
+    } finally {
+      controllers.current.delete(item.id)
+    }
+  }
+
+  async function resumeItem(item: ImportItem) {
+    if (item.file || item.folderFiles) {
+      const session = item.uploadId ? await getUploadSession(item.uploadId).catch(() => undefined) : undefined
+      await runUpload(item, item.kind === 'zip' ? [item.file!] : item.folderFiles!, session)
+      return
+    }
+    resumeTarget.current = item.id
+    if (item.kind === 'zip') zipInputRef.current?.click()
+    else folderInputRef.current?.click()
+  }
+
+  function pauseItem(item: ImportItem) {
+    pauseRequested.current.add(item.id)
+    controllers.current.get(item.id)?.abort()
+  }
 
   function handleZipInputChange(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? [])
-    addItems(files.map(makeZipItem))
+    const targetId = resumeTarget.current
+    resumeTarget.current = null
+    if (targetId && files[0]) {
+      const item = items.find(candidate => candidate.id === targetId)
+      if (item) { updateItem(targetId, { file: files[0], totalBytes: files[0].size }); void resumeItem({ ...item, file: files[0] }) }
+    } else addItems(files.map(makeZipItem))
     e.target.value = ''
   }
 
@@ -275,7 +387,12 @@ export default function AdminImportPage() {
     const images = files.filter(f => IMAGE_EXT.test(f.name))
     if (!images.length) { e.target.value = ''; return }
     const folderName = images[0].webkitRelativePath.split('/')[0] || images[0].name
-    addItems([makeFolderItem(folderName, images)])
+    const targetId = resumeTarget.current
+    resumeTarget.current = null
+    if (targetId) {
+      const item = items.find(candidate => candidate.id === targetId)
+      if (item) { updateItem(targetId, { folderFiles: images, totalBytes: images.reduce((sum, file) => sum + file.size, 0) }); void resumeItem({ ...item, folderFiles: images }) }
+    } else addItems([makeFolderItem(folderName, images)])
     e.target.value = ''
   }
 
@@ -285,23 +402,8 @@ export default function AdminImportPage() {
     setImporting(true)
 
     for (const item of pending) {
-      updateItem(item.id, { status: 'uploading', progress: 0 })
-      const { tagUuids, pendingTags } = extractUploadTags(item.tagItems)
-      const displayTitle = item.form.displayTitle.trim()
-      const originalTitle = item.form.originalTitle.trim() || displayTitle
-      const publishDate = item.form.publishDate?.format('YYYY-MM-DD') ?? null
-
-      try {
-        let result: ImportResult
-        if (item.kind === 'zip' && item.file) {
-          result = await uploadZip(item.file, item.fullname, displayTitle, originalTitle, publishDate, tagUuids, pendingTags, p => updateItem(item.id, { progress: p }))
-        } else if (item.kind === 'folder' && item.folderFiles) {
-          result = await uploadImages(item.folderFiles, item.fullname, displayTitle, originalTitle, publishDate, tagUuids, pendingTags, p => updateItem(item.id, { progress: p }))
-        } else continue
-        updateItem(item.id, { status: 'done', result })
-      } catch (e: any) {
-        updateItem(item.id, { status: 'error', errorMsg: e.message ?? t('import.errorResult') })
-      }
+      const files = item.kind === 'zip' ? (item.file ? [item.file] : []) : (item.folderFiles ?? [])
+      if (files.length) await runUpload(item, files)
     }
 
     setImporting(false)
@@ -323,6 +425,9 @@ export default function AdminImportPage() {
         onFormChange={form => updateItem(item.id, { form })}
         onTagsChange={tagItems => updateItem(item.id, { tagItems })}
         onFullnameChange={fullname => updateItem(item.id, { fullname })}
+        onPause={() => pauseItem(item)}
+        onCancel={() => void removeItem(item.id)}
+        onResume={() => void resumeItem(item)}
       />
     ),
   }))

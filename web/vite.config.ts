@@ -41,6 +41,10 @@ export default defineConfig({
             },
           },
           {
+            urlPattern: /^\/api\/admin\/import\/uploads(?:\/.*)?$/i,
+            handler: 'NetworkOnly',
+          },
+          {
             urlPattern: /^\/api\/.*/i,
             handler: 'NetworkFirst',
             options: {

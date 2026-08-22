@@ -53,7 +53,9 @@ interface ReceivedFileChunks {
   hashes?: Record<number, string>
 }
 
-type UploadStatus = Pick<UploadSessionSummary, 'state' | 'result' | 'error'> & { files?: ReceivedFileChunks[] }
+interface UploadStatus extends UploadSessionSummary {
+  received: ReceivedFileChunks[]
+}
 
 const MAX_MANIFEST_BATCH_BYTES = 512 * 1024
 const MAX_CONCURRENCY = 4
@@ -190,12 +192,85 @@ async function pollImport(uploadId: string, signal?: AbortSignal): Promise<Impor
   }
 }
 
+export async function listUploadSessions(): Promise<UploadSessionSummary[]> {
+  return request<UploadSessionSummary[]>('/api/admin/import/uploads', { method: 'GET' })
+}
+
+export async function getUploadSession(uploadId: string): Promise<UploadSessionSummary> {
+  return request<UploadSessionSummary>(`/api/admin/import/uploads/${uploadId}`, { method: 'GET' })
+}
+
+export async function cancelUpload(uploadId: string): Promise<void> {
+  await uploadJson(`/api/admin/import/uploads/${uploadId}`, undefined, 'DELETE')
+}
+
+function sourceFilesForDescriptors(mode: 'zip' | 'images', files: File[], descriptors: UploadFileDescriptor[]): File[] {
+  if (mode === 'zip') return files
+  const byKey = new Map(files.map(file => [file.webkitRelativePath || file.name, file]))
+  return descriptors.map(descriptor => {
+    const file = byKey.get(descriptor.clientKey)
+    if (!file || file.size !== descriptor.size || file.lastModified !== descriptor.lastModified) throw new Error('Selected files do not match the upload session')
+    return file
+  })
+}
+
+async function uploadChunks(
+  uploadId: string,
+  chunkSize: number,
+  descriptors: UploadFileDescriptor[],
+  files: File[],
+  received: Map<string, string>,
+  onProgress: (percent: number) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  const sourceFiles = sourceFilesForDescriptors(descriptors.length === 1 ? 'zip' : 'images', files, descriptors)
+  const totalBytes = descriptors.reduce((sum, file) => sum + file.size, 0)
+  const tasks: Array<{ fileIndex: number; chunkIndex: number; file: File; start: number; end: number; key: string }> = []
+  let confirmed = 0
+  for (const descriptor of descriptors) {
+    const file = sourceFiles[descriptor.index]
+    for (let chunkIndex = 0, start = 0; start < file.size; chunkIndex++, start += chunkSize) {
+      const end = Math.min(start + chunkSize, file.size)
+      const key = `${descriptor.index}:${chunkIndex}`
+      if (received.has(key)) { confirmed += end - start; continue }
+      tasks.push({ fileIndex: descriptor.index, chunkIndex, file, start, end, key })
+    }
+  }
+  const inFlight = new Map<string, number>()
+  let cursor = 0
+  const updateProgress = () => {
+    const active = [...inFlight.values()].reduce((sum, value) => sum + value, 0)
+    onProgress(totalBytes === 0 ? 0 : Math.min(100, Math.round(((confirmed + active) / totalBytes) * 100)))
+  }
+  updateProgress()
+  const worker = async () => {
+    for (;;) {
+      const task = tasks[cursor++]
+      if (!task) return
+      const body = await task.file.slice(task.start, task.end).arrayBuffer()
+      const hash = await sha256Hex(body)
+      await sendChunkWithRetry(
+        `/api/admin/import/uploads/${uploadId}/files/${task.fileIndex}/chunks/${task.chunkIndex}`,
+        body,
+        hash,
+        loaded => { inFlight.set(task.key, loaded); updateProgress() },
+        signal,
+      )
+      inFlight.delete(task.key)
+      confirmed += task.end - task.start
+      updateProgress()
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(MAX_CONCURRENCY, Math.max(1, tasks.length)) }, () => worker()))
+}
+
 export async function uploadImport(
   mode: 'zip' | 'images',
   files: File[],
   metadata: UploadMetadata,
   onProgress: (percent: number) => void,
   signal?: AbortSignal,
+  onSession?: (uploadId: string) => void,
 ): Promise<ImportResult> {
   const descriptors = mode === 'zip' ? buildZipDescriptor(files[0]) : buildImageDescriptors(files)
   const totalBytes = descriptors.reduce((sum, file) => sum + file.size, 0)
@@ -204,52 +279,46 @@ export async function uploadImport(
     '/api/admin/import/uploads',
     { mode, metadata, expectedFileCount: descriptors.length, totalBytes, manifestSha256 },
   )
+  onSession?.(created.uploadId)
 
   for (const [batchIndex, batch] of splitManifestBatches(descriptors).entries()) {
     await uploadJson(`/api/admin/import/uploads/${created.uploadId}/manifest/${batchIndex}`, batch, 'PUT')
   }
   await uploadJson(`/api/admin/import/uploads/${created.uploadId}/manifest/complete`)
-
-  const sourceFiles = mode === 'zip'
-    ? files
-    : buildImageDescriptors(files).map(descriptor => files.find(file => (file.webkitRelativePath || file.name) === descriptor.clientKey)!)
-  const tasks: Array<{ fileIndex: number; chunkIndex: number; file: File; start: number; end: number }> = []
-  for (const descriptor of descriptors) {
-    const file = mode === 'zip' ? files[0] : sourceFiles[descriptor.index]
-    for (let chunkIndex = 0, start = 0; start < file.size; chunkIndex++, start += created.chunkSize) {
-      tasks.push({ fileIndex: descriptor.index, chunkIndex, file, start, end: Math.min(start + created.chunkSize, file.size) })
-    }
-  }
-
-  let confirmed = 0
-  const inFlight = new Map<string, number>()
-  let cursor = 0
-  const updateProgress = () => {
-    const active = [...inFlight.values()].reduce((sum, value) => sum + value, 0)
-    onProgress(totalBytes === 0 ? 0 : Math.min(100, Math.round(((confirmed + active) / totalBytes) * 100)))
-  }
-  const worker = async () => {
-    for (;;) {
-      const task = tasks[cursor++]
-      if (!task) return
-      const key = `${task.fileIndex}:${task.chunkIndex}`
-      const body = await task.file.slice(task.start, task.end).arrayBuffer()
-      const hash = await sha256Hex(body)
-      await sendChunkWithRetry(
-        `/api/admin/import/uploads/${created.uploadId}/files/${task.fileIndex}/chunks/${task.chunkIndex}`,
-        body,
-        hash,
-        loaded => { inFlight.set(key, loaded); updateProgress() },
-        signal,
-      )
-      inFlight.delete(key)
-      confirmed += task.end - task.start
-      updateProgress()
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(MAX_CONCURRENCY, Math.max(1, tasks.length)) }, () => worker()))
+  await uploadChunks(created.uploadId, created.chunkSize, descriptors, files, new Map(), onProgress, signal)
   await uploadJson(`/api/admin/import/uploads/${created.uploadId}/complete`)
   return pollImport(created.uploadId, signal)
+}
+
+export async function resumeUpload(
+  session: UploadSessionSummary,
+  files: File[],
+  onProgress: (percent: number) => void,
+  signal?: AbortSignal,
+): Promise<ImportResult> {
+  const descriptors = session.mode === 'zip' ? buildZipDescriptor(files[0]) : buildImageDescriptors(files)
+  if (await manifestHash(descriptors) !== session.manifestSha256) throw new Error('Selected files do not match the upload session')
+  const status = await uploadJson<UploadStatus>(`/api/admin/import/uploads/${session.uploadId}?includeHashes=1`, undefined, 'GET')
+  const received = new Map<string, string>()
+  for (const file of status.received) {
+    for (const chunkIndex of file.receivedChunks) {
+      const hash = file.hashes?.[chunkIndex]
+      if (!hash) continue
+      received.set(`${file.index}:${chunkIndex}`, hash)
+    }
+  }
+  const sourceFiles = sourceFilesForDescriptors(session.mode, files, descriptors)
+  for (const [key, expectedHash] of received) {
+    const [fileIndexRaw, chunkIndexRaw] = key.split(':')
+    const fileIndex = Number(fileIndexRaw)
+    const chunkIndex = Number(chunkIndexRaw)
+    const file = sourceFiles[fileIndex]
+    const body = await file.slice(chunkIndex * session.chunkSize, Math.min((chunkIndex + 1) * session.chunkSize, file.size)).arrayBuffer()
+    if (await sha256Hex(body) !== expectedHash) throw new Error('Selected files do not match the uploaded chunks')
+  }
+  await uploadChunks(session.uploadId, session.chunkSize, descriptors, files, received, onProgress, signal)
+  await uploadJson(`/api/admin/import/uploads/${session.uploadId}/complete`)
+  return pollImport(session.uploadId, signal)
 }
 
 // Kept for callers outside the web import page that still need the legacy endpoint.

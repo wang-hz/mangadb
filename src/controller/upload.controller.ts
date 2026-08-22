@@ -92,7 +92,7 @@ export class UploadController {
     try {
       const includeHashes = req.query.includeHashes === '1';
       const result = await uploadService.getReceived(req.params.uploadId, userUuid(req), includeHashes);
-      res.json({ ...result.session, files: result.files });
+      res.json({ ...result.session, files: result.session.files, received: result.files });
     } catch (error) { respondError(res, error); }
   }
 
