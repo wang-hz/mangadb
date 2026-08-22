@@ -299,10 +299,10 @@ export class ImportService {
     tagUuids: string[],
     pendingTags: PendingTagInput[],
   ): Promise<ImportResult> {
-    await prisma.$transaction(async tx => {
-      let candidate = fullname;
-      for (let attempt = 0; attempt < 5; attempt++) {
-        try {
+    let candidate = fullname;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        await prisma.$transaction(async tx => {
           await tx.manga.create({
             data: {
               uuid,
@@ -314,22 +314,22 @@ export class ImportService {
               cover: 0,
             },
           });
-          break;
-        } catch (error) {
-          if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002' && attempt < 4) {
-            candidate = `${fullname}_${attempt + 2}`;
-            continue;
-          }
-          throw error;
+          const pendingUuids = await this.resolveOrCreateTags(pendingTags, tx);
+          await tx.mangaTag.createMany({
+            data: [...tagUuids, ...pendingUuids].map(tagUuid => ({ mangaUuid: uuid, tagUuid })),
+            skipDuplicates: true,
+          });
+        });
+        return { uuid, displayTitle, pageCount: pages.length };
+      } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002' && attempt < 4) {
+          candidate = `${fullname}_${attempt + 2}`;
+          continue;
         }
+        throw error;
       }
-      const pendingUuids = await this.resolveOrCreateTags(pendingTags, tx);
-      await tx.mangaTag.createMany({
-        data: [...tagUuids, ...pendingUuids].map(tagUuid => ({ mangaUuid: uuid, tagUuid })),
-        skipDuplicates: true,
-      });
-    });
-    return { uuid, displayTitle, pageCount: pages.length };
+    }
+    throw new Error('Could not create manga record: fullname conflict after 5 attempts');
   }
 
   private async resolveOrCreateTags(
@@ -347,29 +347,17 @@ export class ImportService {
         let tagType = await db.tagType.findFirst({
           where: { name: { equals: trimType, mode: 'insensitive' } },
         });
-        if (!tagType) {
-          try {
-            tagType = await db.tagType.create({ data: { name: trimType } });
-          } catch (e) {
-            if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
-              tagType = await db.tagType.findFirst({
-                where: { name: { equals: trimType, mode: 'insensitive' } },
-              });
-            } else {
-              throw e;
-            }
-          }
-        }
+        if (!tagType) tagType = await db.tagType.upsert({
+          where: { name: trimType },
+          create: { name: trimType },
+          update: {},
+        });
         if (!tagType) continue;
-        try {
-          tag = await db.tag.create({ data: { name: trimName, tagTypeUuid: tagType.uuid } });
-        } catch (e) {
-          if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
-            tag = await db.tag.findUnique({ where: { name: trimName } });
-          } else {
-            throw e;
-          }
-        }
+        if (!tag) tag = await db.tag.upsert({
+          where: { name: trimName },
+          create: { name: trimName, tagTypeUuid: tagType.uuid },
+          update: {},
+        });
       }
       if (tag) uuids.push(tag.uuid);
     }
