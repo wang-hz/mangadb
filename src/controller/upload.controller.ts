@@ -6,18 +6,18 @@ import { uploadWorker } from '@/service/upload-worker.service';
 
 const uploadService = new UploadSessionService();
 
-const metadataSchema = z.object({
+export const uploadMetadataSchema = z.object({
   fullname: z.string().min(1),
   displayTitle: z.string().min(1),
   originalTitle: z.string().min(1),
-  publishDate: z.string().optional(),
+  publishDate: z.string().nullish().transform(value => value ?? undefined),
   tagUuids: z.array(z.string().uuid()).default([]),
   pendingTags: z.array(z.object({ name: z.string(), tagTypeName: z.string() })).default([]),
 });
 
 const createSchema = z.object({
   mode: z.enum(['zip', 'images']),
-  metadata: metadataSchema,
+  metadata: uploadMetadataSchema,
   expectedFileCount: z.number().int().positive(),
   totalBytes: z.number().int().positive(),
   manifestSha256: z.string().regex(/^[0-9a-f]{64}$/i),
