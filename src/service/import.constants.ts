@@ -1,0 +1,6 @@
+export const IMPORT_MAX_FILE_SIZE = 10 * 1024 * 1024 * 1024;
+export const IMPORT_MAX_TOTAL_SIZE = 10 * 1024 * 1024 * 1024;
+export const IMPORT_MAX_PAGE_COUNT = 10_000;
+export const IMPORT_MAX_EXTRACTED_SIZE = 20 * 1024 * 1024 * 1024;
+export const IMPORT_UPLOAD_TTL_MS = 24 * 60 * 60 * 1000;
+export const IMPORT_CHUNK_SIZE = 768 * 1024;
