@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { splitManifestBatches } from './import';
+import { isUploadNotFoundError, splitManifestBatches } from './import';
 
 test('splitManifestBatches keeps every descriptor and stays below the JSON budget', () => {
   const files = Array.from({ length: 1200 }, (_, index) => ({
@@ -15,4 +15,9 @@ test('splitManifestBatches keeps every descriptor and stays below the JSON budge
   assert.ok(batches.length > 1);
   assert.deepEqual(batches.flat().map(file => file.index), files.map(file => file.index));
   assert.ok(batches.every(batch => new TextEncoder().encode(JSON.stringify(batch)).byteLength <= 512 * 1024));
+});
+
+test('recognizes an already deleted upload session', () => {
+  assert.equal(isUploadNotFoundError(new Error('404: {"error":"Upload not found"}')), true);
+  assert.equal(isUploadNotFoundError(new Error('500: Internal server error')), false);
 });

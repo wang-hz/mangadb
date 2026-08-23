@@ -153,6 +153,7 @@ const zhTW = {
   'import.addZip': '新增壓縮檔',
   'import.addFolder': '新增資料夾',
   'import.clearDone': '清除已完成 ({{count}})',
+  'import.clearDoneFailed': '{{count}} 筆已完成記錄無法從伺服器刪除，請稍後再試',
   'import.goToList': '前往漫畫清單',
   'import.importAll': '全部匯入',
   'import.importAllWithCount': '全部匯入 ({{count}})',

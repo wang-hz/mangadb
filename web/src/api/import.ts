@@ -1,4 +1,5 @@
 import { request } from './request'
+import { acknowledgeCompletedImport } from '../utils/importSessionCleanup'
 
 export interface ImportResult {
   uuid: string
@@ -186,7 +187,11 @@ async function pollImport(uploadId: string, signal?: AbortSignal): Promise<Impor
   for (;;) {
     if (signal?.aborted) throw new Error('Upload paused')
     const status = await uploadJson<UploadStatus>(`/api/admin/import/uploads/${uploadId}`, undefined, 'GET')
-    if (status.state === 'completed' && status.result) return status.result
+    if (status.state === 'completed' && status.result) {
+      const result = status.result
+      void acknowledgeCompletedImport(uploadId, cancelUpload)
+      return result
+    }
     if (status.state === 'failed') throw new Error(status.error?.message ?? 'Import failed')
     await wait(1000)
   }
@@ -201,7 +206,16 @@ export async function getUploadSession(uploadId: string): Promise<UploadSessionS
 }
 
 export async function cancelUpload(uploadId: string): Promise<void> {
-  await uploadJson(`/api/admin/import/uploads/${uploadId}`, undefined, 'DELETE')
+  try {
+    await uploadJson(`/api/admin/import/uploads/${uploadId}`, undefined, 'DELETE')
+  } catch (error) {
+    if (isUploadNotFoundError(error)) return
+    throw error
+  }
+}
+
+export function isUploadNotFoundError(error: unknown): boolean {
+  return error instanceof Error && /^404(?:\s|:)/.test(error.message)
 }
 
 function sourceFilesForDescriptors(mode: 'zip' | 'images', files: File[], descriptors: UploadFileDescriptor[]): File[] {

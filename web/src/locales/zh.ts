@@ -153,6 +153,7 @@ const zh = {
   'import.addZip': '添加压缩包',
   'import.addFolder': '添加文件夹',
   'import.clearDone': '清除已完成 ({{count}})',
+  'import.clearDoneFailed': '{{count}} 条已完成记录未能从服务器删除，请稍后重试',
   'import.goToList': '前往漫画列表',
   'import.importAll': '导入全部',
   'import.importAllWithCount': '导入全部 ({{count}})',

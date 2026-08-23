@@ -153,6 +153,7 @@ const en = {
   'import.addZip': 'Add ZIP',
   'import.addFolder': 'Add Folder',
   'import.clearDone': 'Clear done ({{count}})',
+  'import.clearDoneFailed': 'Could not remove {{count}} completed record(s) from the server. Please try again.',
   'import.goToList': 'Go to Manga List',
   'import.importAll': 'Import All',
   'import.importAllWithCount': 'Import All ({{count}})',

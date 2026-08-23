@@ -35,6 +35,7 @@ import type { Tag as TagData, TagType } from '../types'
 import { parseFilename, stripArchiveExtension } from '../utils/importParser'
 import { summarizeImportStatuses } from '../utils/importStats'
 import type { ImportStatus } from '../utils/importStats'
+import { acknowledgeCompletedImport, removeCompletedImportSessions } from '../utils/importSessionCleanup'
 
 const { Text } = Typography
 
@@ -311,6 +312,7 @@ export default function AdminImportPage() {
   const [tagTypes, setTagTypes] = useState<TagType[]>([])
   const [items, setItems] = useState<ImportItem[]>([])
   const [importing, setImporting] = useState(false)
+  const [clearingDone, setClearingDone] = useState(false)
 
   useEffect(() => {
     api.getTagTypes({ page: 1, limit: 100 }).then(r => setTagTypes(r.items)).catch(() => {})
@@ -319,6 +321,9 @@ export default function AdminImportPage() {
         const existing = new Set(prev.map(item => item.uploadId))
         return [...prev, ...sessions.filter(session => !existing.has(session.uploadId)).map(makeRestoredItem)]
       })
+      for (const session of sessions) {
+        if (session.state === 'completed') void acknowledgeCompletedImport(session.uploadId, cancelUpload)
+      }
     }).catch(() => {})
   }, [])
 
@@ -416,7 +421,17 @@ export default function AdminImportPage() {
     message.success(t('import.batchDone'))
   }
 
-  function clearDone() { setItems(prev => prev.filter(i => i.status !== 'done')) }
+  async function clearDone() {
+    setClearingDone(true)
+    try {
+      const result = await removeCompletedImportSessions(items, cancelUpload)
+      const removedIds = new Set(result.removedIds)
+      setItems(prev => prev.filter(item => !removedIds.has(item.id)))
+      if (result.failedIds.length > 0) message.warning(t('import.clearDoneFailed', { count: result.failedIds.length }))
+    } finally {
+      setClearingDone(false)
+    }
+  }
 
   const pendingCount = items.filter(i => i.status === 'pending').length
   const doneCount = items.filter(i => i.status === 'done').length
@@ -445,7 +460,7 @@ export default function AdminImportPage() {
         <h2 style={{ margin: 0, flex: 1 }}>{t('import.title')}</h2>
         <Button icon={<FileZipOutlined />} onClick={() => zipInputRef.current?.click()}>{t('import.addZip')}</Button>
         <Button icon={<FolderOpenOutlined />} onClick={() => folderInputRef.current?.click()}>{t('import.addFolder')}</Button>
-        {doneCount > 0 && <Button onClick={clearDone}>{t('import.clearDone', { count: doneCount })}</Button>}
+        {doneCount > 0 && <Button loading={clearingDone} onClick={() => void clearDone()}>{t('import.clearDone', { count: doneCount })}</Button>}
         {items.some(i => i.result) && <Button onClick={() => navigate('/mangas')}>{t('import.goToList')}</Button>}
         <Button type="primary" loading={importing} disabled={!pendingCount} onClick={importAll}>
           {pendingCount > 0 ? t('import.importAllWithCount', { count: pendingCount }) : t('import.importAll')}

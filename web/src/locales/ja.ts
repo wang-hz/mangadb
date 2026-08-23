@@ -153,6 +153,7 @@ const ja = {
   'import.addZip': 'ZIPを追加',
   'import.addFolder': 'フォルダを追加',
   'import.clearDone': '完了済みをクリア ({{count}})',
+  'import.clearDoneFailed': '{{count}} 件の完了記録をサーバーから削除できませんでした。後でもう一度お試しください。',
   'import.goToList': 'マンガ一覧へ',
   'import.importAll': 'すべてインポート',
   'import.importAllWithCount': 'すべてインポート ({{count}})',
