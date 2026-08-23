@@ -454,18 +454,6 @@ export class UploadSessionService {
     });
   }
 
-  async markCompleted(uploadId: string, result: UploadSession['result']): Promise<UploadSession> {
-    return this.withLock(uploadId, async () => {
-      const session = await this.getSession(uploadId);
-      session.state = 'completed';
-      session.result = result;
-      session.error = undefined;
-      this.refreshExpiry(session);
-      await this.saveSession(session);
-      return session;
-    });
-  }
-
   async markFailed(uploadId: string, code: string, message: string): Promise<UploadSession> {
     return this.withLock(uploadId, async () => {
       const session = await this.getSession(uploadId);
@@ -477,10 +465,28 @@ export class UploadSessionService {
     });
   }
 
-  async cleanupPayload(uploadId: string): Promise<void> {
+  protected async cleanupPayloadUnlocked(uploadId: string): Promise<void> {
     const dir = this.sessionDir(uploadId);
     const entries = await fs.readdir(dir, { withFileTypes: true });
     await Promise.all(entries.filter(entry => entry.name !== 'session.json').map(entry => fs.rm(path.join(dir, entry.name), { recursive: true, force: true })));
+  }
+
+  async finalizeCompleted(uploadId: string, result: UploadSession['result']): Promise<{ session: UploadSession; cleanupError?: unknown }> {
+    return this.withLock(uploadId, async () => {
+      const session = await this.getSession(uploadId);
+      let cleanupError: unknown;
+      try {
+        await this.cleanupPayloadUnlocked(uploadId);
+      } catch (error) {
+        cleanupError = error;
+      }
+      session.state = 'completed';
+      session.result = result;
+      session.error = undefined;
+      this.refreshExpiry(session);
+      await this.saveSession(session);
+      return { session, ...(cleanupError === undefined ? {} : { cleanupError }) };
+    });
   }
 
   async remove(uploadId: string, ownerUuid: string): Promise<void> {

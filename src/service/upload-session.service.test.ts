@@ -14,6 +14,12 @@ async function tempDir(): Promise<string> {
 const uuid = '11111111-1111-4111-8111-111111111111';
 const mangaUuid = '22222222-2222-4222-8222-222222222222';
 
+class CleanupFailingUploadSessionService extends UploadSessionService {
+  protected override async cleanupPayloadUnlocked(_uploadId: string): Promise<void> {
+    throw new Error('cleanup failed');
+  }
+}
+
 describe('upload session validation', () => {
   it('accepts the 10 GiB boundary and rejects one byte over', () => {
     assert.doesNotThrow(() => validateUploadRequest({ mode: 'zip', expectedFileCount: 1, totalBytes: IMPORT_MAX_TOTAL_SIZE }));
@@ -189,6 +195,26 @@ describe('upload sessions', () => {
     await fs.utimes(orphanDir, oldDate, oldDate);
     assert.equal(await service.cleanupExpired(), 1);
     await assert.rejects(() => fs.access(orphanDir));
+    await fs.rm(root, { recursive: true, force: true });
+  });
+
+  it('records completion even when temporary payload cleanup fails', async () => {
+    const root = await tempDir();
+    const service = new CleanupFailingUploadSessionService(root);
+    const session = await service.createSession({
+      ownerUuid: uuid,
+      mangaUuid,
+      mode: 'zip',
+      metadata: { fullname: 'book', displayTitle: 'Book', originalTitle: 'Book', tagUuids: [], pendingTags: [] },
+      expectedFileCount: 1,
+      totalBytes: 5,
+      manifestSha256: 'a'.repeat(64),
+    });
+    await service.updateState(session.uploadId, uuid, 'processing');
+    const finalized = await service.finalizeCompleted(session.uploadId, { uuid: mangaUuid, displayTitle: 'Book', pageCount: 1 });
+    assert.equal(finalized.session.state, 'completed');
+    assert.match((finalized.cleanupError as Error).message, /cleanup failed/);
+    assert.equal((await service.getSession(session.uploadId, uuid)).state, 'completed');
     await fs.rm(root, { recursive: true, force: true });
   });
 });
