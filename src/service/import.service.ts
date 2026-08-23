@@ -13,6 +13,7 @@ import { IMPORT_MAX_EXTRACTED_SIZE, IMPORT_MAX_PAGE_COUNT } from '@/service/impo
 import type { UploadSession } from '@/service/upload-session.service';
 
 const IMAGE_EXT = /\.(jpe?g|png|webp|gif|avif)$/i;
+const MAX_STORED_FILENAME_BYTES = 255;
 
 function naturalSort(files: string[]): string[] {
   return [...files].sort((a, b) =>
@@ -20,19 +21,38 @@ function naturalSort(files: string[]): string[] {
   );
 }
 
-function sanitizeFilename(name: string): string {
-  return path.basename(name).replace(/[^\w.\-()\[\] ]/g, '_');
+function fitFilename(name: string, suffix = ''): string {
+  const ext = path.extname(name);
+  const base = path.basename(name, ext);
+  const tail = `${suffix}${ext}`;
+  const baseBudget = MAX_STORED_FILENAME_BYTES - Buffer.byteLength(tail, 'utf8');
+  let fittedBase = '';
+  let fittedBytes = 0;
+  for (const character of base) {
+    const characterBytes = Buffer.byteLength(character, 'utf8');
+    if (fittedBytes + characterBytes > baseBudget) break;
+    fittedBase += character;
+    fittedBytes += characterBytes;
+  }
+  return `${fittedBase}${tail}`;
 }
 
-function deduplicateNames(names: string[]): string[] {
-  const seen = new Map<string, number>();
+export function sanitizeFilename(name: string): string {
+  const safeName = path.basename(name).replace(/[^\w.\-()\[\] ]/gu, '_');
+  return fitFilename(safeName);
+}
+
+export function deduplicateNames(names: string[]): string[] {
+  const used = new Set<string>();
   return names.map(name => {
-    const count = seen.get(name) ?? 0;
-    seen.set(name, count + 1);
-    if (count === 0) return name;
-    const ext = path.extname(name);
-    const base = path.basename(name, ext);
-    return `${base}_${count}${ext}`;
+    let count = 0;
+    let candidate = fitFilename(name);
+    while (used.has(candidate)) {
+      count += 1;
+      candidate = fitFilename(name, `_${count}`);
+    }
+    used.add(candidate);
+    return candidate;
   });
 }
 

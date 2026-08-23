@@ -75,4 +75,25 @@ describe('upload sessions', () => {
     assert.equal((await service.getSession(session.uploadId)).state, 'queued');
     await fs.rm(root, { recursive: true, force: true });
   });
+
+  it('accepts a Unicode filename longer than 255 UTF-8 bytes', async () => {
+    const root = await tempDir();
+    const service = new UploadSessionService(root);
+    const name = `${'漫画'.repeat(50)}.jpg`;
+    assert.ok(Buffer.byteLength(name, 'utf8') > 255);
+    const files = [{ index: 0, clientKey: name, name, size: 5, lastModified: 1 }];
+    const session = await service.createSession({
+      ownerUuid: uuid,
+      mangaUuid,
+      mode: 'images',
+      metadata: { fullname: 'book', displayTitle: 'Book', originalTitle: 'Book', tagUuids: [], pendingTags: [] },
+      expectedFileCount: 1,
+      totalBytes: 5,
+      manifestSha256: manifestHash(files),
+    });
+    await service.saveManifestBatch(session.uploadId, uuid, 0, files);
+    const completed = await service.completeManifest(session.uploadId, uuid);
+    assert.equal(completed.files[0].name, name);
+    await fs.rm(root, { recursive: true, force: true });
+  });
 });

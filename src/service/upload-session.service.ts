@@ -70,8 +70,8 @@ function hashManifest(files: UploadFileManifest[]): string {
 }
 
 function validateName(name: string, field: string): void {
-  if (!name || Buffer.byteLength(name, 'utf8') > 255) {
-    throw new Error(`${field} must be 1-255 UTF-8 bytes`);
+  if (!name || Array.from(name).length > 255) {
+    throw new Error(`${field} must be 1-255 characters`);
   }
 }
 
