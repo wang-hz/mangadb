@@ -56,6 +56,7 @@ export interface UploadSession {
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const IMAGE_EXT = /\.(jpe?g|png|webp|gif|avif)$/i;
 const ZIP_EXT = /\.(zip|cbz)$/i;
+const sessionLocks = new Map<string, Promise<void>>();
 
 function nowIso(now: () => number): string {
   return new Date(now()).toISOString();
@@ -114,8 +115,6 @@ export function validateUploadRequest(input: {
 }
 
 export class UploadSessionService {
-  private readonly locks = new Map<string, Promise<void>>();
-
   constructor(
     private readonly rootDir = path.join(DATA_DIR, '.uploads'),
     private readonly clock: () => number = () => Date.now(),
@@ -146,18 +145,35 @@ export class UploadSessionService {
     await this.writeJsonAtomic(this.sessionPath(session.uploadId), session);
   }
 
+  private refreshExpiry(session: UploadSession): void {
+    session.expiresAt = new Date(this.clock() + IMPORT_UPLOAD_TTL_MS).toISOString();
+  }
+
+  private isActive(session: UploadSession): boolean {
+    return session.state === 'queued' || session.state === 'processing';
+  }
+
+  private isExpired(session: UploadSession): boolean {
+    if (this.isActive(session)) return false;
+    const expiresAt = new Date(session.expiresAt).getTime();
+    if (Number.isFinite(expiresAt)) return expiresAt <= this.clock();
+    const updatedAt = new Date(session.updatedAt).getTime();
+    return !Number.isFinite(updatedAt) || updatedAt + IMPORT_UPLOAD_TTL_MS <= this.clock();
+  }
+
   private async withLock<T>(uploadId: string, fn: () => Promise<T>): Promise<T> {
-    const previous = this.locks.get(uploadId) ?? Promise.resolve();
+    const lockKey = `${this.rootDir}\u0000${uploadId}`;
+    const previous = sessionLocks.get(lockKey) ?? Promise.resolve();
     let release!: () => void;
     const next = new Promise<void>(resolve => { release = resolve; });
     const queued = previous.then(() => next);
-    this.locks.set(uploadId, queued);
+    sessionLocks.set(lockKey, queued);
     await previous;
     try {
       return await fn();
     } finally {
       release();
-      if (this.locks.get(uploadId) === queued) this.locks.delete(uploadId);
+      if (sessionLocks.get(lockKey) === queued) sessionLocks.delete(lockKey);
     }
   }
 
@@ -210,6 +226,7 @@ export class UploadSessionService {
       throw error;
     }
     if (ownerUuid !== undefined && session.ownerUuid !== ownerUuid) throw new Error('Upload not found');
+    if (ownerUuid !== undefined && this.isExpired(session)) throw new Error('Upload not found');
     return session;
   }
 
@@ -219,37 +236,42 @@ export class UploadSessionService {
 
   async saveManifestBatch(uploadId: string, ownerUuid: string, batchIndex: number, files: UploadFileManifest[]): Promise<void> {
     if (!Number.isSafeInteger(batchIndex) || batchIndex < 0) throw new Error('Invalid manifest batch');
-    const session = await this.getSession(uploadId, ownerUuid);
-    if (session.state !== 'registering') throw new Error('Manifest is already complete');
-    const normalized = files.map((file, index) => validateManifestFile(file, session.mode, file.index ?? index));
-    const batchPath = path.join(this.sessionDir(uploadId), 'manifest-parts', `${batchIndex}.json`);
-    await this.writeJsonAtomic(batchPath, normalized);
-    await this.saveSession(session);
+    await this.withLock(uploadId, async () => {
+      const session = await this.getSession(uploadId, ownerUuid);
+      if (session.state !== 'registering') throw new Error('Manifest is already complete');
+      const normalized = files.map((file, index) => validateManifestFile(file, session.mode, file.index ?? index));
+      const batchPath = path.join(this.sessionDir(uploadId), 'manifest-parts', `${batchIndex}.json`);
+      await this.writeJsonAtomic(batchPath, normalized);
+      this.refreshExpiry(session);
+      await this.saveSession(session);
+    });
   }
 
   async completeManifest(uploadId: string, ownerUuid: string): Promise<UploadSession> {
-    const session = await this.getSession(uploadId, ownerUuid);
-    if (session.state === 'uploading') return session;
-    if (session.state !== 'registering') throw new Error('Manifest cannot be completed in this state');
-    const partDir = path.join(this.sessionDir(uploadId), 'manifest-parts');
-    const partNames = (await fs.readdir(partDir)).filter(name => name.endsWith('.json')).sort((a, b) => Number.parseInt(a) - Number.parseInt(b));
-    const files: UploadFileManifest[] = [];
-    for (const partName of partNames) {
-      const part = JSON.parse(await fs.readFile(path.join(partDir, partName), 'utf8')) as UploadFileManifest[];
-      files.push(...part);
-    }
-    if (files.length !== session.expectedFileCount) throw new Error('Manifest file count does not match');
-    const normalized = files
-      .sort((a, b) => a.index - b.index)
-      .map((file, index) => validateManifestFile(file, session.mode, index));
-    const totalBytes = normalized.reduce((sum, file) => sum + file.size, 0);
-    if (totalBytes !== session.totalBytes) throw new Error('Manifest total size does not match');
-    if (hashManifest(normalized) !== session.manifestSha256) throw new Error('Manifest hash does not match');
-    session.files = normalized;
-    session.state = 'uploading';
-    session.expiresAt = new Date(this.clock() + IMPORT_UPLOAD_TTL_MS).toISOString();
-    await this.saveSession(session);
-    return session;
+    return this.withLock(uploadId, async () => {
+      const session = await this.getSession(uploadId, ownerUuid);
+      if (session.state === 'uploading') return session;
+      if (session.state !== 'registering') throw new Error('Manifest cannot be completed in this state');
+      const partDir = path.join(this.sessionDir(uploadId), 'manifest-parts');
+      const partNames = (await fs.readdir(partDir)).filter(name => name.endsWith('.json')).sort((a, b) => Number.parseInt(a) - Number.parseInt(b));
+      const files: UploadFileManifest[] = [];
+      for (const partName of partNames) {
+        const part = JSON.parse(await fs.readFile(path.join(partDir, partName), 'utf8')) as UploadFileManifest[];
+        files.push(...part);
+      }
+      if (files.length !== session.expectedFileCount) throw new Error('Manifest file count does not match');
+      const normalized = files
+        .sort((a, b) => a.index - b.index)
+        .map((file, index) => validateManifestFile(file, session.mode, index));
+      const totalBytes = normalized.reduce((sum, file) => sum + file.size, 0);
+      if (totalBytes !== session.totalBytes) throw new Error('Manifest total size does not match');
+      if (hashManifest(normalized) !== session.manifestSha256) throw new Error('Manifest hash does not match');
+      session.files = normalized;
+      session.state = 'uploading';
+      this.refreshExpiry(session);
+      await this.saveSession(session);
+      return session;
+    });
   }
 
   async updateState(uploadId: string, ownerUuid: string, state: UploadState): Promise<UploadSession> {
@@ -343,6 +365,8 @@ export class UploadSessionService {
       if (await this.readByte(receivedPath, input.chunkIndex)) {
         const storedHash = await this.readHash(hashPath, input.chunkIndex * 32);
         if (storedHash !== actualHash) throw new Error('Chunk already exists with different content');
+        this.refreshExpiry(session);
+        await this.saveSession(session);
         return { duplicate: true, session };
       }
 
@@ -351,7 +375,7 @@ export class UploadSessionService {
       await this.writeAt(receivedPath, Buffer.from([1]), input.chunkIndex);
       session.receivedBytes += input.body.length;
       session.receivedChunks++;
-      session.expiresAt = new Date(this.clock() + IMPORT_UPLOAD_TTL_MS).toISOString();
+      this.refreshExpiry(session);
       await this.saveSession(session);
       return { duplicate: false, session };
     });
@@ -436,7 +460,7 @@ export class UploadSessionService {
       session.state = 'completed';
       session.result = result;
       session.error = undefined;
-      session.expiresAt = new Date(this.clock() + IMPORT_UPLOAD_TTL_MS).toISOString();
+      this.refreshExpiry(session);
       await this.saveSession(session);
       return session;
     });
@@ -447,7 +471,7 @@ export class UploadSessionService {
       const session = await this.getSession(uploadId);
       session.state = 'failed';
       session.error = { code, message: message.slice(0, 1000) };
-      session.expiresAt = new Date(this.clock() + IMPORT_UPLOAD_TTL_MS).toISOString();
+      this.refreshExpiry(session);
       await this.saveSession(session);
       return session;
     });
@@ -470,20 +494,24 @@ export class UploadSessionService {
   async cleanupExpired(): Promise<number> {
     await fs.mkdir(this.rootDir, { recursive: true });
     const entries = await fs.readdir(this.rootDir, { withFileTypes: true });
-    const now = this.clock();
     let removed = 0;
     for (const entry of entries) {
       if (!entry.isDirectory() || !UUID_RE.test(entry.name)) continue;
       try {
-        const session = await this.readSession(entry.name);
-        if (session.state === 'queued' || session.state === 'processing') continue;
-        if (new Date(session.expiresAt).getTime() <= now) {
+        const didRemove = await this.withLock(entry.name, async () => {
+          try {
+            const session = await this.readSession(entry.name);
+            if (!this.isExpired(session)) return false;
+          } catch {
+            const stat = await fs.stat(this.sessionDir(entry.name));
+            if (stat.mtimeMs + IMPORT_UPLOAD_TTL_MS > this.clock()) return false;
+          }
           await fs.rm(this.sessionDir(entry.name), { recursive: true, force: true });
-          removed++;
-        }
+          return true;
+        });
+        if (didRemove) removed++;
       } catch {
-        // An incomplete directory is safe to remove only after it has aged out;
-        // leave it for the next cleanup pass if its session file is unreadable.
+        // Leave entries that cannot be inspected or removed for the next pass.
       }
     }
     return removed;
