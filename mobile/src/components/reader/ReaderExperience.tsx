@@ -8,7 +8,7 @@ import { PagedReader } from '@/components/reader/PagedReader'
 import { ReaderSettingsModal } from '@/components/reader/ReaderSettingsModal'
 import { ScrollingReader } from '@/components/reader/ScrollingReader'
 import { useStableViewport } from '@/hooks/useStableViewport'
-import { markMangaCompleted } from '@/storage/progress'
+import { useReaderCompletion } from '@/hooks/useReaderCompletion'
 import { ReadingProgressWriter } from '@/storage/progressWriter'
 import type { ReaderPreferences } from '@/storage/readerPreferences'
 import { colors } from '@/theme/colors'
@@ -27,6 +27,7 @@ interface ReaderExperienceProps {
   onRefreshMetadata: () => Promise<void>
   onReaderReady: () => void
   onReturnToDetail: () => void
+  onReturnToList: () => void
   initialCompleted?: boolean
 }
 
@@ -43,13 +44,14 @@ export function ReaderExperience({
   onRefreshMetadata,
   onReaderReady,
   onReturnToDetail,
+  onReturnToList,
   initialCompleted = false,
 }: ReaderExperienceProps) {
   const viewport = useStableViewport()
   const [pageIndex, setPageIndex] = useState(initialPageIndex)
   const [mode, setMode] = useState<ReaderMode>(initialMode)
   const [settingsVisible, setSettingsVisible] = useState(false)
-  const [completed, setCompleted] = useState(initialCompleted)
+  const [readingRun, setReadingRun] = useState(0)
   const pageIndexRef = useRef(initialPageIndex)
   const modeRef = useRef<ReaderMode>(initialMode)
   const initialStateRef = useRef({ pageIndex: initialPageIndex, mode: initialMode })
@@ -103,7 +105,6 @@ export function ReaderExperience({
   useEffect(() => {
     if (pageCountRef.current === manga.pages.length) return
     pageCountRef.current = manga.pages.length
-    setCompleted(false)
     const clamped = clampPageIndex(pageIndexRef.current, manga.pages.length)
     if (clamped === pageIndexRef.current) return
     pageIndexRef.current = clamped
@@ -111,43 +112,44 @@ export function ReaderExperience({
     persist(clamped, modeRef.current)
   }, [manga.pages.length, persist])
 
+  const completion = useReaderCompletion({
+    manga, serverUrl, userUuid, pageIndex: currentPageIndex, mode,
+    initialCompleted: initialCompleted && initialPageIndex === manga.pages.length - 1,
+    writer: progressWriter,
+    onRestart: () => {
+      pageIndexRef.current = 0
+      setPageIndex(0)
+      setReadingRun(value => value + 1)
+    },
+  })
+
   const changePage = useCallback((nextPageIndex: number) => {
+    if (completion.restarting.current) return
     const clamped = clampPageIndex(nextPageIndex, manga.pages.length)
     if (clamped === pageIndexRef.current) return
     pageIndexRef.current = clamped
     setPageIndex(clamped)
-    if (clamped < manga.pages.length - 1) setCompleted(false)
     persist(clamped, modeRef.current)
-  }, [manga.pages.length, persist])
-
-  const complete = useCallback(async () => {
-    progressWriter.cancel()
-    const latestManga = mangaRef.current
-    await markMangaCompleted(
-      serverUrl,
-      userUuid,
-      latestManga,
-      latestManga.pages.length,
-      modeRef.current,
-    )
-    setCompleted(true)
-  }, [progressWriter, serverUrl, userUuid])
+  }, [manga.pages.length, persist, completion.restarting])
 
   const changeMode = useCallback((nextMode: ReaderMode) => {
-    if (nextMode === modeRef.current) return
+    if (completion.restarting.current || nextMode === modeRef.current) return
     modeRef.current = nextMode
     setMode(nextMode)
     persist(pageIndexRef.current, nextMode)
-  }, [persist])
+  }, [persist, completion.restarting])
 
   const commonProps = {
     api,
-    completed,
+    completed: completion.completed,
+    completionPending: completion.pending,
+    completionError: completion.error,
+    onReread: completion.reread,
     manga,
     localPageUris,
     mode,
     onBack,
-    onMarkCompleted: complete,
+    onMarkCompleted: completion.complete,
     onRefreshMetadata,
     onModeChange: changeMode,
     onPageChange: changePage,
@@ -159,6 +161,7 @@ export function ReaderExperience({
     viewport,
     onOpenSettings: () => setSettingsVisible(true),
     onReturnToDetail,
+    onReturnToList,
   }
 
   const reader = viewport.isTransitioning
@@ -171,13 +174,13 @@ export function ReaderExperience({
       ? (
           <PagedReader
             {...commonProps}
-            key={`paged:${viewport.epoch}:${manga.pages.length}`}
+            key={`paged:${viewport.epoch}:${manga.pages.length}:${readingRun}`}
           />
         )
       : (
           <ScrollingReader
             {...commonProps}
-            key={`scroll:${viewport.epoch}:${manga.pages.length}`}
+            key={`scroll:${viewport.epoch}:${manga.pages.length}:${readingRun}`}
           />
         )
 

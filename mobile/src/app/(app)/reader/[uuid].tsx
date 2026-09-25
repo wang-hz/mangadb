@@ -10,6 +10,7 @@ import type { MangaDetail } from '@/api/types'
 import { PrimaryButton } from '@/components/PrimaryButton'
 import { RouteErrorFallback } from '@/components/RouteErrorFallback'
 import { ReaderExperience } from '@/components/reader/ReaderExperience'
+import { useReaderReturn } from '@/navigation/useReaderReturn'
 import { useLocalDownload } from '@/downloads/useLocalDownload'
 import { useReaderPreferences } from '@/providers/ReaderPreferencesContext'
 import { useSession } from '@/session/SessionContext'
@@ -55,6 +56,8 @@ export default function ReaderScreen() {
     ? localDownload.pageUris
     : null
 
+  const returnFromReader = useReaderReturn(mangaUuid)
+
   return (
     <View style={styles.root}>
       <StatusBar hidden style="light" />
@@ -72,12 +75,8 @@ export default function ReaderScreen() {
               <ReaderContent
                 localPageUris={localPageUris ?? undefined}
                 manga={manga}
-                onReturnToDetail={() => {
-                  router.replace({
-                    pathname: '/(app)/manga/[uuid]',
-                    params: { uuid: manga.uuid },
-                  })
-                }}
+                onReturnToDetail={() => returnFromReader('detail')}
+                onReturnToList={() => returnFromReader('list')}
                 onRefreshMetadata={refreshMetadata}
                 requestedMode={firstParam(params.mode)}
                 requestedPage={firstParam(params.page)}
@@ -140,6 +139,7 @@ function ReaderContent({
   requestedMode,
   localPageUris,
   onReturnToDetail,
+  onReturnToList,
 }: {
   manga: MangaDetail
   onRefreshMetadata: () => Promise<void>
@@ -147,6 +147,7 @@ function ReaderContent({
   requestedMode?: string
   localPageUris?: readonly string[]
   onReturnToDetail: () => void
+  onReturnToList: () => void
 }) {
   const { api, auth, serverUrl } = useSession()
   const { preferences, status: preferencesStatus } = useReaderPreferences()
@@ -248,6 +249,7 @@ function ReaderContent({
       onRefreshMetadata={onRefreshMetadata}
       onReaderReady={markOverrideConsumed}
       onReturnToDetail={onReturnToDetail}
+      onReturnToList={onReturnToList}
       preferences={preferences}
       serverUrl={serverUrl!}
       userUuid={auth!.user.uuid}

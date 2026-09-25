@@ -8,6 +8,7 @@ import { ReaderExperience } from './ReaderExperience'
 
 const mockSaveReadingProgress = jest.fn()
 const mockMarkMangaCompleted = jest.fn()
+const mockRestartMangaReading = jest.fn()
 let mockPagedMounts = 0
 let mockViewport = {
   width: 390,
@@ -24,6 +25,7 @@ jest.mock('@/hooks/useStableViewport', () => ({
 
 jest.mock('@/storage/progress', () => ({
   markMangaCompleted: (...args: unknown[]) => mockMarkMangaCompleted(...args),
+  restartMangaReading: (...args: unknown[]) => mockRestartMangaReading(...args),
   saveReadingProgress: (...args: unknown[]) => mockSaveReadingProgress(...args),
 }))
 
@@ -39,11 +41,11 @@ jest.mock('@/components/reader/PagedReader', () => {
   const React = require('react')
   const { Pressable, Text, View } = require('react-native')
   return {
-    PagedReader: ({ pageIndex, onPageChange, onModeChange, onMarkCompleted, onOpenSettings, viewport }: {
+    PagedReader: ({ pageIndex, onPageChange, onModeChange, onReread, onOpenSettings, viewport }: {
       pageIndex: number
       onPageChange: (pageIndex: number) => void
       onModeChange: (mode: 'scroll') => void
-      onMarkCompleted: () => Promise<void>
+      onReread: () => Promise<void>
       onOpenSettings: () => void
       viewport: { epoch: number }
     }) => {
@@ -65,8 +67,8 @@ jest.mock('@/components/reader/PagedReader', () => {
           onPress: () => onModeChange('scroll'),
         }),
         React.createElement(Pressable, {
-          accessibilityLabel: '保存完成状态',
-          onPress: () => { void onMarkCompleted() },
+          accessibilityLabel: '从头重读',
+          onPress: () => { void onReread() },
         }),
         React.createElement(Pressable, {
           accessibilityLabel: '打开阅读设置',
@@ -135,6 +137,7 @@ describe('ReaderExperience', () => {
       updatedAt: '2026-07-19T00:00:00.000Z',
     })
     mockMarkMangaCompleted.mockResolvedValue({})
+    mockRestartMangaReading.mockResolvedValue({})
   })
 
   it('keeps the same position while switching between reader modes', async () => {
@@ -150,6 +153,7 @@ describe('ReaderExperience', () => {
         onRefreshMetadata={jest.fn().mockResolvedValue(undefined)}
         onReaderReady={onReaderReady}
         onReturnToDetail={jest.fn()}
+        onReturnToList={jest.fn()}
         preferences={DEFAULT_READER_PREFERENCES}
         serverUrl="https://example.com"
         userUuid="user-1"
@@ -204,6 +208,7 @@ describe('ReaderExperience', () => {
         onRefreshMetadata={jest.fn().mockResolvedValue(undefined)}
         onReaderReady={jest.fn()}
         onReturnToDetail={jest.fn()}
+        onReturnToList={jest.fn()}
         preferences={{ ...DEFAULT_READER_PREFERENCES, keepAwake: true }}
         serverUrl="https://example.com"
         userUuid="user-1"
@@ -222,6 +227,7 @@ describe('ReaderExperience', () => {
         onRefreshMetadata={jest.fn().mockResolvedValue(undefined)}
         onReaderReady={jest.fn()}
         onReturnToDetail={jest.fn()}
+        onReturnToList={jest.fn()}
         preferences={DEFAULT_READER_PREFERENCES}
         serverUrl="https://example.com"
         userUuid="user-1"
@@ -230,7 +236,7 @@ describe('ReaderExperience', () => {
     expect(useKeepAwake).not.toHaveBeenCalled()
   })
 
-  it('persists an explicit completion action with the current reader mode', async () => {
+  it('automatically completes at the last page with the current reader mode', async () => {
     render(
       <ReaderExperience
         api={{} as ApiClient}
@@ -241,13 +247,13 @@ describe('ReaderExperience', () => {
         onRefreshMetadata={jest.fn().mockResolvedValue(undefined)}
         onReaderReady={jest.fn()}
         onReturnToDetail={jest.fn()}
+        onReturnToList={jest.fn()}
         preferences={DEFAULT_READER_PREFERENCES}
         serverUrl="https://example.com"
         userUuid="user-1"
       />,
     )
 
-    fireEvent.press(screen.getByLabelText('保存完成状态'))
 
     await waitFor(() => expect(mockMarkMangaCompleted).toHaveBeenCalledWith(
       'https://example.com',
@@ -256,6 +262,31 @@ describe('ReaderExperience', () => {
       10,
       'paged',
     ))
+  })
+
+  it('remounts the reader at page zero after saving a reread', async () => {
+    render(
+      <ReaderExperience
+        api={{} as ApiClient}
+        initialMode="paged"
+        initialPageIndex={9}
+        manga={manga}
+        onBack={jest.fn()}
+        onRefreshMetadata={jest.fn().mockResolvedValue(undefined)}
+        onReaderReady={jest.fn()}
+        onReturnToDetail={jest.fn()}
+        onReturnToList={jest.fn()}
+        preferences={DEFAULT_READER_PREFERENCES}
+        serverUrl="https://example.com"
+        userUuid="user-1"
+      />,
+    )
+    await waitFor(() => expect(mockMarkMangaCompleted).toHaveBeenCalledTimes(1))
+    fireEvent.press(screen.getByLabelText('从头重读'))
+    await waitFor(() => expect(screen.getByText('paged:0')).toBeOnTheScreen())
+    expect(mockRestartMangaReading).toHaveBeenCalledWith('https://example.com', 'user-1', manga, 10, 'paged')
+    expect(screen.getByLabelText('paged-mount-2-epoch-0')).toBeOnTheScreen()
+    expect(mockMarkMangaCompleted).toHaveBeenCalledTimes(1)
   })
 
   it('shows black during a viewport transition and remounts at the current page', () => {
@@ -269,6 +300,7 @@ describe('ReaderExperience', () => {
         onRefreshMetadata={jest.fn().mockResolvedValue(undefined)}
         onReaderReady={jest.fn()}
         onReturnToDetail={jest.fn()}
+        onReturnToList={jest.fn()}
         preferences={DEFAULT_READER_PREFERENCES}
         serverUrl="https://example.com"
         userUuid="user-1"
@@ -309,6 +341,7 @@ describe('ReaderExperience', () => {
         onRefreshMetadata={jest.fn().mockResolvedValue(undefined)}
         onReaderReady={onReaderReady}
         onReturnToDetail={jest.fn()}
+        onReturnToList={jest.fn()}
         preferences={DEFAULT_READER_PREFERENCES}
         serverUrl="https://example.com"
         userUuid="user-1"
@@ -355,6 +388,7 @@ describe('ReaderExperience', () => {
         onRefreshMetadata={jest.fn().mockResolvedValue(undefined)}
         onReaderReady={jest.fn()}
         onReturnToDetail={jest.fn()}
+        onReturnToList={jest.fn()}
         preferences={DEFAULT_READER_PREFERENCES}
         serverUrl="https://example.com"
         userUuid="user-1"

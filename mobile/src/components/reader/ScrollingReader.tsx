@@ -50,6 +50,10 @@ interface ScrollingReaderProps {
   completed: boolean
   onMarkCompleted: () => Promise<void>
   onReturnToDetail: () => void
+  onReturnToList: () => void
+  onReread: () => Promise<void>
+  completionPending: boolean
+  completionError: string | null
   viewport: StableViewport
 }
 
@@ -71,6 +75,10 @@ export function ScrollingReader({
   completed,
   onMarkCompleted,
   onReturnToDetail,
+  onReturnToList,
+  onReread,
+  completionPending,
+  completionError,
   viewport,
 }: ScrollingReaderProps) {
   const { width, height, scale, epoch } = viewport
@@ -198,7 +206,7 @@ export function ScrollingReader({
         initialScrollIndex={pageIndex}
         key={`scroll:${epoch}`}
         keyExtractor={(_, index) => String(index)}
-        ListFooterComponent={(
+        ListFooterComponent={pageIndex === manga.pages.length - 1 ? (
           <View style={[
             styles.completionFooter,
             { paddingBottom: Math.max(24, insets.bottom + 12) },
@@ -206,15 +214,14 @@ export function ScrollingReader({
             <ReaderCompletionPanel
               completed={completed}
               onMarkCompleted={onMarkCompleted}
-              onReread={() => {
-                if (!isCurrentEpoch(epoch)) return
-                onPageChange(0)
-                listRef.current?.scrollToIndex({ index: 0, animated: true })
-              }}
+              onReread={onReread}
               onReturnToDetail={onReturnToDetail}
+              onReturnToList={onReturnToList}
+              pending={completionPending}
+              error={completionError}
             />
           </View>
-        )}
+        ) : null}
         maxToRenderPerBatch={1}
         onScrollBeginDrag={() => {
           if (!isCurrentEpoch(epoch)) return

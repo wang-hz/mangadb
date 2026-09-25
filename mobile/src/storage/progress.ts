@@ -172,6 +172,27 @@ export async function markMangaCompleted(
   pageCount: number,
   mode: ReaderMode,
 ): Promise<RecentReadingEntry> {
+  return writeMangaReadingState(serverUrl, userUuid, manga, pageCount, mode, 'completed')
+}
+
+export async function restartMangaReading(
+  serverUrl: string,
+  userUuid: string,
+  manga: MangaSummary,
+  pageCount: number,
+  mode: ReaderMode,
+): Promise<RecentReadingEntry> {
+  return writeMangaReadingState(serverUrl, userUuid, manga, pageCount, mode, 'reading')
+}
+
+async function writeMangaReadingState(
+  serverUrl: string,
+  userUuid: string,
+  manga: MangaSummary,
+  pageCount: number,
+  mode: ReaderMode,
+  state: ReadingState,
+): Promise<RecentReadingEntry> {
   const identity = progressIdentity(serverUrl, userUuid)
   return enqueueIdentityWrite(identity, async () => {
     const index = await loadProgressIndex(serverUrl, userUuid)
@@ -179,9 +200,9 @@ export async function markMangaCompleted(
     const entry: RecentReadingEntry = {
       manga: cloneMangaSummary(manga),
       pageCount: Math.max(0, Math.trunc(pageCount)),
-      pageIndex: clampPageIndex(pageCount - 1, pageCount),
+      pageIndex: state === 'completed' ? clampPageIndex(pageCount - 1, pageCount) : 0,
       mode,
-      state: 'completed',
+      state,
       updatedAt: now,
       hiddenFromRecent: false,
     }

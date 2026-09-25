@@ -17,6 +17,7 @@ jest.mock('expo-router', () => ({
     replace: jest.fn(),
   },
   useLocalSearchParams: jest.fn(),
+  useNavigation: () => ({ getState: () => ({ index: 0, routes: [] }) }),
 }))
 jest.mock('@/downloads/useLocalDownload', () => ({ useLocalDownload: jest.fn() }))
 jest.mock('@/session/SessionContext', () => ({ useSession: jest.fn() }))

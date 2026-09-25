@@ -5,6 +5,7 @@ import {
   listReadingProgress,
   loadReadingProgress,
   markMangaCompleted,
+  restartMangaReading,
   markMangaUnread,
   removeFromRecentReading,
   saveReadingProgress,
@@ -26,6 +27,21 @@ describe('reading progress storage', () => {
     jest.mocked(AsyncStorage.setItem).mockReset().mockResolvedValue(undefined)
     jest.mocked(AsyncStorage.multiSet).mockReset().mockResolvedValue(undefined)
     jest.mocked(AsyncStorage.removeItem).mockReset().mockResolvedValue(undefined)
+  })
+
+  it.each([1, 10])('restarts a completed %i-page manga atomically and unhides it', async pageCount => {
+    installStorageMap()
+    await markMangaCompleted('server', 'user', manga, pageCount, 'scroll')
+    await removeFromRecentReading('server', 'user', manga.uuid)
+    await restartMangaReading('server', 'user', manga, pageCount, 'scroll')
+    const progress = await loadReadingProgress('server', 'user', manga.uuid, pageCount)
+    expect(progress).toMatchObject({ pageIndex: 0, mode: 'scroll', state: 'reading' })
+    expect(await listRecentReading('server', 'user')).toEqual([
+      expect.objectContaining({ pageIndex: 0, state: 'reading', hiddenFromRecent: false }),
+    ])
+    await saveReadingProgress('server', 'user', manga.uuid, pageCount, 0, 'paged', manga)
+    expect(await loadReadingProgress('server', 'user', manga.uuid, pageCount))
+      .toMatchObject({ pageIndex: 0, state: 'reading' })
   })
 
   it('isolates positions by server, account and manga', async () => {

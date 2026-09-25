@@ -1,33 +1,46 @@
 import { Ionicons } from '@expo/vector-icons'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 
 interface ReaderCompletionPanelProps {
   completed: boolean
+  pending: boolean
+  error: string | null
   onMarkCompleted: () => Promise<void>
-  onReread: () => void
+  onReread: () => Promise<void>
   onReturnToDetail: () => void
+  onReturnToList: () => void
 }
 
 export function ReaderCompletionPanel({
   completed,
+  pending,
+  error,
   onMarkCompleted,
   onReread,
   onReturnToDetail,
+  onReturnToList,
 }: ReaderCompletionPanelProps) {
-  const [pending, setPending] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const complete = async () => {
-    if (pending || completed) return
-    setPending(true)
-    setError(null)
+  const [actionPending, setActionPending] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const acting = useRef(false)
+  const runAction = async (action: 'reread' | 'detail' | 'list') => {
+    if (pending || acting.current) return
+    acting.current = true
+    setActionPending(true)
+    setActionError(null)
     try {
-      await onMarkCompleted()
-    } catch (operationError) {
-      setError(operationError instanceof Error ? operationError.message : '无法保存完成状态')
+      if (action === 'reread') await onReread()
+      else {
+        await onMarkCompleted()
+        if (action === 'detail') onReturnToDetail()
+        else onReturnToList()
+      }
+    } catch (cause) {
+      setActionError(cause instanceof Error ? cause.message : '无法保存阅读状态，请重试。')
     } finally {
-      setPending(false)
+      acting.current = false
+      setActionPending(false)
     }
   }
 
@@ -38,21 +51,31 @@ export function ReaderCompletionPanel({
         <View style={styles.headingText}>
           <Text style={styles.title}>已读到最后一页</Text>
           <Text style={styles.subtitle}>
-            {completed ? '这本漫画已标记完成。' : '保存完成状态，或从头再读一遍。'}
+            {pending ? '正在保存阅读状态…' : completed ? '这本漫画已标记完成。' : '可以从头重读，或返回继续浏览。'}
           </Text>
         </View>
       </View>
       <View style={styles.actions}>
         <CompletionAction
-          disabled={pending || completed}
-          label={completed ? '已完成' : pending ? '正在保存' : '标记已完成'}
-          onPress={() => { void complete() }}
+          disabled={pending || actionPending}
+          label="从头重读"
+          onPress={() => { void runAction('reread') }}
+        />
+        <CompletionAction
+          disabled={pending || actionPending}
+          label="返回漫画"
+          onPress={() => { void runAction('detail') }}
+        />
+        <CompletionAction
+          disabled={pending || actionPending}
+          label="返回列表"
+          onPress={() => { void runAction('list') }}
           primary
         />
-        <CompletionAction label="从头重读" onPress={onReread} />
-        <CompletionAction label="返回详情" onPress={onReturnToDetail} />
       </View>
-      {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
+      {actionError || error
+        ? <Text accessibilityRole="alert" style={styles.error}>{actionError || error}</Text>
+        : null}
     </View>
   )
 }

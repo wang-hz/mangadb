@@ -66,6 +66,9 @@ function renderReader(
           url: (path: string) => `https://example.com${path}`,
         } as unknown as ApiClient}
         completed={false}
+        completionPending={false}
+        completionError={null}
+        onReread={jest.fn().mockResolvedValue(undefined)}
         manga={manga}
         localPageUris={localPageUris}
         mode="paged"
@@ -76,6 +79,7 @@ function renderReader(
         onPageChange={onPageChange}
         onRefreshMetadata={onRefreshMetadata}
         onReturnToDetail={jest.fn()}
+        onReturnToList={jest.fn()}
         pageIndex={1}
         preferences={{ ...DEFAULT_READER_PREFERENCES, ...preferencePatch }}
         settingsVisible={false}

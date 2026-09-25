@@ -39,3 +39,23 @@ implementation is selected and physical Android testing covers:
 - background/foreground listener cleanup;
 - TalkBack and media playback behavior;
 - key-repeat paging bounds and zoom-state conflicts.
+
+## Completion and navigation
+
+- Reaching the last active page automatically saves completion in both reading
+  modes. Rendering a virtualized footer alone does not complete a manga.
+- Completion waits for earlier position writes. Rereading waits for an ongoing
+  completion write, then saves page zero with `reading` state before remounting
+  the page list. A one-page reread stays in progress for that reading visit.
+- The completion panel offers, in order, `从头重读`, `返回漫画`, and `返回列表`.
+  Failed saves remain visible and return actions retry before navigating.
+- `返回漫画` pops to the adjacent current-manga detail, or replaces a directly
+  opened reader with that detail. `返回列表` pops both the reader and adjacent
+  detail to preserve the original list's state. A reader opened directly from
+  recent reading pops back to that tab. Missing list history falls back to the
+  manga library. The ordinary reader back button retains its existing behavior.
+- Tabs are ordered `继续阅读`, `漫画`, `标签`, `设置`; startup still opens `漫画`.
+  Recent reading lists unfinished, non-hidden local records for the current
+  account and server. Downloads live under Settings, alongside account/server,
+  reading preferences, and diagnostics; download preferences are a further
+  subpage of Downloads.

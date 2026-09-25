@@ -57,6 +57,10 @@ interface PagedReaderProps {
   completed: boolean
   onMarkCompleted: () => Promise<void>
   onReturnToDetail: () => void
+  onReturnToList: () => void
+  onReread: () => Promise<void>
+  completionPending: boolean
+  completionError: string | null
   viewport: StableViewport
 }
 
@@ -78,6 +82,10 @@ export function PagedReader({
   completed,
   onMarkCompleted,
   onReturnToDetail,
+  onReturnToList,
+  onReread,
+  completionPending,
+  completionError,
   viewport,
 }: PagedReaderProps) {
   const { width, height, scale, epoch } = viewport
@@ -269,11 +277,11 @@ export function PagedReader({
                       <ReaderCompletionPanel
                         completed={completed}
                         onMarkCompleted={onMarkCompleted}
-                        onReread={() => {
-                          onPageChange(0)
-                          scrollToPage(0)
-                        }}
+                        onReread={onReread}
                         onReturnToDetail={onReturnToDetail}
+                        onReturnToList={onReturnToList}
+                        pending={completionPending}
+                        error={completionError}
                       />
                     </View>
                   )

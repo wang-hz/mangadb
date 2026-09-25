@@ -123,6 +123,9 @@ function renderReader({
           url: (path: string) => `https://example.com${path}`,
         } as unknown as ApiClient}
         completed={false}
+        completionPending={false}
+        completionError={null}
+        onReread={jest.fn().mockResolvedValue(undefined)}
         manga={manga}
         mode="scroll"
         onBack={jest.fn()}
@@ -132,6 +135,7 @@ function renderReader({
         onPageChange={onPageChange}
         onRefreshMetadata={jest.fn().mockResolvedValue(undefined)}
         onReturnToDetail={jest.fn()}
+        onReturnToList={jest.fn()}
         pageIndex={pageIndex}
         preferences={preferences}
         settingsVisible={false}
