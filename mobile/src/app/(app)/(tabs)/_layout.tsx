@@ -5,6 +5,7 @@ import { colors } from '@/theme/colors'
 export default function TabLayout() {
   return (
     <Tabs
+      initialRouteName="mangas"
       screenOptions={{
         headerStyle: { backgroundColor: colors.header },
         headerTintColor: '#ffffff',
@@ -14,6 +15,15 @@ export default function TabLayout() {
         tabBarHideOnKeyboard: true,
       }}
     >
+      <Tabs.Screen
+        name="recent"
+        options={{
+          title: '继续阅读',
+          tabBarIcon: ({ color, focused, size }) => (
+            <Ionicons color={color} name={focused ? 'book' : 'book-outline'} size={size} />
+          ),
+        }}
+      />
       <Tabs.Screen
         name="mangas"
         options={{
@@ -32,23 +42,12 @@ export default function TabLayout() {
           ),
         }}
       />
-      <Tabs.Screen
-        name="downloads"
-        options={{
-          title: '下载',
-          tabBarIcon: ({ color, focused, size }) => (
-            <Ionicons
-              color={color}
-              name={focused ? 'cloud-download' : 'cloud-download-outline'}
-              size={size}
-            />
-          ),
-        }}
-      />
+      <Tabs.Screen name="downloads" options={{ href: null }} />
       <Tabs.Screen
         name="settings"
         options={{
           title: '设置',
+          headerShown: false,
           tabBarIcon: ({ color, focused, size }) => (
             <Ionicons color={color} name={focused ? 'settings' : 'settings-outline'} size={size} />
           ),

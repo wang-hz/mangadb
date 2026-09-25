@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native'
-import DownloadsScreen from '@/app/(app)/(tabs)/downloads'
+import DownloadsScreen from '@/app/(app)/(tabs)/settings/downloads'
 import { useDownloads } from '@/downloads/DownloadContext'
 import { createDownloadManifest } from '@/downloads/types'
 

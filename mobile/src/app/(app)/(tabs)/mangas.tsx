@@ -21,7 +21,6 @@ import type { MangaSortBy, MangaSummary, SortOrder, Tag } from '@/api/types'
 import { MangaCard } from '@/components/MangaCard'
 import { CatalogFilterSheet } from '@/components/catalog/CatalogFilterSheet'
 import { PrimaryButton } from '@/components/PrimaryButton'
-import { RecentReadingSection } from '@/components/RecentReadingSection'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { useFavorites } from '@/hooks/useFavorites'
 import { useCatalogFilters } from '@/hooks/useCatalogFilters'
@@ -31,7 +30,6 @@ import { useSession } from '@/session/SessionContext'
 import { useDownloadedMangaUuids } from '@/downloads/DownloadContext'
 import { matchesLocalMangaFilters } from '@/catalog/mangaFilters'
 import { activeCatalogFilterCount } from '@/storage/catalogFilters'
-import type { RecentReadingEntry } from '@/storage/progress'
 import { colors } from '@/theme/colors'
 import { adaptiveGridLayout } from '@/utils/grid'
 
@@ -147,18 +145,6 @@ export default function MangasScreen() {
   const openManga = useCallback((uuid: string) => {
     router.push({ pathname: '/(app)/manga/[uuid]', params: { uuid } })
   }, [])
-  const continueReading = useCallback((entry: RecentReadingEntry) => {
-    router.push({
-      pathname: '/(app)/reader/[uuid]',
-      params: {
-        uuid: entry.manga.uuid,
-        title: entry.manga.displayTitle || entry.manga.originalTitle,
-        page: String(entry.pageIndex),
-        mode: entry.mode,
-      },
-    })
-  }, [])
-
   const loadMore = () => {
     if (query.hasNextPage && !query.isFetchingNextPage) void query.fetchNextPage()
   }
@@ -204,7 +190,6 @@ export default function MangasScreen() {
             : null}
       ListHeaderComponent={(
         <LibraryHeader
-          api={api!}
           activeFilterCount={activeFilterCount}
           countLabel={hasLocalFilters
             ? `已显示 ${mangas.length} 本 · 服务器筛选匹配 ${total} 本`
@@ -216,13 +201,9 @@ export default function MangasScreen() {
             ...filters,
             sortOrder: filters.sortOrder === 'desc' ? 'asc' : 'desc',
           })}
-          onContinueReading={continueReading}
-          recentEntries={recentReading.entries}
           search={filters.search}
           sortBy={filters.sortBy}
           sortOrder={filters.sortOrder}
-          serverUrl={serverUrl!}
-          userUuid={auth!.user.uuid}
         />
       )}
       maxToRenderPerBatch={8}
@@ -244,12 +225,12 @@ export default function MangasScreen() {
       renderItem={({ item }) => (
         <MangaCard
           api={api!}
+          serverUrl={serverUrl!}
+          userUuid={auth!.user.uuid}
           favorite={favorites.uuids.has(item.uuid)}
           manga={item}
           onPress={openManga}
           progress={progressByManga.get(item.uuid)}
-          serverUrl={serverUrl!}
-          userUuid={auth!.user.uuid}
           width={cardWidth}
         />
       )}
@@ -298,47 +279,30 @@ function tagQueryErrorMessage(error: unknown): string | null {
 }
 
 interface LibraryHeaderProps {
-  api: Parameters<typeof RecentReadingSection>[0]['api']
   search: string
   sortBy: MangaSortBy
   sortOrder: SortOrder
   activeFilterCount: number
   countLabel: string
-  recentEntries: readonly RecentReadingEntry[]
-  serverUrl: string
-  userUuid: string
   onChangeSearch: (value: string) => void
   onChangeSort: (value: MangaSortBy) => void
   onOpenFilters: () => void
   onToggleOrder: () => void
-  onContinueReading: (entry: RecentReadingEntry) => void
 }
 
 function LibraryHeader({
-  api,
   activeFilterCount,
   countLabel,
   search,
   sortBy,
   sortOrder,
-  recentEntries,
-  serverUrl,
-  userUuid,
   onChangeSearch,
   onChangeSort,
   onOpenFilters,
   onToggleOrder,
-  onContinueReading,
 }: LibraryHeaderProps) {
   return (
     <View style={styles.header}>
-      <RecentReadingSection
-        api={api}
-        entries={recentEntries}
-        onContinue={onContinueReading}
-        serverUrl={serverUrl}
-        userUuid={userUuid}
-      />
       <View style={styles.searchBox}>
         <Ionicons color={colors.muted} name="search" size={20} />
         <TextInput

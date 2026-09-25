@@ -51,18 +51,20 @@ export function RecentReadingSection({
   )
 }
 
-function RecentReadingCard({
+export function RecentReadingCard({
   entry,
   api,
   serverUrl,
   userUuid,
   onPress,
+  fullWidth = false,
 }: {
   entry: RecentReadingEntry
   api: ApiClient
   serverUrl: string
   userUuid: string
   onPress: (entry: RecentReadingEntry) => void
+  fullWidth?: boolean
 }) {
   const coverIndex = validCoverIndex(entry.manga.cover, entry.pageCount)
   const source = mangaPageImageSource(
@@ -84,7 +86,7 @@ function RecentReadingCard({
       accessibilityLabel={`继续阅读 ${entry.manga.displayTitle || entry.manga.originalTitle}`}
       accessibilityRole="button"
       onPress={() => onPress(entry)}
-      style={({ pressed }) => [styles.card, pressed ? styles.cardPressed : null]}
+      style={({ pressed }) => [styles.card, fullWidth ? { width: '100%' } : null, pressed ? styles.cardPressed : null]}
     >
       <Image
         cachePolicy="memory-disk"

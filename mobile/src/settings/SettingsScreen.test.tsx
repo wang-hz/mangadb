@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { Share } from 'react-native'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native'
-import SettingsScreen from '@/app/(app)/(tabs)/settings'
+import SettingsOptions from './SettingsOptions'
 import { useDownloads } from '@/downloads/DownloadContext'
 import { ReaderPreferencesProvider } from '@/providers/ReaderPreferencesContext'
 import { useSession } from '@/session/SessionContext'
@@ -53,23 +53,17 @@ describe('SettingsScreen reading preferences', () => {
     })
   })
 
-  it('shows the global reading controls alongside account settings', async () => {
+  it('shows reading preferences in their own subpage', async () => {
     render(
       <ReaderPreferencesProvider>
-        <SettingsScreen />
+        <SettingsOptions section="reading" />
       </ReaderPreferencesProvider>,
     )
 
-    expect(screen.getByText('当前账号')).toBeOnTheScreen()
+    expect(screen.queryByText('当前账号')).toBeNull()
     expect(screen.getByText('阅读设置')).toBeOnTheScreen()
     await waitFor(() => expect(screen.getByLabelText('翻页')).not.toBeDisabled())
     expect(screen.getByLabelText('阅读时保持屏幕常亮')).toBeOnTheScreen()
-    expect(screen.getByLabelText('仅使用 Wi-Fi 下载')).toBeOnTheScreen()
-    expect(screen.getByText('0 本 · 0 B')).toBeOnTheScreen()
-    const downloadSettings = jest.mocked(useDownloads).mock.results.at(-1)?.value
-    if (!downloadSettings) throw new Error('missing download context result')
-    fireEvent(screen.getByLabelText('仅使用 Wi-Fi 下载'), 'valueChange', false)
-    await waitFor(() => expect(downloadSettings.setWifiOnly).toHaveBeenCalledWith(false))
   })
 
   it('shares only the bounded local diagnostic payload', async () => {
@@ -90,7 +84,7 @@ describe('SettingsScreen reading preferences', () => {
 
     render(
       <ReaderPreferencesProvider>
-        <SettingsScreen />
+        <SettingsOptions section="diagnostics" />
       </ReaderPreferencesProvider>,
     )
 
@@ -107,10 +101,9 @@ describe('SettingsScreen reading preferences', () => {
   it('catches Wi-Fi preference failures and allows a retry', async () => {
     render(
       <ReaderPreferencesProvider>
-        <SettingsScreen />
+        <SettingsOptions section="downloads" />
       </ReaderPreferencesProvider>,
     )
-    await screen.findByText('当前共 0 条记录')
     await waitFor(() => expect(screen.getByLabelText('仅使用 Wi-Fi 下载')).not.toBeDisabled())
     const downloadSettings = jest.mocked(useDownloads).mock.results.at(-1)?.value
     if (!downloadSettings) throw new Error('missing download context result')

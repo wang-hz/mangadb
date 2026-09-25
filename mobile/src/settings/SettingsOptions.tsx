@@ -22,7 +22,9 @@ type PendingAction = 'signout' | 'switch-server' | null
 type PendingDownloadAction = 'clear-current' | 'clear-all' | null
 type PendingDiagnosticAction = 'share' | 'clear' | null
 
-export default function SettingsScreen() {
+export default function SettingsOptions({ section }: {
+  section: 'account' | 'reading' | 'downloads' | 'diagnostics'
+}) {
   const session = useSession()
   const downloads = useDownloads()
   const [pendingAction, setPendingAction] = useState<PendingAction>(null)
@@ -38,6 +40,7 @@ export default function SettingsScreen() {
   const account = session.auth?.user
 
   useEffect(() => {
+    if (section !== 'diagnostics') return
     let active = true
     const refresh = () => {
       void loadDiagnostics().then(records => {
@@ -54,7 +57,7 @@ export default function SettingsScreen() {
       active = false
       subscription.remove()
     }
-  }, [])
+  }, [section])
 
   const runAction = async (action: Exclude<PendingAction, null>) => {
     if (pendingAction) return
@@ -152,142 +155,162 @@ export default function SettingsScreen() {
   return (
     <SafeAreaView edges={['bottom']} style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.sectionTitle}>当前账号</Text>
-        <View style={styles.card}>
-          <View style={styles.accountIcon}>
-            <Ionicons color={colors.brand} name="person" size={27} />
-          </View>
-          <View style={styles.accountText}>
-            <Text selectable style={styles.primaryValue}>{account?.username ?? '未知账号'}</Text>
-            <View style={styles.roleChip}>
-              <Text style={styles.roleText}>{roleLabel(account?.role)}</Text>
+        {section === 'account' ? (
+          <>
+            <Text style={styles.sectionTitle}>当前账号</Text>
+            <View style={styles.card}>
+              <View style={styles.accountIcon}>
+                <Ionicons color={colors.brand} name="person" size={27} />
+              </View>
+              <View style={styles.accountText}>
+                <Text selectable style={styles.primaryValue}>{account?.username ?? '未知账号'}</Text>
+                <View style={styles.roleChip}>
+                  <Text style={styles.roleText}>{roleLabel(account?.role)}</Text>
+                </View>
+              </View>
             </View>
-          </View>
-        </View>
 
-        <Text style={styles.sectionTitle}>当前服务器</Text>
-        <View style={[styles.card, styles.serverCard]}>
-          <Ionicons color={colors.brand} name="server-outline" size={24} />
-          <Text selectable style={styles.serverUrl}>{session.serverUrl ?? '未配置'}</Text>
-        </View>
-
-        <Text style={styles.sectionTitle}>阅读设置</Text>
-        <View style={styles.preferencesCard}>
-          <Text style={styles.explanation}>
-            本机所有服务器和账号共用。已读漫画仍优先使用该漫画上次选择的模式。
-          </Text>
-          <ReaderPreferencesControls />
-        </View>
-
-        <Text style={styles.sectionTitle}>下载设置</Text>
-        <View style={styles.actionCard}>
-          <View style={styles.switchRow}>
-            <View style={styles.switchText}>
-              <Text style={styles.switchTitle}>仅使用 Wi-Fi 下载</Text>
-              <Text style={styles.explanation}>以太网也视为非计费连接。</Text>
+            <Text style={styles.sectionTitle}>当前服务器</Text>
+            <View style={[styles.card, styles.serverCard]}>
+              <Ionicons color={colors.brand} name="server-outline" size={24} />
+              <Text selectable style={styles.serverUrl}>{session.serverUrl ?? '未配置'}</Text>
             </View>
-            <Switch
-              accessibilityLabel="仅使用 Wi-Fi 下载"
-              disabled={wifiPending}
-              onValueChange={value => {
-                if (wifiPending) return
-                setWifiPending(true)
-                setDownloadError(null)
-                void downloads.setWifiOnly(value)
-                  .catch(() => {
-                    setDownloadError('无法保存下载网络设置，请重试。')
-                  })
-                  .finally(() => setWifiPending(false))
-              }}
-              trackColor={{ false: '#d1d5db', true: '#91caff' }}
-              value={downloads.preferences.wifiOnly}
-            />
-          </View>
-          <View style={styles.storageSummary}>
-            <Ionicons color={colors.brand} name="phone-portrait-outline" size={22} />
-            <View style={styles.storageText}>
-              <Text style={styles.switchTitle}>当前账号离线内容</Text>
+
+          </>
+        ) : null}
+        {section === 'reading' ? (
+          <>
+            <Text style={styles.sectionTitle}>阅读设置</Text>
+            <View style={styles.preferencesCard}>
               <Text style={styles.explanation}>
-                {downloads.snapshot.manifests.length} 本 · {formatBytes(downloads.storageUsageBytes)}
+                本机所有服务器和账号共用。已读漫画仍优先使用该漫画上次选择的模式。
               </Text>
+              <ReaderPreferencesControls />
             </View>
-          </View>
-          <ActionButton
-            disabled={
-              pendingDownloadAction !== null ||
-              downloads.snapshot.manifests.length === 0
-            }
-            icon="trash-outline"
-            label="删除当前账号下载"
-            loading={pendingDownloadAction === 'clear-current'}
-            onPress={() => { void clearDownloads('clear-current') }}
-            tone="danger"
-          />
-          <ActionButton
-            disabled={pendingDownloadAction !== null}
-            icon="nuclear-outline"
-            label="清除全部离线内容"
-            loading={pendingDownloadAction === 'clear-all'}
-            onPress={() => { void clearDownloads('clear-all') }}
-            tone="danger"
-          />
-          {downloadError
-            ? <Text accessibilityRole="alert" style={styles.error}>{downloadError}</Text>
-            : null}
-        </View>
 
-        <Text style={styles.sectionTitle}>稳定性诊断</Text>
-        <View style={styles.actionCard}>
-          <Text style={styles.explanation}>
-            本机最多保留 50 条脱敏记录，不包含账号、服务器地址、漫画标识或登录凭证。
-          </Text>
-          <Text style={styles.explanation}>当前共 {diagnosticCount} 条记录</Text>
-          <ActionButton
-            disabled={pendingDiagnosticAction !== null}
-            icon="share-outline"
-            label="分享诊断记录"
-            loading={pendingDiagnosticAction === 'share'}
-            onPress={() => { void runDiagnosticAction('share') }}
-            tone="brand"
-          />
-          <ActionButton
-            disabled={pendingDiagnosticAction !== null}
-            icon="trash-bin-outline"
-            label="清除诊断记录"
-            loading={pendingDiagnosticAction === 'clear'}
-            onPress={() => { void runDiagnosticAction('clear') }}
-            tone="danger"
-          />
-          {diagnosticError
-            ? <Text accessibilityRole="alert" style={styles.error}>{diagnosticError}</Text>
-            : null}
-        </View>
+          </>
+        ) : null}
+        {section === 'downloads' ? (
+          <>
+            <Text style={styles.sectionTitle}>下载设置</Text>
+            <View style={styles.actionCard}>
+              <View style={styles.switchRow}>
+                <View style={styles.switchText}>
+                  <Text style={styles.switchTitle}>仅使用 Wi-Fi 下载</Text>
+                  <Text style={styles.explanation}>以太网也视为非计费连接。</Text>
+                </View>
+                <Switch
+                  accessibilityLabel="仅使用 Wi-Fi 下载"
+                  disabled={wifiPending}
+                  onValueChange={value => {
+                    if (wifiPending) return
+                    setWifiPending(true)
+                    setDownloadError(null)
+                    void downloads.setWifiOnly(value)
+                      .catch(() => {
+                        setDownloadError('无法保存下载网络设置，请重试。')
+                      })
+                      .finally(() => setWifiPending(false))
+                  }}
+                  trackColor={{ false: '#d1d5db', true: '#91caff' }}
+                  value={downloads.preferences.wifiOnly}
+                />
+              </View>
+              <View style={styles.storageSummary}>
+                <Ionicons color={colors.brand} name="phone-portrait-outline" size={22} />
+                <View style={styles.storageText}>
+                  <Text style={styles.switchTitle}>当前账号离线内容</Text>
+                  <Text style={styles.explanation}>
+                    {downloads.snapshot.manifests.length} 本 · {formatBytes(downloads.storageUsageBytes)}
+                  </Text>
+                </View>
+              </View>
+              <ActionButton
+                disabled={
+                  pendingDownloadAction !== null ||
+                  downloads.snapshot.manifests.length === 0
+                }
+                icon="trash-outline"
+                label="删除当前账号下载"
+                loading={pendingDownloadAction === 'clear-current'}
+                onPress={() => { void clearDownloads('clear-current') }}
+                tone="danger"
+              />
+              <ActionButton
+                disabled={pendingDownloadAction !== null}
+                icon="nuclear-outline"
+                label="清除全部离线内容"
+                loading={pendingDownloadAction === 'clear-all'}
+                onPress={() => { void clearDownloads('clear-all') }}
+                tone="danger"
+              />
+              {downloadError
+                ? <Text accessibilityRole="alert" style={styles.error}>{downloadError}</Text>
+                : null}
+            </View>
 
-        <Text style={styles.sectionTitle}>会话</Text>
-        <View style={styles.actionCard}>
-          <Text style={styles.explanation}>
-            退出或切换服务器会清除登录凭证、查询缓存和图片缓存，不会删除本机阅读位置或离线下载；下载只会对原服务器和账号显示。
-          </Text>
-          {sessionError
-            ? <Text accessibilityRole="alert" style={styles.error}>{sessionError}</Text>
-            : null}
-          <ActionButton
-            disabled={pendingAction !== null}
-            icon="log-out-outline"
-            label="退出登录"
-            loading={pendingAction === 'signout'}
-            onPress={() => { void runAction('signout') }}
-            tone="brand"
-          />
-          <ActionButton
-            disabled={pendingAction !== null}
-            icon="swap-horizontal-outline"
-            label="切换服务器"
-            loading={pendingAction === 'switch-server'}
-            onPress={() => { void runAction('switch-server') }}
-            tone="danger"
-          />
-        </View>
+          </>
+        ) : null}
+        {section === 'diagnostics' ? (
+          <>
+            <Text style={styles.sectionTitle}>稳定性诊断</Text>
+            <View style={styles.actionCard}>
+              <Text style={styles.explanation}>
+                本机最多保留 50 条脱敏记录，不包含账号、服务器地址、漫画标识或登录凭证。
+              </Text>
+              <Text style={styles.explanation}>当前共 {diagnosticCount} 条记录</Text>
+              <ActionButton
+                disabled={pendingDiagnosticAction !== null}
+                icon="share-outline"
+                label="分享诊断记录"
+                loading={pendingDiagnosticAction === 'share'}
+                onPress={() => { void runDiagnosticAction('share') }}
+                tone="brand"
+              />
+              <ActionButton
+                disabled={pendingDiagnosticAction !== null}
+                icon="trash-bin-outline"
+                label="清除诊断记录"
+                loading={pendingDiagnosticAction === 'clear'}
+                onPress={() => { void runDiagnosticAction('clear') }}
+                tone="danger"
+              />
+              {diagnosticError
+                ? <Text accessibilityRole="alert" style={styles.error}>{diagnosticError}</Text>
+                : null}
+            </View>
+
+          </>
+        ) : null}
+        {section === 'account' ? (
+          <>
+            <Text style={styles.sectionTitle}>会话</Text>
+            <View style={styles.actionCard}>
+              <Text style={styles.explanation}>
+                退出或切换服务器会清除登录凭证、查询缓存和图片缓存，不会删除本机阅读位置或离线下载；下载只会对原服务器和账号显示。
+              </Text>
+              {sessionError
+                ? <Text accessibilityRole="alert" style={styles.error}>{sessionError}</Text>
+                : null}
+              <ActionButton
+                disabled={pendingAction !== null}
+                icon="log-out-outline"
+                label="退出登录"
+                loading={pendingAction === 'signout'}
+                onPress={() => { void runAction('signout') }}
+                tone="brand"
+              />
+              <ActionButton
+                disabled={pendingAction !== null}
+                icon="swap-horizontal-outline"
+                label="切换服务器"
+                loading={pendingAction === 'switch-server'}
+                onPress={() => { void runAction('switch-server') }}
+                tone="danger"
+              />
+            </View>
+          </>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   )
