@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
+import { usePageSize } from '../hooks/usePageSize'
 import { usePagedData } from '../hooks/usePagedData'
 import type { Tag as TagData, TagType } from '../types'
 import { formatDateTime } from '../utils/date'
@@ -25,7 +26,7 @@ export default function TagListPage() {
   const isMobile = screens.md === false
 
   const page = Math.max(1, parseInt(searchParams.get('page') ?? '1') || 1)
-  const pageSize = parseInt(searchParams.get('limit') ?? '10') || 10
+  const [pageSize, handlePageChange] = usePageSize('tagListPageSize', searchParams, setSearchParams)
   const search = searchParams.get('search') ?? ''
   const sort = (VALID_SORTS.has(searchParams.get('sort') ?? '') ? searchParams.get('sort')! : 'updateAt-desc') as SortKey
   const tagTypeFilter = searchParams.get('tagType') ?? undefined
@@ -98,12 +99,11 @@ export default function TagListPage() {
     current: page,
     pageSize,
     total,
-    onChange: (p: number) => setSearchParams(prev => { prev.set('page', String(p)); return prev }, { replace: true }),
-    onShowSizeChange: (_: number, size: number) => setSearchParams(prev => { prev.set('page', '1'); prev.set('limit', String(size)); return prev }, { replace: true }),
+    onChange: handlePageChange,
     showSizeChanger: true,
     showTotal: (n: number) => t('common.total', { count: n }),
     position: ['topRight', 'bottomRight'],
-  }), [page, pageSize, total, t])
+  }), [page, pageSize, total, handlePageChange, t])
 
   return (
     <Space direction="vertical" style={{ width: '100%' }} size="middle">

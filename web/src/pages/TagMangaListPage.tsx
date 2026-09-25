@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
 import MangaGrid from '../components/MangaGrid'
+import { usePageSize } from '../hooks/usePageSize'
 import { usePagedData } from '../hooks/usePagedData'
 import { useViewMode } from '../hooks/useViewMode'
 import type { Manga, Tag as TagData, TagType } from '../types'
@@ -34,7 +35,7 @@ export default function TagMangaListPage() {
   const isMobile = screens.md === false
 
   const page = Math.max(1, parseInt(searchParams.get('page') ?? '1') || 1)
-  const pageSize = parseInt(searchParams.get('limit') ?? '10') || 10
+  const [pageSize, handlePageChange] = usePageSize('tagMangaListPageSize', searchParams, setSearchParams)
   const search = searchParams.get('search') ?? ''
   const sort = (VALID_SORTS.has(searchParams.get('sort') ?? '') ? searchParams.get('sort')! : 'updateAt-desc') as `${SortBy}-${SortOrder}`
 
@@ -151,12 +152,6 @@ export default function TagMangaListPage() {
     t('manga.loadError'),
   )
 
-  const handlePageChange = (p: number) =>
-    setSearchParams(prev => { prev.set('page', String(p)); return prev }, { replace: true })
-
-  const handlePageSizeChange = (_: number, size: number) =>
-    setSearchParams(prev => { prev.set('page', '1'); prev.set('limit', String(size)); return prev }, { replace: true })
-
   const sortOptions = useMemo(() => [
     { label: t('sort.updateAtDesc'), value: 'updateAt-desc' },
     { label: t('sort.updateAtAsc'),  value: 'updateAt-asc' },
@@ -181,11 +176,10 @@ export default function TagMangaListPage() {
     pageSize,
     total,
     onChange: handlePageChange,
-    onShowSizeChange: handlePageSizeChange,
     showSizeChanger: true,
     showTotal: (n: number) => t('common.total', { count: n }),
     position: ['topRight', 'bottomRight'],
-  }), [page, pageSize, total, t])
+  }), [page, pageSize, total, handlePageChange, t])
 
   const from = location.pathname + location.search
 
@@ -335,11 +329,11 @@ export default function TagMangaListPage() {
       ) : (
         <Space direction="vertical" style={{ width: '100%' }} size="middle">
           <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <Pagination current={page} pageSize={pageSize} total={total} onChange={handlePageChange} onShowSizeChange={handlePageSizeChange} showSizeChanger showTotal={n => t('common.total', { count: n })} />
+            <Pagination current={page} pageSize={pageSize} total={total} onChange={handlePageChange} showSizeChanger showTotal={n => t('common.total', { count: n })} />
           </div>
           <MangaGrid data={data} loading={loading} from={from} />
           <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <Pagination current={page} pageSize={pageSize} total={total} onChange={handlePageChange} onShowSizeChange={handlePageSizeChange} showSizeChanger showTotal={n => t('common.total', { count: n })} />
+            <Pagination current={page} pageSize={pageSize} total={total} onChange={handlePageChange} showSizeChanger showTotal={n => t('common.total', { count: n })} />
           </div>
         </Space>
       )}

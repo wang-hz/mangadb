@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
 import MangaGrid from '../components/MangaGrid'
+import { usePageSize } from '../hooks/usePageSize'
 import { usePagedData } from '../hooks/usePagedData'
 import { useViewMode } from '../hooks/useViewMode'
 import type { Manga } from '../types'
@@ -31,7 +32,7 @@ export default function MangaListPage() {
   const isMobile = screens.md === false
 
   const page = Math.max(1, parseInt(searchParams.get('page') ?? '1') || 1)
-  const pageSize = parseInt(searchParams.get('limit') ?? '10') || 10
+  const [pageSize, handlePageChange] = usePageSize('mangaListPageSize', searchParams, setSearchParams)
   const search = searchParams.get('search') ?? ''
   const sort = (VALID_SORTS.has(searchParams.get('sort') ?? '') ? searchParams.get('sort')! : 'updateAt-desc') as `${SortBy}-${SortOrder}`
 
@@ -55,16 +56,6 @@ export default function MangaListPage() {
     { label: t('sort.publishDateDesc'), value: 'publishDate-desc' },
     { label: t('sort.publishDateAsc'),  value: 'publishDate-asc' },
   ], [t])
-
-  const handlePageChange = useCallback(
-    (p: number) => setSearchParams(prev => { prev.set('page', String(p)); return prev }, { replace: true }),
-    [setSearchParams],
-  )
-
-  const handlePageSizeChange = useCallback(
-    (_: number, size: number) => setSearchParams(prev => { prev.set('page', '1'); prev.set('limit', String(size)); return prev }, { replace: true }),
-    [setSearchParams],
-  )
 
   const from = useMemo(() => location.pathname + location.search, [location.pathname, location.search])
 
@@ -101,11 +92,10 @@ export default function MangaListPage() {
     pageSize,
     total,
     onChange: handlePageChange,
-    onShowSizeChange: handlePageSizeChange,
     showSizeChanger: true,
     showTotal: (n: number) => t('common.total', { count: n }),
     position: ['topRight', 'bottomRight'],
-  }), [page, pageSize, total, handlePageChange, handlePageSizeChange, t])
+  }), [page, pageSize, total, handlePageChange, t])
 
   return (
     <Space direction="vertical" style={{ width: '100%' }} size="middle">
@@ -160,7 +150,6 @@ export default function MangaListPage() {
               pageSize={pageSize}
               total={total}
               onChange={handlePageChange}
-              onShowSizeChange={handlePageSizeChange}
               showSizeChanger
               showTotal={n => t('common.total', { count: n })}
             />
@@ -172,7 +161,6 @@ export default function MangaListPage() {
               pageSize={pageSize}
               total={total}
               onChange={handlePageChange}
-              onShowSizeChange={handlePageSizeChange}
               showSizeChanger
               showTotal={n => t('common.total', { count: n })}
             />
