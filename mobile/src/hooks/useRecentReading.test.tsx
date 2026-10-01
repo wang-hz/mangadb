@@ -1,7 +1,10 @@
+import { synchronizeProgress } from '@/sync/registry'
 import { act, render, waitFor } from '@testing-library/react-native'
 import { AppState } from 'react-native'
-import { listRecentReading, listReadingProgress } from '@/storage/progress'
+import { listRecentReading, listReadingProgress, subscribeProgress } from '@/storage/progress'
 import { useRecentReading } from './useRecentReading'
+
+jest.mock('@/sync/registry', () => ({ synchronizeProgress: jest.fn(async () => {}) }))
 
 jest.mock('@/storage/progress', () => ({
   subscribeProgress: jest.fn(() => () => {}),
@@ -65,6 +68,18 @@ describe('useRecentReading', () => {
 
     expect(current.entries).toEqual([])
     expect(current.status).toBe('ready')
+  })
+
+  it('requests server sync on manual refresh but only reloads local data on storage notifications', async () => {
+    render(<Probe />)
+    await waitFor(() => expect(current.status).toBe('ready'))
+    jest.mocked(synchronizeProgress).mockClear()
+    await act(async () => { await current.refresh() })
+    expect(synchronizeProgress).toHaveBeenCalledWith('https://example.com', 'user-1', true)
+    const listener = jest.mocked(subscribeProgress).mock.calls[0]![0]
+    await act(async () => { listener('https://example.com', 'user-1') })
+    expect(synchronizeProgress).toHaveBeenCalledTimes(1)
+    expect(listReadingProgress).toHaveBeenCalledTimes(3)
   })
 
   it('removes the app-state listener on unmount', () => {

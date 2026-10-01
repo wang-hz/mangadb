@@ -37,13 +37,13 @@ it('does not clear an edit made while an older operation is uploading', async ()
 })
 
 it('imports old standalone keys once using their original operation timestamp', async () => {
-  const updatedAt = '2026-01-01T00:00:00.000Z'
+  const updatedAt = '2026-01-01T00:00:00Z'
   values.set('mangadb.readingProgress.v1:server:user:manga', JSON.stringify({ pageIndex: 4, mode: 'paged', state: 'reading', updatedAt }))
   const store = createProgressSyncStore('server', 'user')
   await store.prepare()
   await store.calibrate(new Date().toISOString())
   const sent = await store.pending()
-  expect(sent[0]?.updatedAt).toBe(updatedAt)
+  expect(sent[0]?.updatedAt).toBe(new Date(updatedAt).toISOString())
   await store.apply([{ ...sent[0]!, manga, pageCount: 10 }], sent)
   await store.prepare()
   expect(await store.pending()).toEqual([])

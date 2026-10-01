@@ -40,7 +40,7 @@ export function useRecentReading(
     error: null,
   })
 
-  const refresh = useCallback(async () => {
+  const loadLocal = useCallback(async () => {
     const requestId = requestIdRef.current + 1
     requestIdRef.current = requestId
     if (!serverUrl || !userUuid || !identity) {
@@ -78,10 +78,14 @@ export function useRecentReading(
     }
   }, [identity, serverUrl, userUuid])
 
+  const refresh = useCallback(() => {
+    if (serverUrl && userUuid) void synchronizeProgress(serverUrl, userUuid, true).catch(() => {})
+    return loadLocal()
+  }, [loadLocal, serverUrl, userUuid])
+
   useFocusEffect(useCallback(() => {
     void refresh()
-    if (serverUrl && userUuid) void synchronizeProgress(serverUrl, userUuid, true).catch(() => {})
-  }, [refresh, serverUrl, userUuid]))
+  }, [refresh]))
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', state => {
@@ -90,10 +94,9 @@ export function useRecentReading(
     return () => subscription.remove()
   }, [refresh])
 
-
   useEffect(() => subscribeProgress((server, user) => {
-    if (server === serverUrl && user === userUuid) void refresh()
-  }), [refresh, serverUrl, userUuid])
+    if (server === serverUrl && user === userUuid) void loadLocal()
+  }), [loadLocal, serverUrl, userUuid])
 
   const matchesIdentity = result.identity === identity
   return {

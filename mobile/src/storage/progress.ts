@@ -333,7 +333,9 @@ function normalizeProgressIndexV2(value: unknown): ProgressIndexV2 | null {
     index.sync = value.sync as unknown as SyncState
   }
   for (const [mangaUuid, entry] of Object.entries(value.entries)) {
-    if (mangaUuid && isStoredProgressEntryV2(entry)) index.entries[mangaUuid] = { ...entry }
+    if (mangaUuid && isStoredProgressEntryV2(entry)) {
+      index.entries[mangaUuid] = { ...entry, updatedAt: new Date(entry.updatedAt).toISOString() }
+    }
   }
   for (const [mangaUuid, manga] of Object.entries(value.recentMangas)) {
     if (
@@ -361,7 +363,7 @@ function migrateProgressIndexV1(value: unknown): ProgressIndexV2 | null {
       pageIndex: entry.pageIndex,
       mode: entry.mode,
       state: entry.state ?? 'reading',
-      updatedAt: entry.updatedAt,
+      updatedAt: new Date(entry.updatedAt).toISOString(),
       pageCount: entry.pageCount,
       hiddenFromRecent: entry.hiddenFromRecent ?? false,
     }
@@ -407,7 +409,7 @@ function parseReadingProgress(stored: string | null): ReadingProgress | null {
     pageIndex: Number(value.pageIndex),
     mode: value.mode,
     state: value.state ?? 'reading',
-    updatedAt: value.updatedAt,
+    updatedAt: new Date(value.updatedAt).toISOString(),
   }
 }
 
