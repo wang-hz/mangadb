@@ -1,3 +1,5 @@
+import * as Crypto from 'expo-crypto'
+import { calibrate, emptySyncState, mergeRemote, newer, queueOperation, type ProgressOperation, type RemoteProgress, type SyncState, type SyncStore } from '@/sync/protocol'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import type { MangaSummary } from '@/api/types'
 import { clampPageIndex, type ReaderMode } from '@/utils/reader'
@@ -39,6 +41,7 @@ interface ProgressIndexV2 {
   schemaVersion: 2
   entries: Record<string, StoredProgressEntryV2>
   recentMangas: Record<string, MangaSummary>
+  sync: SyncState
 }
 
 interface LegacyRecentReadingEntry extends Omit<RecentReadingEntry, 'state' | 'hiddenFromRecent'> {
@@ -65,7 +68,10 @@ export async function loadReadingProgress(
   await identityWriteQueues.get(identity)?.catch(() => {})
   const key = progressKey(serverUrl, userUuid, mangaUuid)
   const stored = await AsyncStorage.getItem(key)
-  const value = parseReadingProgress(stored)
+  const indexForRead = await loadProgressIndex(serverUrl, userUuid)
+  const syncedRecord = indexForRead.sync.records[mangaUuid]
+  if (syncedRecord?.deleted) return null
+  const value = indexForRead.entries[mangaUuid] ?? parseReadingProgress(stored)
   if (!value) return null
 
   const pageIndex = clampPageIndex(value.pageIndex, pageCount)
@@ -106,7 +112,7 @@ export async function saveReadingProgress(
 ): Promise<ReadingProgress> {
   const identity = progressIdentity(serverUrl, userUuid)
   return enqueueIdentityWrite(identity, async () => {
-    const index = manga ? await loadProgressIndex(serverUrl, userUuid) : null
+    const index = await loadProgressIndex(serverUrl, userUuid)
     const previousEntry = index?.entries[mangaUuid]
     const clampedPageIndex = clampPageIndex(pageIndex, pageCount)
     const progress: ReadingProgress = {
@@ -115,24 +121,20 @@ export async function saveReadingProgress(
       state: keepCompletedState(previousEntry, pageCount, clampedPageIndex)
         ? 'completed'
         : 'reading',
-      updatedAt: new Date().toISOString(),
+      updatedAt: progressNow(index, mangaUuid),
     }
     const progressStorageKey = progressKey(serverUrl, userUuid, mangaUuid)
-    if (manga && index) {
-      index.entries[mangaUuid] = {
-        ...progress,
-        pageCount: Math.max(0, Math.trunc(pageCount)),
-        hiddenFromRecent: false,
-      }
-      index.recentMangas[mangaUuid] = cloneMangaSummary(manga)
-      pruneRecentMangas(index)
-      await AsyncStorage.multiSet([
-        [progressStorageKey, JSON.stringify(progress)],
-        [progressIndexV2Key(serverUrl, userUuid), JSON.stringify(index)],
-      ])
-    } else {
-      await AsyncStorage.setItem(progressStorageKey, JSON.stringify(progress))
+    index.entries[mangaUuid] = {
+      ...progress, pageCount: Math.max(0, Math.trunc(pageCount)), hiddenFromRecent: false,
     }
+    if (manga) index.recentMangas[mangaUuid] = cloneMangaSummary(manga)
+    recordLocalOperation(index, mangaUuid)
+    pruneRecentMangas(index)
+    await AsyncStorage.multiSet([
+      [progressStorageKey, JSON.stringify(progress)],
+      [progressIndexV2Key(serverUrl, userUuid), JSON.stringify(index)],
+    ])
+    notifyProgress(serverUrl, userUuid)
     return progress
   })
 }
@@ -196,7 +198,7 @@ async function writeMangaReadingState(
   const identity = progressIdentity(serverUrl, userUuid)
   return enqueueIdentityWrite(identity, async () => {
     const index = await loadProgressIndex(serverUrl, userUuid)
-    const now = new Date().toISOString()
+    const now = progressNow(index, manga.uuid)
     const entry: RecentReadingEntry = {
       manga: cloneMangaSummary(manga),
       pageCount: Math.max(0, Math.trunc(pageCount)),
@@ -208,6 +210,7 @@ async function writeMangaReadingState(
     }
     index.entries[manga.uuid] = progressEntryFromRecent(entry)
     index.recentMangas[manga.uuid] = cloneMangaSummary(manga)
+    recordLocalOperation(index, manga.uuid)
     pruneRecentMangas(index)
     await AsyncStorage.multiSet([
       [
@@ -216,6 +219,7 @@ async function writeMangaReadingState(
       ],
       [progressIndexV2Key(serverUrl, userUuid), JSON.stringify(index)],
     ])
+    notifyProgress(serverUrl, userUuid)
     return entry
   })
 }
@@ -228,12 +232,14 @@ export async function markMangaUnread(
   const identity = progressIdentity(serverUrl, userUuid)
   await enqueueIdentityWrite(identity, async () => {
     const index = await loadProgressIndex(serverUrl, userUuid)
+    recordLocalOperation(index, mangaUuid, true)
     delete index.entries[mangaUuid]
     delete index.recentMangas[mangaUuid]
     await AsyncStorage.multiSet([
       [progressKey(serverUrl, userUuid, mangaUuid), PROGRESS_DELETION_TOMBSTONE],
       [progressIndexV2Key(serverUrl, userUuid), JSON.stringify(index)],
     ])
+    notifyProgress(serverUrl, userUuid)
   })
 }
 
@@ -247,9 +253,11 @@ export async function removeFromRecentReading(
     const index = await loadProgressIndex(serverUrl, userUuid)
     const entry = index.entries[mangaUuid]
     if (!entry) return
-    index.entries[mangaUuid] = { ...entry, hiddenFromRecent: true }
+    index.entries[mangaUuid] = { ...entry, hiddenFromRecent: true, updatedAt: progressNow(index, mangaUuid) }
+    recordLocalOperation(index, mangaUuid)
     delete index.recentMangas[mangaUuid]
     await saveProgressIndex(serverUrl, userUuid, index)
+    notifyProgress(serverUrl, userUuid)
   })
 }
 
@@ -308,7 +316,7 @@ async function saveProgressIndex(
 }
 
 function emptyProgressIndex(): ProgressIndexV2 {
-  return { schemaVersion: 2, entries: {}, recentMangas: {} }
+  return { schemaVersion: 2, entries: {}, recentMangas: {}, sync: emptySyncState() }
 }
 
 function normalizeProgressIndexV2(value: unknown): ProgressIndexV2 | null {
@@ -319,6 +327,11 @@ function normalizeProgressIndexV2(value: unknown): ProgressIndexV2 | null {
     !isRecord(value.recentMangas)
   ) return null
   const index = emptyProgressIndex()
+  if (isRecord(value.sync) && isRecord(value.sync.pending) && isRecord(value.sync.records) &&
+      isRecord(value.sync.uncalibrated) && typeof value.sync.imported === 'boolean' &&
+      typeof value.sync.calibrated === 'boolean' && typeof value.sync.offset === 'number') {
+    index.sync = value.sync as unknown as SyncState
+  }
   for (const [mangaUuid, entry] of Object.entries(value.entries)) {
     if (mangaUuid && isStoredProgressEntryV2(entry)) index.entries[mangaUuid] = { ...entry }
   }
@@ -509,4 +522,110 @@ function progressIndexV2Key(serverUrl: string, userUuid: string): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+const progressListeners = new Set<(serverUrl: string, userUuid: string) => void>()
+export function subscribeProgress(listener: (serverUrl: string, userUuid: string) => void): () => void {
+  progressListeners.add(listener)
+  return () => { progressListeners.delete(listener) }
+}
+function notifyProgress(serverUrl: string, userUuid: string): void {
+  for (const listener of progressListeners) listener(serverUrl, userUuid)
+}
+function progressNow(index: ProgressIndexV2, mangaUuid: string): string {
+  const previous = index.sync.pending[mangaUuid]?.updatedAt ?? index.entries[mangaUuid]?.updatedAt
+    ?? index.sync.records[mangaUuid]?.updatedAt
+  return new Date(Math.max(Date.now() + index.sync.offset, previous ? Date.parse(previous) + 1 : 0)).toISOString()
+}
+function recordLocalOperation(index: ProgressIndexV2, mangaUuid: string, deleted = false): void {
+  const entry = index.entries[mangaUuid]
+  const operation: ProgressOperation = {
+    mangaUuid, pageIndex: deleted ? 0 : entry?.pageIndex ?? 0,
+    mode: entry?.mode ?? 'paged', state: deleted ? 'reading' : entry?.state ?? 'reading',
+    hiddenFromRecent: deleted || (entry?.hiddenFromRecent ?? false), deleted,
+    updatedAt: deleted ? progressNow(index, mangaUuid) : entry!.updatedAt,
+    operationId: Crypto.randomUUID(),
+  }
+  queueOperation(index.sync, operation)
+  const manga = index.recentMangas[mangaUuid] ?? index.sync.records[mangaUuid]?.manga
+  if (manga) index.sync.records[mangaUuid] = { ...operation, manga, pageCount: entry?.pageCount ?? 0 }
+}
+
+export function createProgressSyncStore(serverUrl: string, userUuid: string): SyncStore {
+  const mutate = <T,>(operation: (index: ProgressIndexV2) => Promise<T> | T): Promise<T> =>
+    enqueueIdentityWrite(progressIdentity(serverUrl, userUuid), async () => {
+      const index = await loadProgressIndex(serverUrl, userUuid)
+      const result = await operation(index)
+      // This envelope is authoritative for both progress and its upload queue.
+      await saveProgressIndex(serverUrl, userUuid, index)
+      notifyProgress(serverUrl, userUuid)
+      return result
+    })
+  return {
+    prepare: () => mutate(async index => {
+      if (index.sync.imported) return
+      // Older standalone per-manga keys may predate the recent-reading index.
+      const prefix = `${PROGRESS_KEY_PREFIX}:${progressIdentity(serverUrl, userUuid)}:`
+      for (const key of await AsyncStorage.getAllKeys()) {
+        if (!key.startsWith(prefix)) continue
+        const uuid = decodeURIComponent(key.slice(prefix.length))
+        if (index.entries[uuid] || index.sync.pending[uuid]) continue
+        const progress = parseReadingProgress(await AsyncStorage.getItem(key))
+        if (progress) index.entries[uuid] = { ...progress, pageCount: 0, hiddenFromRecent: false }
+      }
+      for (const [uuid, entry] of Object.entries(index.entries)) {
+        if (index.sync.pending[uuid]) continue
+        queueOperation(index.sync, {
+          mangaUuid: uuid, pageIndex: entry.pageIndex, mode: entry.mode, state: entry.state,
+          updatedAt: entry.updatedAt, hiddenFromRecent: entry.hiddenFromRecent,
+          deleted: false, operationId: Crypto.randomUUID(),
+        }, true)
+      }
+      index.sync.imported = true
+    }),
+    calibrate: serverTime => mutate(index => {
+      calibrate(index.sync, serverTime)
+      for (const [uuid, pending] of Object.entries(index.sync.pending)) {
+        const entry = index.entries[uuid]
+        if (entry && !pending.deleted) entry.updatedAt = pending.updatedAt
+      }
+    }),
+    pending: async () => {
+      await identityWriteQueues.get(progressIdentity(serverUrl, userUuid))?.catch(() => {})
+      return Object.values((await loadProgressIndex(serverUrl, userUuid)).sync.pending)
+    },
+    apply: (items, sent = [], missing = []) => mutate(index => {
+      for (const item of items) {
+        const pending = index.sync.pending[item.mangaUuid]
+        const entry = index.entries[item.mangaUuid]
+        if (entry && entry.updatedAt > item.updatedAt) continue
+        if (!mergeRemote(index.sync, item)) continue
+        if (pending && !newer(pending, item)) {
+          delete index.sync.pending[item.mangaUuid]
+          delete index.sync.uncalibrated[item.mangaUuid]
+        }
+        if (item.deleted) {
+          delete index.entries[item.mangaUuid]
+          delete index.recentMangas[item.mangaUuid]
+        } else {
+          index.entries[item.mangaUuid] = {
+            pageIndex: item.pageIndex, mode: item.mode, state: item.state,
+            updatedAt: item.updatedAt, pageCount: item.pageCount,
+            hiddenFromRecent: item.hiddenFromRecent,
+          }
+          if (item.hiddenFromRecent) delete index.recentMangas[item.mangaUuid]
+          else index.recentMangas[item.mangaUuid] = cloneMangaSummary(item.manga)
+        }
+      }
+      for (const operation of sent) {
+        if (!missing.includes(operation.mangaUuid)) continue
+        if (index.sync.pending[operation.mangaUuid]?.operationId !== operation.operationId) continue
+        delete index.sync.pending[operation.mangaUuid]
+        delete index.sync.records[operation.mangaUuid]
+        delete index.entries[operation.mangaUuid]
+        delete index.recentMangas[operation.mangaUuid]
+      }
+      pruneRecentMangas(index)
+    }),
+  }
 }

@@ -49,7 +49,7 @@ describe('reading progress storage', () => {
     await saveReadingProgress('https://one.example.com', 'user-2', 'manga-1', 20, 8, 'scroll')
     await saveReadingProgress('https://two.example.com', 'user-1', 'manga-1', 20, 12, 'paged')
 
-    const keys = jest.mocked(AsyncStorage.setItem).mock.calls.map(([key]) => key)
+    const keys = jest.mocked(AsyncStorage.multiSet).mock.calls.flatMap(([pairs]) => pairs.map(([key]) => key)).filter(key => key.startsWith('mangadb.readingProgress.v1:'))
     expect(new Set(keys).size).toBe(3)
     expect(keys.every(key => !key.includes('undefined'))).toBe(true)
   })
@@ -100,19 +100,19 @@ describe('reading progress storage', () => {
 
   it('serializes writes per identity and preserves the last requested position', async () => {
     let releaseFirstWrite: (() => void) | undefined
-    jest.mocked(AsyncStorage.setItem)
+    jest.mocked(AsyncStorage.multiSet)
       .mockImplementationOnce(() => new Promise<void>(resolve => { releaseFirstWrite = resolve }))
       .mockResolvedValueOnce(undefined)
 
     const first = saveReadingProgress('server', 'user', 'manga', 20, 3, 'paged')
     const second = saveReadingProgress('server', 'user', 'manga', 20, 9, 'scroll')
     await flushMicrotasks()
-    expect(AsyncStorage.setItem).toHaveBeenCalledTimes(1)
+    expect(AsyncStorage.multiSet).toHaveBeenCalledTimes(1)
 
     releaseFirstWrite?.()
     await Promise.all([first, second])
-    expect(AsyncStorage.setItem).toHaveBeenCalledTimes(2)
-    expect(JSON.parse(jest.mocked(AsyncStorage.setItem).mock.calls[1]![1])).toMatchObject({
+    expect(AsyncStorage.multiSet).toHaveBeenCalledTimes(2)
+    expect(JSON.parse(jest.mocked(AsyncStorage.multiSet).mock.calls[1]![0][0]![1])).toMatchObject({
       pageIndex: 9,
       mode: 'scroll',
     })
@@ -120,7 +120,7 @@ describe('reading progress storage', () => {
 
   it('continues a key queue after an earlier write fails', async () => {
     let rejectFirstWrite: ((error: Error) => void) | undefined
-    jest.mocked(AsyncStorage.setItem)
+    jest.mocked(AsyncStorage.multiSet)
       .mockImplementationOnce(() => new Promise<void>((_, reject) => {
         rejectFirstWrite = reject
       }))
@@ -287,6 +287,9 @@ describe('reading progress storage', () => {
 })
 
 async function flushMicrotasks() {
+  await Promise.resolve()
+  await Promise.resolve()
+  await Promise.resolve()
   await Promise.resolve()
   await Promise.resolve()
   await Promise.resolve()

@@ -1,7 +1,9 @@
+import { synchronizeProgress } from '@/sync/registry'
 import { useFocusEffect } from 'expo-router'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppState } from 'react-native'
 import {
+  subscribeProgress,
   listRecentReading,
   listReadingProgress,
   type ReadingProgressEntry,
@@ -78,7 +80,8 @@ export function useRecentReading(
 
   useFocusEffect(useCallback(() => {
     void refresh()
-  }, [refresh]))
+    if (serverUrl && userUuid) void synchronizeProgress(serverUrl, userUuid, true).catch(() => {})
+  }, [refresh, serverUrl, userUuid]))
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', state => {
@@ -86,6 +89,11 @@ export function useRecentReading(
     })
     return () => subscription.remove()
   }, [refresh])
+
+
+  useEffect(() => subscribeProgress((server, user) => {
+    if (server === serverUrl && user === userUuid) void refresh()
+  }), [refresh, serverUrl, userUuid])
 
   const matchesIdentity = result.identity === identity
   return {

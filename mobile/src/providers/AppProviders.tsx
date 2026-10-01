@@ -1,3 +1,4 @@
+import { ProgressSyncLifecycle } from './ProgressSyncLifecycle'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { type PropsWithChildren, useCallback, useEffect, useState } from 'react'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
@@ -39,6 +40,7 @@ export function AppProviders({ children }: PropsWithChildren) {
           <ReaderPreferencesProvider>
             <QueryClientProvider client={queryClient}>
               <SessionProvider onSessionCleanup={onSessionCleanup}>
+                <ProgressSyncLifecycle />
                 <DownloadProvider>
                   {children}
                   <NetworkStatusBanner />

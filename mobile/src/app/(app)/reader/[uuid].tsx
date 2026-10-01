@@ -1,3 +1,4 @@
+import { prepareReaderProgress } from '@/sync/registry'
 import { useQuery } from '@tanstack/react-query'
 import { StatusBar } from 'expo-status-bar'
 import { type ErrorBoundaryProps, router, useLocalSearchParams } from 'expo-router'
@@ -167,12 +168,12 @@ function ReaderContent({
 
   useEffect(() => {
     let active = true
-    loadReadingProgress(
+    prepareReaderProgress(serverUrl!, auth!.user.uuid).then(() => loadReadingProgress(
       serverUrl!,
       auth!.user.uuid,
       manga.uuid,
       manga.pages.length,
-    )
+    ))
       .then(value => {
         if (active) setLoadedProgress({ identity: sessionIdentity, status: 'ready', value })
       })

@@ -64,10 +64,10 @@ describe('ReadingProgressWriter', () => {
     const values = new Map<string, string>()
     let releaseWrite: (() => void) | undefined
     jest.mocked(AsyncStorage.getItem).mockImplementation(async key => values.get(key) ?? null)
-    jest.mocked(AsyncStorage.setItem).mockImplementation((key, value) =>
+    jest.mocked(AsyncStorage.multiSet).mockImplementation(pairs =>
       new Promise<void>(resolve => {
         releaseWrite = () => {
-          values.set(key, value)
+          for (const [key, value] of pairs) values.set(key, value)
           resolve()
         }
       }))
@@ -85,7 +85,7 @@ describe('ReadingProgressWriter', () => {
     const restored = loadReadingProgress('server', 'user', 'manga', 10)
     await flushMicrotasks()
 
-    expect(AsyncStorage.getItem).not.toHaveBeenCalled()
+    expect(jest.mocked(AsyncStorage.getItem).mock.calls.some(([key]) => key.startsWith('mangadb.readingProgress.v1:'))).toBe(false)
     if (!releaseWrite) throw new Error('progress write did not start')
     releaseWrite()
     await flush
@@ -94,6 +94,9 @@ describe('ReadingProgressWriter', () => {
 })
 
 async function flushMicrotasks() {
+  await Promise.resolve()
+  await Promise.resolve()
+  await Promise.resolve()
   await Promise.resolve()
   await Promise.resolve()
   await Promise.resolve()

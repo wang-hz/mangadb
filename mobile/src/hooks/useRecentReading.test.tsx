@@ -4,6 +4,7 @@ import { listRecentReading, listReadingProgress } from '@/storage/progress'
 import { useRecentReading } from './useRecentReading'
 
 jest.mock('@/storage/progress', () => ({
+  subscribeProgress: jest.fn(() => () => {}),
   listRecentReading: jest.fn(),
   listReadingProgress: jest.fn(),
 }))

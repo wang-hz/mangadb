@@ -1,3 +1,4 @@
+import { synchronizeProgress } from '@/sync/registry'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useKeepAwake } from 'expo-keep-awake'
 import { StatusBar } from 'expo-status-bar'
@@ -83,14 +84,16 @@ export function ReaderExperience({
     persist(initialStateRef.current.pageIndex, initialStateRef.current.mode)
     void progressWriter.flush().catch(() => {})
     onReaderReadyRef.current()
-    return () => { void progressWriter.flush().catch(() => {}) }
+    return () => {
+      void progressWriter.flush().then(() => synchronizeProgress(serverUrl, userUuid, true)).catch(() => {})
+    }
   }, [persist, progressWriter])
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', state => {
       if (state !== 'active') {
         setSettingsVisible(false)
-        void progressWriter.flush().catch(() => {})
+        void progressWriter.flush().then(() => synchronizeProgress(serverUrl, userUuid, true)).catch(() => {})
       }
     })
     return () => subscription.remove()
