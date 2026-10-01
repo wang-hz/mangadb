@@ -24,7 +24,8 @@ export default function AppLayout() {
   const [opdsOpen, setOpdsOpen] = useState(false)
   const [aboutOpen, setAboutOpen] = useState(false)
 
-  const selectedKey = location.pathname.startsWith('/mangas') ? 'mangas'
+  const selectedKey = location.pathname.startsWith('/recent') ? 'recent'
+    : location.pathname.startsWith('/mangas') ? 'mangas'
     : location.pathname.startsWith('/tags') ? 'tags'
     : 'mangas'
 
@@ -39,6 +40,7 @@ export default function AppLayout() {
 
   const navItems = [
     { key: 'mangas', icon: <BookOutlined />, label: t('nav.manga'), onClick: () => navigate('/mangas') },
+    { key: 'recent', icon: <BookOutlined />, label: t('progress.recent'), onClick: () => navigate('/recent') },
     { key: 'tags', icon: <TagOutlined />, label: t('nav.tags'), onClick: () => navigate('/tags') },
   ]
 

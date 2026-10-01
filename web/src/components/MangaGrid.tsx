@@ -1,4 +1,6 @@
-import { Empty } from 'antd'
+import { useTranslation } from 'react-i18next'
+import { useProgress } from '../progress/ProgressProvider'
+import { Empty, Tag } from 'antd'
 import { memo } from 'react'
 import { Link } from 'react-router-dom'
 import type { Manga } from '../types'
@@ -38,6 +40,9 @@ interface CardProps {
 }
 
 const MangaCard = memo(function MangaCard({ manga, from }: CardProps) {
+  const { records } = useProgress()
+  const { t } = useTranslation()
+  const progress = records[manga.uuid]
   return (
     <Link
       to={`/mangas/${manga.uuid}`}
@@ -50,6 +55,7 @@ const MangaCard = memo(function MangaCard({ manga, from }: CardProps) {
       </div>
       <div style={{ padding: '8px 10px' }}>
         <div style={titleStyle}>{manga.displayTitle}</div>
+        {progress && !progress.deleted && <Tag color={progress.state === 'completed' ? 'green' : 'blue'} style={{ marginTop: 4 }}>{t(progress.state === 'completed' ? 'progress.completed' : 'progress.reading')}</Tag>}
         {manga.publishDate && (
           <div style={dateStyle}>{formatDate(manga.publishDate)}</div>
         )}

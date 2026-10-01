@@ -1,3 +1,4 @@
+import { ProgressProvider } from '../progress/ProgressProvider'
 import { Navigate, useLocation } from 'react-router-dom'
 import { getSession } from '../utils/token'
 
@@ -6,5 +7,5 @@ export default function RequireAuth({ children }: { children: React.ReactNode })
   if (!getSession()) {
     return <Navigate to="/login" state={{ from: location }} replace />
   }
-  return <>{children}</>
+  return <ProgressProvider>{children}</ProgressProvider>
 }

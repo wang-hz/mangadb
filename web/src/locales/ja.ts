@@ -1,4 +1,19 @@
 const ja = {
+  'common.retry': '再試行',
+  'progress.recent': '最近読んだ漫画',
+  'progress.continue': '続きを読む',
+  'progress.reading': '読書中',
+  'progress.completed': '読了',
+  'progress.unread': '未読',
+  'progress.markCompleted': '読了にする',
+  'progress.restart': '読み直す',
+  'progress.markUnread': '未読にする',
+  'progress.removeRecent': '履歴から非表示',
+  'progress.pending': '同期待ち',
+  'progress.noRecent': '読書履歴はありません',
+  'progress.storageError': '読書位置を保存または読み込めません。再試行してください。',
+  'progress.emptyPages': 'この漫画にはページがありません',
+
   'nav.manga': 'マンガ',
   'nav.tags': 'タグ',
 

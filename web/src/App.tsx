@@ -1,3 +1,4 @@
+import RecentReadingPage from './pages/RecentReadingPage'
 import { Navigate, Route, BrowserRouter as Router, Routes } from 'react-router-dom'
 import AppLayout from './components/AppLayout'
 import RequireAuth from './components/RequireAuth'
@@ -29,6 +30,7 @@ export default function App() {
         <Route path="/mangas/:uuid/read" element={<RequireAuth><ReaderPage /></RequireAuth>} />
         <Route path="/" element={<RequireAuth><AppLayout /></RequireAuth>}>
           <Route index element={<Navigate to="/mangas" replace />} />
+          <Route path="recent" element={<RecentReadingPage />} />
           <Route path="mangas" element={<MangaListPage />} />
           <Route path="mangas/:uuid" element={<MangaDetailPage />} />
           <Route path="mangas/:uuid/pages" element={<MangaPagesEditorPage />} />

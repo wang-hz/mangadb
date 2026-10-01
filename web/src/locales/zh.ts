@@ -1,4 +1,19 @@
 const zh = {
+  'common.retry': '重试',
+  'progress.recent': '最近阅读',
+  'progress.continue': '继续阅读',
+  'progress.reading': '阅读中',
+  'progress.completed': '已完成',
+  'progress.unread': '未读',
+  'progress.markCompleted': '标记已完成',
+  'progress.restart': '重新阅读',
+  'progress.markUnread': '标记未读',
+  'progress.removeRecent': '移出最近阅读',
+  'progress.pending': '等待同步',
+  'progress.noRecent': '暂无最近阅读记录',
+  'progress.storageError': '无法保存或读取本机阅读进度，请重试',
+  'progress.emptyPages': '此漫画没有可阅读的页面',
+
   'nav.manga': '漫画',
   'nav.tags': '标签',
 

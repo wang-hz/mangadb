@@ -6,6 +6,16 @@ import { Router } from 'express';
 const router = Router();
 const mangadbController = new MangadbController();
 
+// The assertion prevents an old browser tab's queue from following a changed cookie.
+router.use('/reading-progress', (req, res, next) => {
+  res.set('Cache-Control', 'no-store');
+  res.vary('X-MangaDB-User');
+  const expectedUser = req.get('X-MangaDB-User');
+  if (expectedUser && expectedUser !== req.user?.uuid) {
+    res.status(403).json({ error: 'Reading progress session changed' }); return;
+  }
+  next();
+});
 router.get('/reading-progress', readingProgressController.list);
 router.get('/reading-progress/:uuid', readingProgressController.get);
 router.post('/reading-progress', readingProgressController.submit);

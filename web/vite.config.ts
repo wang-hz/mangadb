@@ -29,6 +29,10 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
         runtimeCaching: [
           {
+            urlPattern: ({ url }) => url.pathname.startsWith('/api/mangadb/reading-progress'),
+            handler: 'NetworkOnly',
+          },
+          {
             urlPattern: /^\/api\/file\/.*/i,
             handler: 'CacheFirst',
             options: {

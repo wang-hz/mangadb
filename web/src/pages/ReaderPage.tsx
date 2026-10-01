@@ -1,11 +1,13 @@
 import { ArrowLeftOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons'
 import { useDrag } from '@use-gesture/react'
-import { Button, InputNumber, message, Segmented, Spin } from 'antd'
-import { useEffect, useState } from 'react'
+import { Alert, Button, InputNumber, message, Segmented, Spin } from 'antd'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api'
 import type { Manga } from '../types'
+import { useReaderProgress } from '../progress/useReaderProgress'
+import { visibleReaderPage } from '../progress/reader'
 
 const IMG_FALLBACK =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 2 3'%3E%3Crect fill='%23282828' width='2' height='3'/%3E%3C/svg%3E"
@@ -15,34 +17,68 @@ const onImgError = (e: React.SyntheticEvent<HTMLImageElement>) => {
   e.currentTarget.src = IMG_FALLBACK
 }
 
-type Mode = 'flip' | 'scroll'
-
 const TOP_BAR_H = 48
 
 export default function ReaderPage() {
   const { uuid } = useParams<{ uuid: string }>()
   const navigate = useNavigate()
   const { t } = useTranslation()
-  const [searchParams, setSearchParams] = useSearchParams()
 
   const [manga, setManga] = useState<Manga | null>(null)
   const [loading, setLoading] = useState(true)
 
-  const mode = (searchParams.get('mode') === 'scroll' ? 'scroll' : 'flip') as Mode
-  const currentPage = Math.max(0, parseInt(searchParams.get('page') ?? '0') || 0)
+  const { readingRun, mode, currentPage, ready, error, completed, goToPage, changeMode, restart } = useReaderProgress(manga)
   const totalPages = manga?.pages.length ?? 0
+  const pageElements = useRef<(HTMLDivElement | null)[]>([])
+  const currentPageRef = useRef(currentPage)
+  currentPageRef.current = currentPage
+  const goToPageRef = useRef(goToPage)
+  goToPageRef.current = goToPage
+  const scrollTarget = useRef<number | null>(null)
 
   useEffect(() => {
     if (!uuid) return
+    let active = true
+    setManga(null)
+    setLoading(true)
     api.getManga(uuid)
-      .then(m => { setManga(m); setLoading(false) })
-      .catch(() => { message.error(t('reader.loadError')); navigate(`/mangas/${uuid}`, { replace: true }) })
+      .then(m => { if (active) { setManga(m); setLoading(false) } })
+      .catch(() => { if (active) { message.error(t('reader.loadError')); navigate(`/mangas/${uuid}`, { replace: true }) } })
+    return () => { active = false }
   }, [uuid])
 
-  const goToPage = (p: number) => {
-    const clamped = Math.max(0, Math.min(totalPages - 1, p))
-    setSearchParams(prev => { prev.set('page', String(clamped)); return prev }, { replace: true })
-  }
+  useEffect(() => {
+    if (mode !== 'scroll' || !ready || !totalPages) return
+    const target = scrollTarget.current ?? currentPageRef.current
+    scrollTarget.current = null
+    let restoring = true
+    let frame = 0
+    const scrollToTarget = () => pageElements.current[target]?.scrollIntoView({ block: 'start' })
+    const updatePage = () => {
+      frame = 0
+      if (restoring) return
+      const elements = pageElements.current.slice(0, totalPages)
+      const page = visibleReaderPage(elements.map(element => element?.getBoundingClientRect() ?? { top: Infinity, bottom: -Infinity }), window.innerHeight)
+      if (page !== null && page !== currentPageRef.current) goToPageRef.current(page)
+    }
+    const onScroll = () => { if (!frame) frame = requestAnimationFrame(updatePage) }
+    const onInteraction = () => { restoring = false; onScroll() }
+    const resize = new ResizeObserver(() => { if (restoring) scrollToTarget() })
+    for (const element of pageElements.current.slice(0, totalPages)) if (element) resize.observe(element)
+    scrollToTarget()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    window.addEventListener('wheel', onInteraction, { passive: true })
+    window.addEventListener('touchstart', onInteraction, { passive: true })
+    window.addEventListener('keydown', onInteraction)
+    return () => {
+      cancelAnimationFrame(frame)
+      resize.disconnect()
+      window.removeEventListener('scroll', onScroll)
+      window.removeEventListener('wheel', onInteraction)
+      window.removeEventListener('touchstart', onInteraction)
+      window.removeEventListener('keydown', onInteraction)
+    }
+  }, [mode, ready, uuid, totalPages, readingRun])
 
   // Reset window scroll position when entering flip mode so the fixed
   // viewport layout isn't offset by a leftover scroll from scroll mode.
@@ -69,13 +105,16 @@ export default function ReaderPage() {
     if (swipeX === 1 && hasPrev) goToPage(currentPage - 1)
   }, { axis: 'x', swipe: { distance: 50, velocity: [0.3, 0.3] } })
 
-  if (loading) {
+  if (loading || (!ready && !error)) {
     return (
       <div style={{ height: '100vh', background: '#141414', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <Spin size="large" />
       </div>
     )
   }
+
+  if (!ready) return <Alert type="error" message={t('progress.storageError')} action={<Button onClick={() => window.location.reload()}>{t('common.retry')}</Button>} />
+  if (!totalPages) return <Alert message={t('progress.emptyPages')} action={<Button onClick={() => navigate(`/mangas/${uuid}`)}>{t('common.back')}</Button>} />
 
   // Inner content of the top bar — shared between both modes.
   const topBarContent = (
@@ -84,9 +123,11 @@ export default function ReaderPage() {
       <span style={{ color: '#aaa', flex: 1, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {manga?.displayTitle}
       </span>
+      {error && <span role="alert" style={{ color: '#ff7875' }}>{t('progress.storageError')}</span>}
+      {completed && <Button size="small" onClick={() => { scrollTarget.current = 0; restart(); if (mode === 'scroll') pageElements.current[0]?.scrollIntoView() }}>{t('progress.restart')}</Button>}
       <Segmented
         value={mode}
-        onChange={v => setSearchParams(prev => { prev.set('mode', v as string); return prev }, { replace: true })}
+        onChange={v => changeMode(v as 'flip' | 'scroll')}
         options={[{ value: 'flip', label: t('reader.flip') }, { value: 'scroll', label: t('reader.scroll') }]}
         size="small"
         style={{ flexShrink: 0 }}
@@ -165,11 +206,11 @@ export default function ReaderPage() {
       </div>
       <div style={{ paddingTop: TOP_BAR_H, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         {manga?.pages.map((_, i) => (
-          <div key={i} style={{ width: '100%', maxWidth: 800 }}>
+          <div key={i} ref={element => { pageElements.current[i] = element }} style={{ width: '100%', maxWidth: 800, minHeight: 120, scrollMarginTop: TOP_BAR_H }}>
             <img
               src={`/api/file/mangas/${uuid}/pages/${i}`}
               alt={`${t('reader.pageLabel')} ${i + 1}`}
-              loading="lazy"
+              loading={i === currentPage ? 'eager' : 'lazy'}
               style={{ width: '100%', display: 'block' }}
               onError={onImgError}
             />

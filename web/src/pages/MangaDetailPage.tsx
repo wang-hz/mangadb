@@ -1,3 +1,5 @@
+import ReadingProgressControls from '../components/ReadingProgressControls'
+import { useProgress } from '../progress/ProgressProvider'
 import { ArrowLeftOutlined, OrderedListOutlined, ReadOutlined } from '@ant-design/icons'
 import { Button, DatePicker, Descriptions, Form, Grid, Input, message, Select, Space, Spin, Tag } from 'antd'
 import dayjs from 'dayjs'
@@ -22,6 +24,7 @@ export default function MangaDetailPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const { t } = useTranslation()
+  const { records } = useProgress()
   const backTo: string = (location.state as { from?: string } | null)?.from ?? '/mangas'
   const screens = useBreakpoint()
   const isMobile = screens.md === false
@@ -119,8 +122,9 @@ export default function MangaDetailPage() {
             onError={onImgError}
           />
           <Button type="primary" icon={<ReadOutlined />} block onClick={() => navigate(`/mangas/${manga.uuid}/read`)}>
-            {t('manga.startReading')}
+            {t(records[manga.uuid] && !records[manga.uuid].deleted ? 'progress.continue' : 'manga.startReading')}
           </Button>
+          <ReadingProgressControls manga={manga} pageCount={manga.pages.length} />
           {isAdmin && (
             <Button icon={<OrderedListOutlined />} block onClick={() => navigate(`/mangas/${manga.uuid}/pages`)}>
               {t('manga.pageManagement')}

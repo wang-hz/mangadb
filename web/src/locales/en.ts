@@ -1,4 +1,19 @@
 const en = {
+  'common.retry': 'Retry',
+  'progress.recent': 'Recent reading',
+  'progress.continue': 'Continue reading',
+  'progress.reading': 'Reading',
+  'progress.completed': 'Completed',
+  'progress.unread': 'Unread',
+  'progress.markCompleted': 'Mark completed',
+  'progress.restart': 'Read again',
+  'progress.markUnread': 'Mark unread',
+  'progress.removeRecent': 'Remove from recent',
+  'progress.pending': 'Waiting to sync',
+  'progress.noRecent': 'No recent reading',
+  'progress.storageError': 'Cannot save or load reading progress. Please retry.',
+  'progress.emptyPages': 'This manga has no pages',
+
   'nav.manga': 'Manga',
   'nav.tags': 'Tags',
 
