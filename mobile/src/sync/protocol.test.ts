@@ -80,3 +80,14 @@ it('keeps operations on failed upload and retries the same payload', async () =>
   await sync.sync(true)
   expect(request.mock.calls[1]?.[1].body).toBe(request.mock.calls[3]?.[1].body)
 })
+
+it('corrects future pending timestamps after a device clock jumps', () => {
+  jest.useFakeTimers().setSystemTime(new Date('2030-01-02T00:00:00.000Z'))
+  try {
+    const state = emptySyncState()
+    state.calibrated = true
+    queueOperation(state, { ...operation, updatedAt: '2030-01-02T00:00:00.000Z' })
+    calibrate(state, '2026-01-02T00:00:00.000Z')
+    expect(state.pending.manga?.updatedAt).toBe('2026-01-02T00:00:00.000Z')
+  } finally { jest.useRealTimers() }
+})

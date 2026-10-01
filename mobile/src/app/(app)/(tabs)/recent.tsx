@@ -42,8 +42,6 @@ export default function RecentReadingScreen() {
             params: {
               uuid: entry.manga.uuid,
               title: entry.manga.displayTitle || entry.manga.originalTitle,
-              page: String(entry.pageIndex),
-              mode: entry.mode,
             },
           })}
           serverUrl={serverUrl!}

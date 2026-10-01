@@ -18,7 +18,7 @@ export function ProgressSyncLifecycle() {
     const timer = setInterval(() => { if (AppState.currentState === 'active') run() }, 15000)
     const subscription = AppState.addEventListener('change', () => run(true))
     const unsubscribeNetwork = NetInfo.addEventListener(state => {
-      if (state.isConnected && state.isInternetReachable !== false) run(true)
+      if (state.isConnected !== false) run(true)
     })
     return () => {
       unregister()

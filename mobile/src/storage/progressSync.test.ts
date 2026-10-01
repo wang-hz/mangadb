@@ -10,6 +10,7 @@ beforeEach(() => {
   jest.mocked(AsyncStorage.getAllKeys).mockImplementation(async () => [...values.keys()])
   jest.mocked(AsyncStorage.setItem).mockImplementation(async (key, value) => { values.set(key, value) })
   jest.mocked(AsyncStorage.multiSet).mockImplementation(async pairs => { for (const [key, value] of pairs) values.set(key, value) })
+  jest.mocked(AsyncStorage.removeItem).mockImplementation(async key => { values.delete(key) })
 })
 
 it('persists deletion and hidden-recent operations alongside local progress', async () => {
@@ -48,4 +49,12 @@ it('imports old standalone keys once using their original operation timestamp', 
   expect(await store.pending()).toEqual([])
   expect(await listRecentReading('server', 'user')).toHaveLength(1)
   expect(await createProgressSyncStore('server', 'other').pending()).toEqual([])
+})
+
+it('clears legacy fallback keys when the server acknowledges a missing manga', async () => {
+  const store = createProgressSyncStore('server', 'user')
+  await saveReadingProgress('server', 'user', 'manga', 10, 4, 'paged', manga)
+  await store.apply([], await store.pending(), ['manga'])
+  expect(await loadReadingProgress('server', 'user', 'manga', 10)).toBeNull()
+  expect(await store.pending()).toEqual([])
 })

@@ -30,11 +30,11 @@ beforeEach(() => {
   })
 })
 
-it('continues directly with the saved page and mode', () => {
+it('continues through reader restoration so newer synchronized positions take precedence', () => {
   render(<RecentReadingScreen />)
   fireEvent.press(screen.getByLabelText('继续阅读 继续测试'))
   expect(router.push).toHaveBeenCalledWith({ pathname: '/(app)/reader/[uuid]',
-    params: { uuid: 'm1', title: '继续测试', page: '4', mode: 'scroll' } })
+    params: { uuid: 'm1', title: '继续测试' } })
   expect(useRecentReading).toHaveBeenCalledWith('https://example.com', 'u1')
 })
 

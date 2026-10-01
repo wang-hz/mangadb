@@ -530,7 +530,9 @@ export function subscribeProgress(listener: (serverUrl: string, userUuid: string
   return () => { progressListeners.delete(listener) }
 }
 function notifyProgress(serverUrl: string, userUuid: string): void {
-  for (const listener of progressListeners) listener(serverUrl, userUuid)
+  for (const listener of progressListeners) {
+    try { listener(serverUrl, userUuid) } catch {}
+  }
 }
 function progressNow(index: ProgressIndexV2, mangaUuid: string): string {
   const previous = index.sync.pending[mangaUuid]?.updatedAt ?? index.entries[mangaUuid]?.updatedAt
@@ -594,7 +596,7 @@ export function createProgressSyncStore(serverUrl: string, userUuid: string): Sy
       await identityWriteQueues.get(progressIdentity(serverUrl, userUuid))?.catch(() => {})
       return Object.values((await loadProgressIndex(serverUrl, userUuid)).sync.pending)
     },
-    apply: (items, sent = [], missing = []) => mutate(index => {
+    apply: (items, sent = [], missing = []) => mutate(async index => {
       for (const item of items) {
         const pending = index.sync.pending[item.mangaUuid]
         const entry = index.entries[item.mangaUuid]
@@ -622,6 +624,9 @@ export function createProgressSyncStore(serverUrl: string, userUuid: string): Sy
         if (index.sync.pending[operation.mangaUuid]?.operationId !== operation.operationId) continue
         delete index.sync.pending[operation.mangaUuid]
         delete index.sync.records[operation.mangaUuid]
+        delete index.sync.uncalibrated[operation.mangaUuid]
+        // Remove the legacy fallback too, so offline metadata cannot revive it.
+        await AsyncStorage.removeItem(progressKey(serverUrl, userUuid, operation.mangaUuid))
         delete index.entries[operation.mangaUuid]
         delete index.recentMangas[operation.mangaUuid]
       }

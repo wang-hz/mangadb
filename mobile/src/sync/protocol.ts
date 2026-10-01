@@ -48,11 +48,16 @@ export function queueOperation(state: SyncState, operation: ProgressOperation, l
 }
 
 export function calibrate(state: SyncState, serverTime: string): void {
-  const offset = Date.parse(serverTime) - Date.now()
+  const serverTimestamp = Date.parse(serverTime)
+  const offset = serverTimestamp - Date.now()
   if (!Number.isFinite(offset)) throw new Error('Invalid server time')
   for (const [uuid, operation] of Object.entries(state.pending)) {
-    if (state.uncalibrated[uuid]) {
-      operation.updatedAt = new Date(Date.parse(operation.updatedAt) + offset - state.offset).toISOString()
+    if (state.uncalibrated[uuid] || Date.parse(operation.updatedAt) > serverTimestamp + 60000) {
+      // A clock changed while offline must not poison all later uploads. Normal
+      // historical migration timestamps stay untouched; impossible future ones
+      // are corrected with the current clock offset and bounded by server time.
+      operation.updatedAt = new Date(Math.min(serverTimestamp,
+        Date.parse(operation.updatedAt) + offset - state.offset)).toISOString()
       const record = state.records[uuid]
       if (record?.operationId === operation.operationId) record.updatedAt = operation.updatedAt
       state.uncalibrated[uuid] = false

@@ -1,3 +1,4 @@
+import { synchronizeProgress } from '@/sync/registry'
 import { Ionicons } from '@expo/vector-icons'
 import { Image } from 'expo-image'
 import { useQuery } from '@tanstack/react-query'
@@ -27,7 +28,7 @@ import { ScreenHeader } from '@/components/ScreenHeader'
 import { mangaPageImageSource } from '@/media/images'
 import { useSession } from '@/session/SessionContext'
 import { useFavorites } from '@/hooks/useFavorites'
-import { loadReadingProgress, type ReadingProgress } from '@/storage/progress'
+import { subscribeProgress, loadReadingProgress, type ReadingProgress } from '@/storage/progress'
 import { colors } from '@/theme/colors'
 import { validCoverIndex } from '@/utils/manga'
 
@@ -148,14 +149,23 @@ function MangaMetadata({
 
   useFocusEffect(useCallback(() => {
     let active = true
-    loadReadingProgress(serverUrl!, auth!.user.uuid, manga.uuid, manga.pages.length)
-      .then(value => {
-        if (active) setLoadedProgress({ identity: progressIdentity, value })
-      })
-      .catch(() => {
-        if (active) setLoadedProgress({ identity: progressIdentity, value: null })
-      })
-    return () => { active = false }
+    let revision = 0
+    const refresh = () => {
+      const request = ++revision
+      void loadReadingProgress(serverUrl!, auth!.user.uuid, manga.uuid, manga.pages.length)
+        .then(value => {
+          if (active && request === revision) setLoadedProgress({ identity: progressIdentity, value })
+        })
+        .catch(() => {
+          if (active && request === revision) setLoadedProgress({ identity: progressIdentity, value: null })
+        })
+    }
+    const unsubscribe = subscribeProgress((server, user) => {
+      if (server === serverUrl && user === auth?.user.uuid) refresh()
+    })
+    refresh()
+    void synchronizeProgress(serverUrl!, auth!.user.uuid, true).catch(() => {})
+    return () => { active = false; unsubscribe() }
   }, [serverUrl, auth?.user.uuid, manga.uuid, manga.pages.length, progressIdentity]))
 
   const openReader = () => {
