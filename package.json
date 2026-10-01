@@ -18,7 +18,8 @@
     "mobile:typecheck": "npm --prefix mobile run typecheck",
     "mobile:test": "npm --prefix mobile run test",
     "mobile:build:android": "npm --prefix mobile run build:android:apk",
-    "mobile:build:ios": "npm --prefix mobile run build:ios:simulator"
+    "mobile:build:ios": "npm --prefix mobile run build:ios:simulator",
+    "test:progress:integration": "DATABASE_URL=\"${PROGRESS_TEST_DATABASE_URL:?Set PROGRESS_TEST_DATABASE_URL to a disposable migrated database}\" PROGRESS_INTEGRATION=1 node --import tsx --test src/controller/reading-progress.controller.test.ts src/service/reading-progress.service.test.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.1",

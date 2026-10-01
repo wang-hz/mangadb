@@ -7,6 +7,7 @@ A self-hosted manga library server with a web UI and OPDS feed support.
 ## Features
 
 - Browse and manage your manga collection through a web interface
+- Reading progress, completion and recent reading synchronize across web, Android and iOS, with offline saves and automatic reconnect merging
 - Online reader with flip and scroll modes; set the cover from within the reader; touch swipe gestures on mobile
 - Tag-based organization with customizable tag types; inline tag editing on the detail page
 - Batch operations: set publish date or add a tag across all mangas in a tag
@@ -59,11 +60,13 @@ The server runs at `http://localhost:3000` by default. On first launch you will 
 
 ## Expo Mobile App
 
-The independent client under `mobile/` targets Android phones/tablets and iPhone/iPad with the application identifier `top.wanghaizhou.mangadb`. Its UI is Simplified Chinese and supports server setup, login, manga and tag browsing, manga details, paged and continuous-scroll readers, identity-isolated offline downloads, per-account local reading positions, settings, and logout.
+The independent client under `mobile/` targets Android phones/tablets and iPhone/iPad with the application identifier `top.wanghaizhou.mangadb`. Its UI is Simplified Chinese and supports server setup, login, manga and tag browsing, manga details, paged and continuous-scroll readers, identity-isolated offline downloads, per-account reading positions with cross-device synchronization, settings, and logout.
 
-The client does not include administration or cross-device synchronization.
-Favorites, recent reading, and progress are stored locally and isolated by
-server and user identity.
+The client does not include administration. Favorites and downloads remain local
+and isolated by server and user identity. Reading progress, completion and recent
+reading synchronize automatically with the authenticated backend. Apply the new
+database migration before upgrading; see [reading progress synchronization](docs/reading-progress.md)
+for conflict rules, API details and verification.
 
 ### Mobile toolchain
 
