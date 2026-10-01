@@ -26,6 +26,7 @@ model Manga {
   createAt      DateTime   @default(now()) @map("create_at")
   updateAt      DateTime   @updatedAt @map("update_at")
   mangaTags     MangaTag[]
+  readingProgress ReadingProgress[]
 
   @@index([updateAt, originalTitle])
   @@map("manga")
@@ -86,6 +87,7 @@ model User {
   createAt     DateTime   @default(now()) @map("create_at")
   updateAt     DateTime   @updatedAt @map("update_at")
   loginLogs    LoginLog[]
+  readingProgress ReadingProgress[]
 
   @@map("user")
 }
@@ -103,4 +105,21 @@ model LoginLog {
   @@index([createdAt])
   @@index([userUuid])
   @@map("login_log")
+}
+
+model ReadingProgress {
+  userUuid String @map("user_uuid")
+  mangaUuid String @map("manga_uuid")
+  pageIndex Int @map("page_index")
+  mode String
+  state String
+  hiddenFromRecent Boolean @default(false) @map("hidden_from_recent")
+  deleted Boolean @default(false)
+  updatedAt DateTime @db.Timestamptz(3) @map("updated_at")
+  operationId String @map("operation_id")
+  user User @relation(fields: [userUuid], references: [uuid], onDelete: Cascade)
+  manga Manga @relation(fields: [mangaUuid], references: [uuid], onDelete: Cascade)
+
+  @@id([userUuid, mangaUuid])
+  @@map("reading_progress")
 }

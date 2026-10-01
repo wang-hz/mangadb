@@ -1,9 +1,14 @@
+import { readingProgressController } from '@/controller/reading-progress.controller';
 import { MangadbController } from '@/controller/mangadb.controller';
 import { requireAdmin } from '@/middleware/auth';
 import { Router } from 'express';
 
 const router = Router();
 const mangadbController = new MangadbController();
+
+router.get('/reading-progress', readingProgressController.list);
+router.get('/reading-progress/:uuid', readingProgressController.get);
+router.post('/reading-progress', readingProgressController.submit);
 
 router.get('/mangas', mangadbController.getMangasByPage);
 router.get('/mangas/:uuid', mangadbController.getMangaByUuid);
