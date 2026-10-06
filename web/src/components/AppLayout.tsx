@@ -39,8 +39,8 @@ export default function AppLayout() {
   const isMobile = screens.md === false
 
   const navItems = [
-    { key: 'mangas', icon: <BookOutlined />, label: t('nav.manga'), onClick: () => navigate('/mangas') },
     { key: 'recent', icon: <BookOutlined />, label: t('progress.recent'), onClick: () => navigate('/recent') },
+    { key: 'mangas', icon: <BookOutlined />, label: t('nav.manga'), onClick: () => navigate('/mangas') },
     { key: 'tags', icon: <TagOutlined />, label: t('nav.tags'), onClick: () => navigate('/tags') },
   ]
 
