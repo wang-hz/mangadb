@@ -1,4 +1,4 @@
-import ReadingProgressControls from '../components/ReadingProgressControls'
+import ReadingProgressTag from '../components/ReadingProgressTag'
 import { useProgress } from '../progress/ProgressProvider'
 import { ArrowLeftOutlined, OrderedListOutlined, ReadOutlined } from '@ant-design/icons'
 import { Button, DatePicker, Descriptions, Form, Grid, Input, message, Select, Space, Spin, Tag } from 'antd'
@@ -24,7 +24,7 @@ export default function MangaDetailPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const { t } = useTranslation()
-  const { records } = useProgress()
+  const { records, pending } = useProgress()
   const backTo: string = (location.state as { from?: string } | null)?.from ?? '/mangas'
   const screens = useBreakpoint()
   const isMobile = screens.md === false
@@ -121,10 +121,13 @@ export default function MangaDetailPage() {
             style={{ width: '100%', borderRadius: 4, display: 'block' }}
             onError={onImgError}
           />
+          <Space wrap size="small">
+            <ReadingProgressTag entry={records[manga.uuid]} pageCount={manga.pages.length} />
+            {pending && <span style={{ fontSize: 12, color: '#888' }}>{t('progress.pending')}</span>}
+          </Space>
           <Button type="primary" icon={<ReadOutlined />} block onClick={() => navigate(`/mangas/${manga.uuid}/read`)}>
             {t(records[manga.uuid] && !records[manga.uuid].deleted ? 'progress.continue' : 'manga.startReading')}
           </Button>
-          <ReadingProgressControls manga={manga} pageCount={manga.pages.length} />
           {isAdmin && (
             <Button icon={<OrderedListOutlined />} block onClick={() => navigate(`/mangas/${manga.uuid}/pages`)}>
               {t('manga.pageManagement')}
