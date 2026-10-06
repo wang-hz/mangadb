@@ -1,11 +1,11 @@
-import { useTranslation } from 'react-i18next'
 import { useProgress } from '../progress/ProgressProvider'
-import { Empty, Tag } from 'antd'
+import { Empty } from 'antd'
 import { memo } from 'react'
 import { Link } from 'react-router-dom'
 import type { Manga } from '../types'
 import { formatDate } from '../utils/date'
 import CoverImage from './CoverImage'
+import ReadingProgressTag from './ReadingProgressTag'
 
 interface Props {
   data: Manga[]
@@ -41,7 +41,6 @@ interface CardProps {
 
 const MangaCard = memo(function MangaCard({ manga, from }: CardProps) {
   const { records } = useProgress()
-  const { t } = useTranslation()
   const progress = records[manga.uuid]
   return (
     <Link
@@ -53,13 +52,13 @@ const MangaCard = memo(function MangaCard({ manga, from }: CardProps) {
       <div style={coverContainerStyle}>
         <CoverImage uuid={manga.uuid} cover={manga.cover} thumb style={coverImgStyle} />
       </div>
-      <div style={{ padding: '8px 10px' }}>
+      <div style={{ padding: '8px 10px 42px' }}>
         <div style={titleStyle}>{manga.displayTitle}</div>
-        {progress && !progress.deleted && <Tag color={progress.state === 'completed' ? 'green' : 'blue'} style={{ marginTop: 4 }}>{t(progress.state === 'completed' ? 'progress.completed' : 'progress.reading')}</Tag>}
         {manga.publishDate && (
           <div style={dateStyle}>{formatDate(manga.publishDate)}</div>
         )}
       </div>
+      <ReadingProgressTag entry={progress} pageCount={manga.pages.length} style={{ position: 'absolute', left: 10, bottom: 10, margin: 0 }} />
     </Link>
   )
 })

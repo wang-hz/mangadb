@@ -1,8 +1,9 @@
-import { Button, message, Space, Tag } from 'antd'
+import { Button, message, Space } from 'antd'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ProgressManga } from '../../../mobile/src/sync/protocol'
 import { useProgress } from '../progress/ProgressProvider'
+import ReadingProgressTag from './ReadingProgressTag'
 
 export default function ReadingProgressControls({ manga, pageCount, recent = false }: { manga: ProgressManga; pageCount: number; recent?: boolean }) {
   const { records, store, sync, pending } = useProgress()
@@ -19,10 +20,7 @@ export default function ReadingProgressControls({ manga, pageCount, recent = fal
     finally { setSaving(false) }
   }
   return <Space wrap size="small">
-    <Tag color={exists ? entry.state === 'completed' ? 'green' : 'blue' : undefined}>
-      {t(exists ? entry.state === 'completed' ? 'progress.completed' : 'progress.reading' : 'progress.unread')}
-      {exists && ` · ${Math.min(entry.pageIndex + 1, pageCount)}/${pageCount}`}
-    </Tag>
+    <ReadingProgressTag entry={entry} pageCount={pageCount} />
     {pending && <span style={{ fontSize: 12, color: '#888' }}>{t('progress.pending')}</span>}
     {pageCount > 0 && <Button size="small" disabled={saving} onClick={() => void update({ pageIndex: pageCount - 1, state: 'completed' })}>{t('progress.markCompleted')}</Button>}
     {exists && <>
