@@ -45,12 +45,23 @@ export function anchorIndexForColumns(
   columns: number,
 ): number {
   if (itemCount <= 0) return 0
-  const safeColumns = Math.max(1, Math.trunc(columns))
+  const safeColumns = Math.max(1, Math.trunc(finite(columns)))
   const clampedIndex = Math.min(
     itemCount - 1,
     Math.max(0, Math.trunc(finite(visibleIndex))),
   )
   return Math.floor(clampedIndex / safeColumns) * safeColumns
+}
+
+// FlatList groups items into rows when numColumns > 1. Its scrollToIndex and
+// onScrollToIndexFailed APIs use row indices, while viewability uses item indices.
+export function anchorRowIndexForColumns(
+  visibleIndex: number,
+  itemCount: number,
+  columns: number,
+): number {
+  const safeColumns = Math.max(1, Math.trunc(finite(columns)))
+  return anchorIndexForColumns(visibleIndex, itemCount, safeColumns) / safeColumns
 }
 
 function widthForColumns(

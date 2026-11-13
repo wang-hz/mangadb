@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { FlatList, type ViewToken } from 'react-native'
-import { anchorIndexForColumns } from '@/utils/grid'
+import { anchorRowIndexForColumns } from '@/utils/grid'
 
 export function useAdaptiveGridAnchor<Item>(
   columns: number,
@@ -8,33 +8,37 @@ export function useAdaptiveGridAnchor<Item>(
 ) {
   const listRef = useRef<FlatList<Item>>(null)
   const visibleAnchorRef = useRef(0)
-  const layoutRef = useRef({ columns, generation: 0 })
-  if (layoutRef.current.columns !== columns) {
-    layoutRef.current = {
-      columns,
-      generation: layoutRef.current.generation + 1,
-    }
+  const layoutRef = useRef({ columns, itemCount, generation: 0 })
+  layoutRef.current = {
+    columns,
+    itemCount,
+    generation: layoutRef.current.generation + (layoutRef.current.columns !== columns ? 1 : 0),
   }
   const generation = layoutRef.current.generation
-  const generationRef = useRef(generation)
-  generationRef.current = generation
   const mountedRef = useRef(true)
   const restoreFrameRef = useRef<number | null>(null)
   const restoreAttemptsRef = useRef(0)
 
   const scrollToAnchor = useCallback((index: number, callbackGeneration: number) => {
-    const target = anchorIndexForColumns(index, itemCount, columns)
     if (restoreFrameRef.current !== null) cancelAnimationFrame(restoreFrameRef.current)
-    restoreFrameRef.current = requestAnimationFrame(() => {
+    const frame = requestAnimationFrame(() => {
+      if (restoreFrameRef.current !== frame) return
       restoreFrameRef.current = null
-      if (!mountedRef.current || generationRef.current !== callbackGeneration) return
+      const current = layoutRef.current
+      if (
+        !mountedRef.current ||
+        current.generation !== callbackGeneration ||
+        current.itemCount === 0
+      ) return
+      const target = anchorRowIndexForColumns(index, current.itemCount, current.columns)
       listRef.current?.scrollToIndex({ index: target, animated: false, viewPosition: 0 })
     })
-  }, [columns, itemCount])
+    restoreFrameRef.current = frame
+  }, [])
 
   const onViewableItemsChanged = useMemo(
     () => (info: { viewableItems: Array<ViewToken<Item>> }) => {
-      if (!mountedRef.current || generationRef.current !== generation) return
+      if (!mountedRef.current || layoutRef.current.generation !== generation) return
       const firstVisible = info.viewableItems
         .map(token => token.index)
         .filter((index): index is number => index !== null)
@@ -66,12 +70,13 @@ export function useAdaptiveGridAnchor<Item>(
   const onScrollToIndexFailed = useCallback(({ index }: { index: number }) => {
     if (
       !mountedRef.current ||
-      generationRef.current !== generation ||
+      layoutRef.current.generation !== generation ||
       restoreAttemptsRef.current >= 4
     ) return
     restoreAttemptsRef.current += 1
-    scrollToAnchor(index, generation)
-  }, [generation, scrollToAnchor])
+    // The failed index is already a row; convert to an item before restoring.
+    scrollToAnchor(index * columns, generation)
+  }, [columns, generation, scrollToAnchor])
 
   return {
     generation,

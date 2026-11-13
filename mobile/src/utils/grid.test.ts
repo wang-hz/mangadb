@@ -1,4 +1,4 @@
-import { adaptiveGridLayout, anchorIndexForColumns } from './grid'
+import { adaptiveGridLayout, anchorIndexForColumns, anchorRowIndexForColumns } from './grid'
 
 describe('adaptiveGridLayout', () => {
   it.each([
@@ -40,5 +40,20 @@ describe('anchorIndexForColumns', () => {
     expect(anchorIndexForColumns(99, 7, 3)).toBe(6)
     expect(anchorIndexForColumns(-4, 7, 3)).toBe(0)
     expect(anchorIndexForColumns(4, 0, 3)).toBe(0)
+  })
+})
+
+describe('anchorRowIndexForColumns', () => {
+  it.each([
+    [236, 264, 2, 118],
+    [17, 50, 3, 5],
+    [17, 50, 4, 4],
+    [99, 7, 3, 2],
+    [6, 7, 2, 3],
+    [17, 50, 1, 17],
+    [-4, 7, 3, 0],
+    [4, 0, 3, 0],
+  ])('maps item %i of %i in %i columns to row %i', (index, count, columns, row) => {
+    expect(anchorRowIndexForColumns(index, count, columns)).toBe(row)
   })
 })
