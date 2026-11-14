@@ -126,6 +126,25 @@ describe('PagedReader preferences', () => {
     expect(screen.getAllByLabelText('页面图片-contain').length).toBeGreaterThan(0)
   })
 
+  it.each(['ltr', 'rtl'] as const)('jumps immediately in %s mode and ignores stale momentum', direction => {
+    const scroll = jest.spyOn(FlatList.prototype, 'scrollToIndex').mockImplementation(() => {})
+    const { onPageChange, view } = renderReader({ pagedDirection: direction })
+    const list = view.UNSAFE_getByType(FlatList)
+    fireEvent.press(screen.getByLabelText('跳转页码'))
+    fireEvent.changeText(screen.getByLabelText('目标页码'), '4')
+    fireEvent.press(screen.getByText('跳转'))
+    expect(scroll).toHaveBeenLastCalledWith({ index: direction === 'rtl' ? 0 : 3, animated: false })
+    expect(onPageChange).toHaveBeenCalledWith(3)
+    act(() => list.props.onMomentumScrollEnd({ nativeEvent: { contentOffset: { x: 0 } } }))
+    expect(onPageChange).toHaveBeenCalledTimes(1)
+    // Navigation buttons must resume ordinary page tracking after a jump.
+    fireEvent.press(screen.getByLabelText('下一页'))
+    const width = list.props.getItemLayout(null, 0).length
+    act(() => list.props.onMomentumScrollEnd({ nativeEvent: { contentOffset: { x: width * (direction === 'rtl' ? 1 : 2) } } }))
+    expect(onPageChange).toHaveBeenLastCalledWith(2)
+    scroll.mockRestore()
+  })
+
   it('does not start full-resolution image prefetches', async () => {
     const { view } = renderReader({ pagedDirection: 'rtl' })
 
@@ -287,6 +306,21 @@ describe('PagedReader preferences', () => {
     act(() => { jest.advanceTimersByTime(timeout - 1) })
     expect(screen.getByLabelText('退出阅读器')).toBeOnTheScreen()
     act(() => { jest.advanceTimersByTime(1) })
+    expect(screen.queryByLabelText('退出阅读器')).toBeNull()
+    view.unmount()
+    jest.useRealTimers()
+  })
+
+  it('pauses auto-hide while dragging and restarts the timer on cancellation', () => {
+    jest.useFakeTimers()
+    const { view } = renderReader({ controlsAutoHideMs: 3000 })
+    const slider = screen.getByLabelText('阅读进度')
+    act(() => slider.props.onLayout({ nativeEvent: { layout: { width: 200 } } }))
+    fireEvent(slider, 'responderGrant', { nativeEvent: { locationX: 10, pageX: 10 } })
+    act(() => { jest.advanceTimersByTime(6000) })
+    expect(screen.getByLabelText('退出阅读器')).toBeOnTheScreen()
+    fireEvent(slider, 'responderTerminate')
+    act(() => { jest.advanceTimersByTime(3000) })
     expect(screen.queryByLabelText('退出阅读器')).toBeNull()
     view.unmount()
     jest.useRealTimers()

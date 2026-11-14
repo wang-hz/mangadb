@@ -41,6 +41,53 @@ describe('ScrollingReader preferences', () => {
     expect(list.props.renderItem({ item: '2.jpg', index: 2 }).props.pageGap).toBe(0)
   })
 
+  it('jumps to the page offset and ignores an earlier scroll completion', () => {
+    const scroll = jest.spyOn(FlatList.prototype, 'scrollToOffset').mockImplementation(() => {})
+    const onPageChange = jest.fn()
+    const { view } = renderReader({ onPageChange })
+    const list = view.UNSAFE_getByType(FlatList)
+    // A prior manual scroll must not overwrite the explicit target.
+    act(() => list.props.onScrollBeginDrag())
+    // Reveal the controls again with the page tap handler.
+    act(() => list.props.renderItem({ item: '0.jpg', index: 0 }).props.onTap())
+    fireEvent.press(screen.getByLabelText('跳转页码'))
+    fireEvent.changeText(screen.getByLabelText('目标页码'), '3')
+    fireEvent.press(screen.getByText('跳转'))
+    expect(scroll).toHaveBeenLastCalledWith({ offset: list.props.getItemLayout(null, 2).offset, animated: false })
+    expect(onPageChange).toHaveBeenCalledWith(2)
+    act(() => {
+      list.props.onScroll({ nativeEvent: { contentOffset: { y: 0 } } })
+      list.props.onMomentumScrollEnd()
+    })
+    expect(onPageChange).toHaveBeenCalledTimes(1)
+    view.unmount()
+    scroll.mockRestore()
+  })
+
+  it('keeps a jump anchored as image sizes resolve, then releases it on manual scrolling', async () => {
+    const scroll = jest.spyOn(FlatList.prototype, 'scrollToOffset').mockImplementation(() => {})
+    const { view } = renderReader()
+    const list = view.UNSAFE_getByType(FlatList)
+    fireEvent.press(screen.getByLabelText('跳转页码'))
+    fireEvent.changeText(screen.getByLabelText('目标页码'), '3')
+    fireEvent.press(screen.getByText('跳转'))
+    await act(async () => {
+      list.props.renderItem({ item: '0.jpg', index: 0 }).props.onAspectRatio(0, 1)
+      await new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
+    })
+    const updatedList = view.UNSAFE_getByType(FlatList)
+    expect(scroll).toHaveBeenLastCalledWith({ offset: updatedList.props.getItemLayout(null, 2).offset, animated: false })
+    scroll.mockClear()
+    act(() => updatedList.props.onContentSizeChange())
+    expect(scroll).toHaveBeenCalledTimes(1)
+    act(() => updatedList.props.onScrollBeginDrag())
+    scroll.mockClear()
+    act(() => updatedList.props.onContentSizeChange())
+    expect(scroll).not.toHaveBeenCalled()
+    view.unmount()
+    scroll.mockRestore()
+  })
+
   it('locks vertical scrolling while an image is zoomed', () => {
     const { view } = renderReader()
     fireEvent(

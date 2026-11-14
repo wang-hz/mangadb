@@ -3,23 +3,19 @@ import { StatusBar } from 'expo-status-bar'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
-  AppState,
   FlatList,
-  KeyboardAvoidingView,
-  Modal,
   Platform,
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { ApiClient } from '@/api/client'
 import type { MangaDetail } from '@/api/types'
-import { PrimaryButton } from '@/components/PrimaryButton'
 import { ReaderCompletionPanel } from '@/components/reader/ReaderCompletionPanel'
 import { ReaderDimmer } from '@/components/reader/ReaderDimmer'
+import { ReaderProgressControls } from '@/components/reader/ReaderProgressControls'
 import { ReaderTopBar } from '@/components/reader/ReaderTopBar'
 import { ZoomableReaderImage } from '@/components/reader/ZoomableReaderImage'
 import {
@@ -96,7 +92,8 @@ export function PagedReader({
   const epochRef = useRef(epoch)
   epochRef.current = epoch
   const [controlsVisible, setControlsVisible] = useState(true)
-  const [jumpVisible, setJumpVisible] = useState(false)
+  const [progressInteracting, setProgressInteracting] = useState(false)
+  const explicitJumpRef = useRef(false)
   const [pageZoomed, setPageZoomed] = useState(false)
   const firstPageReportedRef = useRef(false)
   const visiblePageRef = useRef(pageIndex)
@@ -126,30 +123,33 @@ export function PagedReader({
 
   useEffect(() => {
     setPageZoomed(false)
-    setJumpVisible(false)
   }, [epoch])
 
   useEffect(() => {
-    const subscription = AppState.addEventListener('change', state => {
-      if (state !== 'active' && isCurrentEpoch(epoch)) setJumpVisible(false)
-    })
-    return () => subscription.remove()
-  }, [epoch, isCurrentEpoch])
-
-  useEffect(() => {
-    if (!controlsVisible || jumpVisible || settingsVisible) return
+    if (!controlsVisible || progressInteracting || settingsVisible) return
     if (preferences.controlsAutoHideMs === null) return
     const timeout = setTimeout(() => setControlsVisible(false), preferences.controlsAutoHideMs)
     return () => clearTimeout(timeout)
-  }, [controlsVisible, jumpVisible, settingsVisible, pageIndex, preferences.controlsAutoHideMs])
+  }, [controlsVisible, progressInteracting, settingsVisible, pageIndex, preferences.controlsAutoHideMs])
 
   const scrollToPage = (nextIndex: number, animated = true) => {
     if (!isCurrentEpoch(epoch)) return
+    explicitJumpRef.current = false
     const clamped = clampPageIndex(nextIndex, manga.pages.length)
     listRef.current?.scrollToIndex({
       index: displayIndexForPage(clamped, manga.pages.length, preferences.pagedDirection),
       animated,
     })
+  }
+
+  const jumpToPage = (nextIndex: number) => {
+    if (!isCurrentEpoch(epoch)) return
+    const clamped = clampPageIndex(nextIndex, manga.pages.length)
+    setPageZoomed(false)
+    scrollToPage(clamped, false)
+    explicitJumpRef.current = true
+    onPageChange(clamped)
+    setControlsVisible(true)
   }
 
   const handlePageTap = (x: number) => {
@@ -182,8 +182,9 @@ export function PagedReader({
         key={`${preferences.pagedDirection}:${epoch}`}
         keyExtractor={index => String(index)}
         maxToRenderPerBatch={1}
+        onScrollBeginDrag={() => { if (isCurrentEpoch(epoch)) explicitJumpRef.current = false }}
         onMomentumScrollEnd={event => {
-          if (!isCurrentEpoch(epoch)) return
+          if (!isCurrentEpoch(epoch) || explicitJumpRef.current) return
           const displayIndex = clampPageIndex(
             Math.round(event.nativeEvent.contentOffset.x / width),
             manga.pages.length,
@@ -247,14 +248,12 @@ export function PagedReader({
                 >
                   <Ionicons color="#ffffff" name="chevron-back" size={25} />
                 </Pressable>
-                <Pressable
-                  accessibilityHint="输入要跳转的页码"
-                  accessibilityRole="button"
-                  onPress={() => setJumpVisible(true)}
-                  style={styles.pageIndicator}
-                >
-                  <Text style={styles.pageIndicatorText}>{pageIndex + 1} / {manga.pages.length}</Text>
-                </Pressable>
+                <ReaderProgressControls
+                  pageIndex={pageIndex}
+                  pageCount={manga.pages.length}
+                  onJump={jumpToPage}
+                  onInteractionChange={setProgressInteracting}
+                />
                 <Pressable
                   accessibilityLabel={preferences.pagedDirection === 'rtl' ? '上一页' : '下一页'}
                   accessibilityRole="button"
@@ -272,7 +271,7 @@ export function PagedReader({
                 ? (
                     <View style={[
                       styles.completionPanel,
-                      { bottom: Math.max(insets.bottom, 10) + 70 },
+                      { bottom: Math.max(insets.bottom, 10) + 110 },
                     ]}>
                       <ReaderCompletionPanel
                         completed={completed}
@@ -289,18 +288,6 @@ export function PagedReader({
             </>
           )
         : null}
-
-      <PageJumpModal
-        currentPage={pageIndex + 1}
-        onClose={() => setJumpVisible(false)}
-        onJump={page => {
-          setJumpVisible(false)
-          setControlsVisible(true)
-          scrollToPage(page - 1)
-        }}
-        pageCount={manga.pages.length}
-        visible={jumpVisible}
-      />
     </View>
   )
 }
@@ -483,92 +470,6 @@ const ReaderPage = memo(function ReaderPage({
   )
 })
 
-function PageJumpModal({
-  visible,
-  currentPage,
-  pageCount,
-  onClose,
-  onJump,
-}: {
-  visible: boolean
-  currentPage: number
-  pageCount: number
-  onClose: () => void
-  onJump: (page: number) => void
-}) {
-  const [value, setValue] = useState(String(currentPage))
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (visible) {
-      setValue(String(currentPage))
-      setError(null)
-    }
-  }, [visible, currentPage])
-
-  const submit = () => {
-    if (!/^\d+$/.test(value)) {
-      setError('请输入有效页码')
-      return
-    }
-    const page = Number(value)
-    if (page < 1 || page > pageCount) {
-      setError(`页码范围为 1–${pageCount}`)
-      return
-    }
-    onJump(page)
-  }
-
-  return (
-    <Modal
-      animationType="fade"
-      onRequestClose={onClose}
-      statusBarTranslucent
-      supportedOrientations={[
-        'portrait',
-        'portrait-upside-down',
-        'landscape-left',
-        'landscape-right',
-      ]}
-      transparent
-      visible={visible}
-    >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.modalBackdrop}
-      >
-        <View style={styles.modalCard}>
-          <Text style={styles.modalTitle}>跳转页码</Text>
-          <TextInput
-            accessibilityLabel="目标页码"
-            autoFocus
-            keyboardType="number-pad"
-            onChangeText={text => {
-              setValue(text)
-              setError(null)
-            }}
-            onSubmitEditing={submit}
-            selectTextOnFocus
-            style={[styles.modalInput, error ? styles.modalInputError : null]}
-            value={value}
-          />
-          <Text style={error ? styles.modalError : styles.modalHelp}>
-            {error ?? `共 ${pageCount} 页`}
-          </Text>
-          <View style={styles.modalActions}>
-            <Pressable accessibilityRole="button" onPress={onClose} style={styles.modalCancel}>
-              <Text style={styles.modalCancelText}>取消</Text>
-            </Pressable>
-            <View style={styles.modalPrimary}>
-              <PrimaryButton onPress={submit}>跳转</PrimaryButton>
-            </View>
-          </View>
-        </View>
-      </KeyboardAvoidingView>
-    </Modal>
-  )
-}
-
 const styles = StyleSheet.create({
   root: {
     flex: 1,
@@ -620,8 +521,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 22,
+    gap: 8,
     paddingTop: 7,
+    paddingHorizontal: 12,
     backgroundColor: 'rgba(0,0,0,0.82)',
   },
   controlButton: {
@@ -633,86 +535,5 @@ const styles = StyleSheet.create({
   },
   controlDisabled: {
     opacity: 0.3,
-  },
-  pageIndicator: {
-    minWidth: 100,
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.14)',
-  },
-  pageIndicatorText: {
-    color: '#ffffff',
-    fontSize: 15,
-    fontVariant: ['tabular-nums'],
-    fontWeight: '700',
-  },
-  modalBackdrop: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-    backgroundColor: 'rgba(0,0,0,0.72)',
-  },
-  modalCard: {
-    width: '100%',
-    maxWidth: 360,
-    gap: 12,
-    padding: 20,
-    borderRadius: 16,
-    backgroundColor: colors.surface,
-  },
-  modalTitle: {
-    color: colors.text,
-    fontSize: 19,
-    fontWeight: '700',
-  },
-  modalInput: {
-    minHeight: 52,
-    paddingHorizontal: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 10,
-    color: colors.text,
-    fontSize: 20,
-    textAlign: 'center',
-    backgroundColor: colors.surface,
-  },
-  modalInputError: {
-    borderColor: colors.danger,
-  },
-  modalHelp: {
-    color: colors.muted,
-    fontSize: 13,
-    textAlign: 'center',
-  },
-  modalError: {
-    color: colors.danger,
-    fontSize: 13,
-    textAlign: 'center',
-  },
-  modalActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginTop: 4,
-  },
-  modalCancel: {
-    minHeight: 48,
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 10,
-  },
-  modalCancelText: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  modalPrimary: {
-    flex: 1,
   },
 })

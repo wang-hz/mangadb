@@ -15,6 +15,7 @@ import type { ApiClient } from '@/api/client'
 import type { MangaDetail } from '@/api/types'
 import { ReaderCompletionPanel } from '@/components/reader/ReaderCompletionPanel'
 import { ReaderDimmer } from '@/components/reader/ReaderDimmer'
+import { ReaderProgressControls } from '@/components/reader/ReaderProgressControls'
 import { ReaderTopBar } from '@/components/reader/ReaderTopBar'
 import { ZoomableReaderImage } from '@/components/reader/ZoomableReaderImage'
 import {
@@ -28,6 +29,7 @@ import type { ReaderPreferences } from '@/storage/readerPreferences'
 import { colors } from '@/theme/colors'
 import {
   buildScrollingPageLayouts,
+  clampPageIndex,
   pageIndexAtViewportCenter,
   type ReaderMode,
 } from '@/utils/reader'
@@ -98,6 +100,8 @@ export function ScrollingReader({
   visiblePageRef.current = pageIndex
   const [aspectRatios, setAspectRatios] = useState<Record<number, number>>({})
   const [controlsVisible, setControlsVisible] = useState(true)
+  const [progressInteracting, setProgressInteracting] = useState(false)
+  const jumpTargetRef = useRef<number | null>(null)
   const [zoomedPageIndex, setZoomedPageIndex] = useState<number | null>(null)
   const isCurrentEpoch = useCallback(
     (callbackEpoch: number) => mountedRef.current && epochRef.current === callbackEpoch,
@@ -133,15 +137,40 @@ export function ScrollingReader({
   useEffect(() => {
     setZoomedPageIndex(null)
     userInteractingRef.current = false
+    jumpTargetRef.current = null
     scrollOffsetRef.current = layouts[pageIndex]?.offset ?? 0
   }, [epoch])
 
   useEffect(() => {
-    if (!controlsVisible || settingsVisible) return
+    if (!controlsVisible || settingsVisible || progressInteracting) return
     if (preferences.controlsAutoHideMs === null) return
     const timeout = setTimeout(() => setControlsVisible(false), preferences.controlsAutoHideMs)
     return () => clearTimeout(timeout)
-  }, [controlsVisible, settingsVisible, pageIndex, preferences.controlsAutoHideMs])
+  }, [controlsVisible, settingsVisible, progressInteracting, pageIndex, preferences.controlsAutoHideMs])
+
+  // Keep the selected page anchored while its estimated image sizes resolve.
+  const restoreJumpTarget = useCallback(() => {
+    const target = jumpTargetRef.current
+    if (target === null || !isCurrentEpoch(epoch)) return
+    const offset = layoutsRef.current[target]?.offset ?? 0
+    scrollOffsetRef.current = offset
+    listRef.current?.scrollToOffset({ offset, animated: false })
+  }, [epoch, isCurrentEpoch])
+
+  useEffect(restoreJumpTarget, [layouts, restoreJumpTarget])
+
+  const jumpToPage = (nextIndex: number) => {
+    if (!isCurrentEpoch(epoch)) return
+    const target = clampPageIndex(nextIndex, manga.pages.length)
+    jumpTargetRef.current = target
+    userInteractingRef.current = false
+    setZoomedPageIndex(null)
+    const offset = layoutsRef.current[target]?.offset ?? 0
+    scrollOffsetRef.current = offset
+    listRef.current?.scrollToOffset({ offset, animated: false })
+    callbackRef.current(target)
+    setControlsVisible(true)
+  }
 
   const settleVisiblePage = () => {
     if (!isCurrentEpoch(epoch) || !userInteractingRef.current) return
@@ -209,7 +238,7 @@ export function ScrollingReader({
         ListFooterComponent={pageIndex === manga.pages.length - 1 ? (
           <View style={[
             styles.completionFooter,
-            { paddingBottom: Math.max(24, insets.bottom + 12) },
+            { paddingBottom: Math.max(24, insets.bottom + 110) },
           ]}>
             <ReaderCompletionPanel
               completed={completed}
@@ -225,9 +254,11 @@ export function ScrollingReader({
         maxToRenderPerBatch={1}
         onScrollBeginDrag={() => {
           if (!isCurrentEpoch(epoch)) return
+          jumpTargetRef.current = null
           userInteractingRef.current = true
           setControlsVisible(false)
         }}
+        onContentSizeChange={restoreJumpTarget}
         onMomentumScrollEnd={settleVisiblePage}
         onScroll={event => {
           if (isCurrentEpoch(epoch)) {
@@ -278,8 +309,16 @@ export function ScrollingReader({
                 title={manga.displayTitle}
                 topInset={insets.top}
               />
-              <View style={[styles.pageBadge, { bottom: Math.max(insets.bottom, 12) }]}>
-                <Text style={styles.pageBadgeText}>{pageIndex + 1} / {manga.pages.length}</Text>
+              <View style={[styles.progressBar, { paddingBottom: Math.max(insets.bottom, 10) }]}>
+                <ReaderProgressControls
+                  pageIndex={pageIndex}
+                  pageCount={manga.pages.length}
+                  onJump={jumpToPage}
+                  onInteractionChange={interacting => {
+                    if (interacting) userInteractingRef.current = false
+                    setProgressInteracting(interacting)
+                  }}
+                />
               </View>
             </>
           )
@@ -476,6 +515,17 @@ const ScrollingPage = memo(function ScrollingPage({
 })
 
 const styles = StyleSheet.create({
+  progressBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingTop: 7,
+    backgroundColor: 'rgba(0,0,0,0.82)',
+  },
   root: {
     flex: 1,
     backgroundColor: colors.reader,
@@ -515,19 +565,5 @@ const styles = StyleSheet.create({
   metadataRefreshError: {
     color: '#fca5a5',
     fontSize: 12,
-  },
-  pageBadge: {
-    position: 'absolute',
-    alignSelf: 'center',
-    paddingHorizontal: 15,
-    paddingVertical: 9,
-    borderRadius: 999,
-    backgroundColor: 'rgba(0,0,0,0.78)',
-  },
-  pageBadgeText: {
-    color: '#ffffff',
-    fontSize: 14,
-    fontVariant: ['tabular-nums'],
-    fontWeight: '700',
   },
 })
