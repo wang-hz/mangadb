@@ -1,5 +1,26 @@
 # Reader Interaction Decisions
 
+## Floating reading controls
+
+- Both modes share a dark floating header and bottom panel inside the safe area.
+  The bottom panel holds progress, numeric page jump, thumbnails, and mode selection.
+  Paged mode also exposes previous/next buttons; controls have 44-point touch targets.
+- The panel scrolls vertically when space is limited, including at the last page.
+  Reader settings and page jump use the same dark palette. Settings show the current
+  reading mode; selecting a mode there also updates the saved device default, with
+  rollback to the prior active mode if saving fails.
+- Thumbnails are collapsed on entry. Opening them centers the current page in a
+  virtualized horizontal list. Selecting a thumbnail jumps through the reader's
+  existing navigation path, resets zoom, and leaves the list open.
+- Paged RTL reverses thumbnails and the progress track while retaining logical
+  page indices for storage and accessibility. Scrolling uses increasing page order.
+- Online thumbnails use the authenticated `thumb=1` endpoint and existing cache
+  identity. Downloads use local files, never a network fallback. Failed or missing
+  thumbnails retain a selectable page-number placeholder.
+- Expanding thumbnails or interacting with progress pauses auto-hide. Closing the
+  list restarts the configured timeout. Settings, mode changes, viewport epochs,
+  and backgrounding dismiss thumbnails. The expanded state is not persisted.
+
 ## Image gestures
 
 - The reader uses the Expo SDK 55-compatible Gesture Handler, Reanimated, and

@@ -299,6 +299,9 @@ export function ScrollingReader({
 
       {controlsVisible ? (
         <ReaderControls
+          key={epoch}
+          api={api} manga={manga} serverUrl={serverUrl} userUuid={userUuid}
+          localPageUris={localPageUris} settingsVisible={settingsVisible}
           title={manga.displayTitle} mode={mode} direction={preferences.pagedDirection}
           pageIndex={pageIndex} pageCount={manga.pages.length}
           onBack={onBack} onOpenSettings={onOpenSettings} onModeChange={onModeChange}

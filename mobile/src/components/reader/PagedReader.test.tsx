@@ -145,6 +145,18 @@ describe('PagedReader preferences', () => {
     scroll.mockRestore()
   })
 
+  it('jumps from thumbnails using logical RTL pages and resets zoom', () => {
+    const scroll = jest.spyOn(FlatList.prototype, 'scrollToIndex').mockImplementation(() => {})
+    const { onPageChange, view } = renderReader({ pagedDirection: 'rtl' })
+    fireEvent(screen.getByLabelText('第 2 页图片'), 'accessibilityAction', { nativeEvent: { actionName: 'increment' } })
+    fireEvent.press(screen.getByLabelText('展开页面缩略图'))
+    fireEvent.press(screen.getByLabelText('跳转到第 1 页'))
+    expect(onPageChange).toHaveBeenLastCalledWith(0)
+    expect(view.UNSAFE_getAllByType(FlatList)[0].props.scrollEnabled).toBe(true)
+    expect(scroll).toHaveBeenCalledWith({ index: 3, animated: false })
+    scroll.mockRestore()
+  })
+
   it('does not start full-resolution image prefetches', async () => {
     const { view } = renderReader({ pagedDirection: 'rtl' })
 
@@ -276,9 +288,9 @@ describe('PagedReader preferences', () => {
   })
 
   it('allows all app orientations in the page jump modal and closes it in background', () => {
-    let appStateListener: ((state: 'background') => void) | undefined
+    const appStateListeners: Array<(state: 'background') => void> = []
     jest.spyOn(AppState, 'addEventListener').mockImplementation(((_event, listener) => {
-      appStateListener = listener as (state: 'background') => void
+      appStateListeners.push(listener as (state: 'background') => void)
       return { remove: jest.fn() } as NativeEventSubscription
     }) as typeof AppState.addEventListener)
     const { view } = renderReader()
@@ -293,7 +305,7 @@ describe('PagedReader preferences', () => {
       'landscape-right',
     ])
 
-    act(() => appStateListener?.('background'))
+    act(() => appStateListeners.forEach(listener => listener('background')))
     expect(view.UNSAFE_getByType(Modal).props.visible).toBe(false)
     jest.restoreAllMocks()
   })
@@ -335,4 +347,23 @@ describe('PagedReader preferences', () => {
     jest.useRealTimers()
   })
 
+  it('pauses auto-hide while thumbnails are open and resumes after closing', () => {
+    const scroll = jest.spyOn(FlatList.prototype, 'scrollToIndex').mockImplementation(() => {})
+    jest.useFakeTimers()
+    try {
+      const { view } = renderReader()
+      fireEvent.press(screen.getByLabelText('展开页面缩略图'))
+      act(() => jest.advanceTimersByTime(10000))
+      expect(screen.getByLabelText('收起页面缩略图')).toBeOnTheScreen()
+      fireEvent.press(screen.getByLabelText('收起页面缩略图'))
+      act(() => jest.advanceTimersByTime(2999))
+      expect(screen.getByLabelText('展开页面缩略图')).toBeOnTheScreen()
+      act(() => jest.advanceTimersByTime(1))
+      expect(screen.queryByLabelText('展开页面缩略图')).toBeNull()
+      view.unmount()
+    } finally {
+      jest.useRealTimers()
+      scroll.mockRestore()
+    }
+  })
 })
