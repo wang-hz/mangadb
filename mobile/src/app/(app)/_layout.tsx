@@ -14,6 +14,8 @@ export default function ProtectedLayout() {
     <Stack
       screenOptions={({ route }) => ({
         headerShown: false,
+        // Keep reader back navigation at the edge, including on iOS 26.
+        fullScreenGestureEnabled: route.name === 'reader/[uuid]' ? false : undefined,
         contentStyle: {
           backgroundColor: route.name === 'reader/[uuid]'
             ? colors.reader

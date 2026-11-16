@@ -42,6 +42,9 @@ implementation is selected and physical Android testing covers:
 
 ## Completion and navigation
 
+- In both reading modes, iOS back navigation uses the native left-edge gesture.
+  Full-screen back gestures are explicitly disabled for the reader, including
+  on iOS 26, to avoid accidental exits while reading or scrolling.
 - Reaching the last active page automatically saves completion in both reading
   modes. Rendering a virtualized footer alone does not complete a manga.
 - Completion waits for earlier position writes. Rereading waits for an ongoing
