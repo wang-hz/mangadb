@@ -11,14 +11,17 @@ import { useReaderPreferences } from '@/providers/ReaderPreferencesContext'
 import type { ReaderPreferences } from '@/storage/readerPreferences'
 import { colors } from '@/theme/colors'
 import type { ReaderMode } from '@/utils/reader'
+import { readerChrome } from './readerChrome'
 
 interface ReaderPreferencesControlsProps {
+  currentMode?: ReaderMode
   dark?: boolean
   onDefaultModeChange?: (mode: ReaderMode) => void
 }
 
 export function ReaderPreferencesControls({
   dark = false,
+  currentMode,
   onDefaultModeChange,
 }: ReaderPreferencesControlsProps) {
   const { preferences, status, updatePreferences } = useReaderPreferences()
@@ -29,8 +32,8 @@ export function ReaderPreferencesControls({
     key: Key,
     value: ReaderPreferences[Key],
   ) => {
-    if (pending || preferences[key] === value) return
-    const previous = preferences[key]
+    const previous = key === 'defaultMode' ? currentMode ?? preferences.defaultMode : preferences[key]
+    if (pending || previous === value) return
     setPending(true)
     if (key === 'defaultMode') onDefaultModeChange?.(value as ReaderMode)
     try {
@@ -47,7 +50,8 @@ export function ReaderPreferencesControls({
 
   return (
     <View accessibilityLabel="阅读设置" style={styles.root}>
-      <PreferenceRow label="默认阅读模式" palette={palette}>
+      {dark ? <Text accessibilityRole="header" style={styles.groupTitle}>阅读方式</Text> : null}
+      <PreferenceRow label={currentMode ? '阅读模式' : '默认阅读模式'} palette={palette}>
         <SegmentedControl
           disabled={disabled}
           onChange={value => { void update('defaultMode', value) }}
@@ -56,7 +60,7 @@ export function ReaderPreferencesControls({
             { label: '连续滚动', value: 'scroll' },
           ]}
           palette={palette}
-          value={preferences.defaultMode}
+          value={currentMode ?? preferences.defaultMode}
         />
       </PreferenceRow>
 
@@ -73,6 +77,7 @@ export function ReaderPreferencesControls({
         />
       </PreferenceRow>
 
+      {dark ? <Text accessibilityRole="header" style={styles.groupTitle}>画面</Text> : null}
       <PreferenceRow label="翻页图片显示" palette={palette}>
         <SegmentedControl
           disabled={disabled}
@@ -100,20 +105,6 @@ export function ReaderPreferencesControls({
         />
       </PreferenceRow>
 
-      <PreferenceRow label="控制栏自动隐藏" palette={palette}>
-        <SegmentedControl
-          disabled={disabled}
-          onChange={value => { void update('controlsAutoHideMs', value) }}
-          options={[
-            { label: '3 秒', value: 3000 },
-            { label: '5 秒', value: 5000 },
-            { label: '不隐藏', value: null },
-          ]}
-          palette={palette}
-          value={preferences.controlsAutoHideMs}
-        />
-      </PreferenceRow>
-
       <PreferenceRow label="阅读画面亮度" palette={palette}>
         <SegmentedControl
           disabled={disabled}
@@ -129,6 +120,21 @@ export function ReaderPreferencesControls({
         <Text style={[styles.help, { color: palette.muted }]}>
           仅调暗阅读画面，不修改设备系统亮度
         </Text>
+      </PreferenceRow>
+
+      {dark ? <Text accessibilityRole="header" style={styles.groupTitle}>交互</Text> : null}
+      <PreferenceRow label="控制栏自动隐藏" palette={palette}>
+        <SegmentedControl
+          disabled={disabled}
+          onChange={value => { void update('controlsAutoHideMs', value) }}
+          options={[
+            { label: '3 秒', value: 3000 },
+            { label: '5 秒', value: 5000 },
+            { label: '不隐藏', value: null },
+          ]}
+          palette={palette}
+          value={preferences.controlsAutoHideMs}
+        />
       </PreferenceRow>
 
       <PreferenceRow label="双击缩放" palette={palette}>
@@ -217,7 +223,7 @@ function SegmentedControl<Value extends string | number | null>({
             disabled={disabled}
             key={`${option.label}:${String(option.value)}`}
             onPress={() => onChange(option.value)}
-            style={[styles.segment, selected ? { backgroundColor: palette.active } : null]}
+            style={[styles.segment, palette === darkPalette ? { minHeight: 44 } : null, selected ? { backgroundColor: palette.active } : null]}
           >
             <Text style={[
               styles.segmentText,
@@ -245,14 +251,15 @@ const lightPalette: Palette = {
 const darkPalette: Palette = {
   text: '#ffffff',
   muted: '#b8bcc5',
-  border: '#444a55',
-  inactive: '#272b32',
+  border: readerChrome.border,
+  inactive: readerChrome.raised,
   active: '#ffffff',
   activeText: '#111827',
   track: '#555b66',
 }
 
 const styles = StyleSheet.create({
+  groupTitle: { color: readerChrome.muted, fontSize: 12, fontWeight: '700', marginTop: 6 },
   root: {
     gap: 18,
   },

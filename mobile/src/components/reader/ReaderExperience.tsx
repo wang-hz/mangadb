@@ -192,6 +192,7 @@ export function ReaderExperience({
       {preferences.keepAwake ? <ReaderWakeLock /> : null}
       {reader}
       <ReaderSettingsModal
+        currentMode={mode}
         onClose={() => setSettingsVisible(false)}
         onDefaultModeChange={changeMode}
         visible={settingsVisible && !viewport.isTransitioning}

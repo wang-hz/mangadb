@@ -46,6 +46,19 @@ describe('ReaderProgressControls', () => {
     expect(onJump).toHaveBeenLastCalledWith(0)
   })
 
+  it('maps the RTL track to logical pages while preserving accessible increments', () => {
+    const onJump = jest.fn()
+    render(<ReaderProgressControls direction="rtl" pageCount={11} pageIndex={0} onJump={onJump} onInteractionChange={jest.fn()} />)
+    const slider = screen.getByLabelText('阅读进度')
+    act(() => slider.props.onLayout({ nativeEvent: { layout: { width: 220 } } }))
+    fireEvent(slider, 'responderGrant', { nativeEvent: { locationX: 10, pageX: 30 } })
+    expect(screen.getByText('11 / 11')).toBeOnTheScreen()
+    fireEvent(slider, 'responderRelease')
+    expect(onJump).toHaveBeenLastCalledWith(10)
+    fireEvent(slider, 'accessibilityAction', { nativeEvent: { actionName: 'increment' } })
+    expect(onJump).toHaveBeenLastCalledWith(1)
+  })
+
   it('discards a cancelled gesture', () => {
     const { slider, onJump } = renderControls()
     beginDrag(slider)

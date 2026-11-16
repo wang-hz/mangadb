@@ -15,8 +15,7 @@ import type { ApiClient } from '@/api/client'
 import type { MangaDetail } from '@/api/types'
 import { ReaderCompletionPanel } from '@/components/reader/ReaderCompletionPanel'
 import { ReaderDimmer } from '@/components/reader/ReaderDimmer'
-import { ReaderProgressControls } from '@/components/reader/ReaderProgressControls'
-import { ReaderTopBar } from '@/components/reader/ReaderTopBar'
+import { ReaderControls } from '@/components/reader/ReaderControls'
 import { ZoomableReaderImage } from '@/components/reader/ZoomableReaderImage'
 import {
   reportReaderTelemetry,
@@ -298,31 +297,15 @@ export function ScrollingReader({
       />
       <ReaderDimmer level={preferences.readerDimLevel} />
 
-      {controlsVisible
-        ? (
-            <>
-              <ReaderTopBar
-                mode={mode}
-                onBack={onBack}
-                onModeChange={onModeChange}
-                onOpenSettings={onOpenSettings}
-                title={manga.displayTitle}
-                topInset={insets.top}
-              />
-              <View style={[styles.progressBar, { paddingBottom: Math.max(insets.bottom, 10) }]}>
-                <ReaderProgressControls
-                  pageIndex={pageIndex}
-                  pageCount={manga.pages.length}
-                  onJump={jumpToPage}
-                  onInteractionChange={interacting => {
-                    if (interacting) userInteractingRef.current = false
-                    setProgressInteracting(interacting)
-                  }}
-                />
-              </View>
-            </>
-          )
-        : null}
+      {controlsVisible ? (
+        <ReaderControls
+          title={manga.displayTitle} mode={mode} direction={preferences.pagedDirection}
+          pageIndex={pageIndex} pageCount={manga.pages.length}
+          onBack={onBack} onOpenSettings={onOpenSettings} onModeChange={onModeChange}
+          onJump={jumpToPage}
+          onInteractionChange={setProgressInteracting}
+        />
+      ) : null}
     </View>
   )
 }
@@ -515,17 +498,6 @@ const ScrollingPage = memo(function ScrollingPage({
 })
 
 const styles = StyleSheet.create({
-  progressBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingTop: 7,
-    backgroundColor: 'rgba(0,0,0,0.82)',
-  },
   root: {
     flex: 1,
     backgroundColor: colors.reader,

@@ -60,6 +60,24 @@ describe('ReaderPreferencesControls', () => {
     })
   })
 
+  it('uses the current mode for selection and failure rollback inside the reader', async () => {
+    const onModeChange = jest.fn()
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {})
+    render(
+      <ReaderPreferencesProvider>
+        <ReaderPreferencesControls dark currentMode="scroll" onDefaultModeChange={onModeChange} />
+      </ReaderPreferencesProvider>,
+    )
+    await waitFor(() => expect(screen.getByLabelText('翻页')).not.toBeDisabled())
+    expect(screen.getByLabelText('连续滚动').props.accessibilityState.checked).toBe(true)
+    jest.mocked(AsyncStorage.setItem).mockRejectedValueOnce(new Error('disk unavailable'))
+    await act(async () => { fireEvent.press(screen.getByLabelText('翻页')) })
+    expect(onModeChange).toHaveBeenNthCalledWith(1, 'paged')
+    expect(onModeChange).toHaveBeenNthCalledWith(2, 'scroll')
+    expect(alert).toHaveBeenCalled()
+    alert.mockRestore()
+  })
+
   it('restores the previous value and alerts when persistence fails', async () => {
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {})
     const onDefaultModeChange = await renderControls()

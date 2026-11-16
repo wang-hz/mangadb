@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { AppState, Pressable, StyleSheet, Text, View } from 'react-native'
 import { PageJumpModal } from '@/components/reader/PageJumpModal'
+import type { PagedDirection } from '@/storage/readerPreferences'
 import { clampPageIndex } from '@/utils/reader'
 
 interface ReaderProgressControlsProps {
+  direction?: PagedDirection
   pageIndex: number
   pageCount: number
   onJump: (pageIndex: number) => void
@@ -11,7 +13,7 @@ interface ReaderProgressControlsProps {
 }
 
 export function ReaderProgressControls({
-  pageIndex, pageCount, onJump, onInteractionChange,
+  pageIndex, pageCount, onJump, onInteractionChange, direction = 'ltr',
 }: ReaderProgressControlsProps) {
   const [preview, setPreview] = useState<number | null>(null)
   const [jumpVisible, setJumpVisible] = useState(false)
@@ -22,7 +24,8 @@ export function ReaderProgressControls({
   interactionRef.current = onInteractionChange
   const disabled = pageCount <= 1
   const shownPage = clampPageIndex(preview ?? pageIndex, pageCount)
-  const fraction = pageCount > 1 ? shownPage / (pageCount - 1) : 0
+  const progress = pageCount > 1 ? shownPage / (pageCount - 1) : 0
+  const fraction = direction === 'rtl' ? 1 - progress : progress
 
   const cancelDrag = () => {
     draft.current = null
@@ -44,12 +47,12 @@ export function ReaderProgressControls({
     }
   }, [])
 
-  useEffect(() => { cancelDrag() }, [pageCount])
+  useEffect(() => { cancelDrag() }, [pageCount, direction])
 
   const previewAt = (x: number) => {
     if (disabled || width.current <= 20) return
     const ratio = Math.max(0, Math.min(1, (x - 10) / (width.current - 20)))
-    draft.current = Math.round(ratio * (pageCount - 1))
+    draft.current = Math.round((direction === 'rtl' ? 1 - ratio : ratio) * (pageCount - 1))
     setPreview(draft.current)
   }
 
@@ -93,7 +96,7 @@ export function ReaderProgressControls({
         style={[styles.slider, disabled ? styles.disabled : null]}
       >
         <View pointerEvents="none" style={styles.track}>
-          <View style={[styles.fill, { width: `${fraction * 100}%` }]} />
+          <View style={[styles.fill, { width: `${progress * 100}%`, alignSelf: direction === 'rtl' ? 'flex-end' : 'flex-start' }]} />
           <View style={[styles.thumb, { left: `${fraction * 100}%` }]} />
         </View>
       </View>

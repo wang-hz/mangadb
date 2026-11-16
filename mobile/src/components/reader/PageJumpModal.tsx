@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
-import { PrimaryButton } from '@/components/PrimaryButton'
+import { readerChrome } from './readerChrome'
 import { colors } from '@/theme/colors'
 
 export function PageJumpModal({
@@ -80,7 +80,7 @@ export function PageJumpModal({
               <Text style={styles.modalCancelText}>取消</Text>
             </Pressable>
             <View style={styles.modalPrimary}>
-              <PrimaryButton onPress={submit}>跳转</PrimaryButton>
+<Pressable accessibilityRole="button" onPress={submit} style={styles.confirm}><Text style={styles.confirmText}>跳转</Text></Pressable>
             </View>
           </View>
         </View>
@@ -103,10 +103,10 @@ const styles = StyleSheet.create({
     gap: 12,
     padding: 20,
     borderRadius: 16,
-    backgroundColor: colors.surface,
+    backgroundColor: readerChrome.surface,
   },
   modalTitle: {
-    color: colors.text,
+    color: readerChrome.text,
     fontSize: 19,
     fontWeight: '700',
   },
@@ -114,18 +114,18 @@ const styles = StyleSheet.create({
     minHeight: 52,
     paddingHorizontal: 14,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: readerChrome.border,
     borderRadius: 10,
-    color: colors.text,
+    color: readerChrome.text,
     fontSize: 20,
     textAlign: 'center',
-    backgroundColor: colors.surface,
+    backgroundColor: readerChrome.surface,
   },
   modalInputError: {
     borderColor: colors.danger,
   },
   modalHelp: {
-    color: colors.muted,
+    color: readerChrome.muted,
     fontSize: 13,
     textAlign: 'center',
   },
@@ -146,14 +146,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: readerChrome.border,
     borderRadius: 10,
   },
   modalCancelText: {
-    color: colors.text,
+    color: readerChrome.text,
     fontSize: 16,
     fontWeight: '600',
   },
+  confirm: { minHeight: 48, borderRadius: 12, backgroundColor: '#ffffff', alignItems: 'center', justifyContent: 'center' },
+  confirmText: { color: '#222222', fontSize: 16, fontWeight: '600' },
   modalPrimary: {
     flex: 1,
   },

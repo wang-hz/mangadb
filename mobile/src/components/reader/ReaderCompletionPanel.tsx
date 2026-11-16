@@ -1,3 +1,4 @@
+import { readerChrome } from './readerChrome'
 import { Ionicons } from '@expo/vector-icons'
 import { useRef, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
@@ -117,7 +118,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.2)',
     borderRadius: 14,
-    backgroundColor: 'rgba(17,24,39,0.94)',
+    backgroundColor: readerChrome.surface,
   },
   heading: {
     flexDirection: 'row',
@@ -144,7 +145,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   action: {
-    minHeight: 36,
+    minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 12,
@@ -153,8 +154,8 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   actionPrimary: {
-    borderColor: '#3b82f6',
-    backgroundColor: '#2563eb',
+    borderColor: '#ffffff',
+    backgroundColor: '#ffffff',
   },
   actionPressed: {
     opacity: 0.72,
@@ -168,7 +169,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   actionTextPrimary: {
-    color: '#ffffff',
+    color: '#222222',
   },
   error: {
     color: '#fca5a5',

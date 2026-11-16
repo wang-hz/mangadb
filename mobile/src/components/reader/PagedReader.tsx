@@ -15,8 +15,7 @@ import type { ApiClient } from '@/api/client'
 import type { MangaDetail } from '@/api/types'
 import { ReaderCompletionPanel } from '@/components/reader/ReaderCompletionPanel'
 import { ReaderDimmer } from '@/components/reader/ReaderDimmer'
-import { ReaderProgressControls } from '@/components/reader/ReaderProgressControls'
-import { ReaderTopBar } from '@/components/reader/ReaderTopBar'
+import { ReaderControls } from '@/components/reader/ReaderControls'
 import { ZoomableReaderImage } from '@/components/reader/ZoomableReaderImage'
 import {
   reportReaderTelemetry,
@@ -227,67 +226,22 @@ export function PagedReader({
       />
       <ReaderDimmer level={preferences.readerDimLevel} />
 
-      {controlsVisible
-        ? (
-            <>
-              <ReaderTopBar
-                mode={mode}
-                onBack={onBack}
-                onModeChange={onModeChange}
-                onOpenSettings={onOpenSettings}
-                title={manga.displayTitle}
-                topInset={insets.top}
+      {controlsVisible ? (
+        <ReaderControls
+          title={manga.displayTitle} mode={mode} direction={preferences.pagedDirection}
+          pageIndex={pageIndex} pageCount={manga.pages.length}
+          onBack={onBack} onOpenSettings={onOpenSettings} onModeChange={onModeChange}
+          onJump={jumpToPage}
+          onInteractionChange={setProgressInteracting}
+            completion={pageIndex === manga.pages.length - 1 ? (
+              <ReaderCompletionPanel
+                completed={completed} onMarkCompleted={onMarkCompleted} onReread={onReread}
+                onReturnToDetail={onReturnToDetail} onReturnToList={onReturnToList}
+                pending={completionPending} error={completionError}
               />
-              <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 10) }]}>
-                <Pressable
-                  accessibilityLabel={preferences.pagedDirection === 'rtl' ? '下一页' : '上一页'}
-                  accessibilityRole="button"
-                  disabled={!validPage(leftTarget)}
-                  onPress={() => scrollToPage(leftTarget)}
-                  style={[styles.controlButton, !validPage(leftTarget) ? styles.controlDisabled : null]}
-                >
-                  <Ionicons color="#ffffff" name="chevron-back" size={25} />
-                </Pressable>
-                <ReaderProgressControls
-                  pageIndex={pageIndex}
-                  pageCount={manga.pages.length}
-                  onJump={jumpToPage}
-                  onInteractionChange={setProgressInteracting}
-                />
-                <Pressable
-                  accessibilityLabel={preferences.pagedDirection === 'rtl' ? '上一页' : '下一页'}
-                  accessibilityRole="button"
-                  disabled={!validPage(rightTarget)}
-                  onPress={() => scrollToPage(rightTarget)}
-                  style={[
-                    styles.controlButton,
-                    !validPage(rightTarget) ? styles.controlDisabled : null,
-                  ]}
-                >
-                  <Ionicons color="#ffffff" name="chevron-forward" size={25} />
-                </Pressable>
-              </View>
-              {pageIndex === manga.pages.length - 1
-                ? (
-                    <View style={[
-                      styles.completionPanel,
-                      { bottom: Math.max(insets.bottom, 10) + 110 },
-                    ]}>
-                      <ReaderCompletionPanel
-                        completed={completed}
-                        onMarkCompleted={onMarkCompleted}
-                        onReread={onReread}
-                        onReturnToDetail={onReturnToDetail}
-                        onReturnToList={onReturnToList}
-                        pending={completionPending}
-                        error={completionError}
-                      />
-                    </View>
-                  )
-                : null}
-            </>
-          )
-        : null}
+            ) : null}
+        />
+      ) : null}
     </View>
   )
 }
@@ -484,11 +438,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     alignSelf: 'center',
   },
-  completionPanel: {
-    position: 'absolute',
-    right: 14,
-    left: 14,
-  },
   pageFailure: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -511,29 +460,5 @@ const styles = StyleSheet.create({
   metadataRefreshError: {
     color: '#fca5a5',
     fontSize: 12,
-  },
-  bottomBar: {
-    position: 'absolute',
-    right: 0,
-    bottom: 0,
-    left: 0,
-    minHeight: 58,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingTop: 7,
-    paddingHorizontal: 12,
-    backgroundColor: 'rgba(0,0,0,0.82)',
-  },
-  controlButton: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 22,
-  },
-  controlDisabled: {
-    opacity: 0.3,
   },
 })
