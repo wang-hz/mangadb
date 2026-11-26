@@ -1,6 +1,7 @@
 const zh = {
   'common.retry': '重试',
   'progress.recent': '最近阅读',
+  'progress.history': '历史记录',
   'progress.continue': '继续阅读',
   'progress.reading': '阅读中',
   'progress.completed': '已完成',

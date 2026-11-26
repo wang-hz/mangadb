@@ -36,6 +36,7 @@ const routes = {
   '(app)/(tabs)/recent': () => <Source direct />,
   '(app)/(tabs)/settings/_layout': SettingsLayout,
   '(app)/(tabs)/settings/downloads': Source,
+  '(app)/(tabs)/settings/history': () => <Source direct />,
   '(app)/tag/[uuid]': Source,
   '(app)/manga/[uuid]': Detail,
   '(app)/reader/[uuid]': Reader,
@@ -61,18 +62,18 @@ it('reuses the existing detail without leaving a duplicate in history', async ()
   await waitFor(() => expect(view.getPathname()).toBe('/mangas'))
 })
 
-it('returns directly to recent reading or replaces the reader with detail', async () => {
-  const view = renderRouter(routes, { initialUrl: '/recent' })
+it.each(['/recent', '/settings/history'])('returns directly to %s or replaces the reader with detail', async initialUrl => {
+  const view = renderRouter(routes, { initialUrl })
   fireEvent.press(screen.getByText('选择筛选'))
   fireEvent.press(screen.getByText('打开漫画'))
   fireEvent.press(await screen.findByText('返回列表'))
-  await waitFor(() => expect(view.getPathname()).toBe('/recent'))
+  await waitFor(() => expect(view.getPathname()).toBe(initialUrl))
   expect(screen.getByText('filter:reading')).toBeOnTheScreen()
   fireEvent.press(screen.getByText('打开漫画'))
   fireEvent.press(await screen.findByText('返回漫画'))
   await waitFor(() => expect(view.getPathname()).toBe('/manga/m1'))
   act(() => router.back())
-  await waitFor(() => expect(view.getPathname()).toBe('/recent'))
+  await waitFor(() => expect(view.getPathname()).toBe(initialUrl))
 })
 
 it.each(['返回列表', '返回漫画'])('handles a direct reader deep link with %s', async label => {

@@ -1,6 +1,7 @@
 const ja = {
   'common.retry': '再試行',
   'progress.recent': '最近読んだ漫画',
+  'progress.history': '読書履歴',
   'progress.continue': '続きを読む',
   'progress.reading': '読書中',
   'progress.completed': '読了',

@@ -1,4 +1,4 @@
-import { AuditOutlined, BookOutlined, DownOutlined, ImportOutlined, InfoCircleOutlined, KeyOutlined, LogoutOutlined, TagOutlined, UserOutlined, WifiOutlined } from '@ant-design/icons'
+import { AuditOutlined, BookOutlined, DownOutlined, HistoryOutlined, ImportOutlined, InfoCircleOutlined, KeyOutlined, LogoutOutlined, TagOutlined, UserOutlined, WifiOutlined } from '@ant-design/icons'
 import type { MenuProps } from 'antd'
 import { Button, Dropdown, Grid, Layout, Menu } from 'antd'
 import { useState } from 'react'
@@ -45,6 +45,7 @@ export default function AppLayout() {
   ]
 
   const userMenuItems: MenuProps['items'] = [
+    { key: 'history', icon: <HistoryOutlined />, label: t('progress.history'), onClick: () => navigate('/recent') },
     { key: 'change-password', icon: <KeyOutlined />, label: t('user.changePassword'), onClick: () => setChangePwOpen(true) },
     ...(isAdmin ? [
       { type: 'divider' as const },

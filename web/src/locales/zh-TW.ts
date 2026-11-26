@@ -1,6 +1,7 @@
 const zhTW = {
   'common.retry': '重試',
   'progress.recent': '最近閱讀',
+  'progress.history': '歷史記錄',
   'progress.continue': '繼續閱讀',
   'progress.reading': '閱讀中',
   'progress.completed': '已完成',

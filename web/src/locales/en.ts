@@ -1,6 +1,7 @@
 const en = {
   'common.retry': 'Retry',
   'progress.recent': 'Recent reading',
+  'progress.history': 'Reading history',
   'progress.continue': 'Continue reading',
   'progress.reading': 'Reading',
   'progress.completed': 'Completed',

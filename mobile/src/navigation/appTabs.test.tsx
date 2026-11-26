@@ -24,7 +24,7 @@ it('orders visible tabs and keeps the library as the initial screen', () => {
 
 it.each([
   ['账号与服务器', 'account'], ['阅读设置', 'reading'],
-  ['下载', 'downloads'],
+  ['历史记录', 'history'], ['下载', 'downloads'],
 ])('opens the %s settings subpage', (title, route) => {
   render(<SettingsScreen />)
   fireEvent.press(screen.getByText(title))
@@ -45,4 +45,6 @@ it('uses icon-only native back buttons throughout the settings stack', () => {
   expect(layout.props.screenOptions.headerBackButtonDisplayMode).toBe('minimal')
   expect(layout.props.screenOptions.headerLeft).toBeUndefined()
   expect(layout.props.screenOptions.gestureEnabled).toBeUndefined()
+  expect(layout.props.children.find((child: { props: { name: string } }) => child.props.name === 'history')
+    .props.options.title).toBe('历史记录')
 })
