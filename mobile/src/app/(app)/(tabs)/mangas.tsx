@@ -18,6 +18,7 @@ import { ApiError } from '@/api/client'
 import { getMangas, nextMangaPage, uniqueMangas } from '@/api/mangas'
 import type { MangaSortBy, MangaSummary, SortOrder } from '@/api/types'
 import { MangaCard } from '@/components/MangaCard'
+import { MangaSortControls } from '@/components/catalog/MangaSortControls'
 import { PrimaryButton } from '@/components/PrimaryButton'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { useFavorites } from '@/hooks/useFavorites'
@@ -30,12 +31,6 @@ import { adaptiveGridLayout } from '@/utils/grid'
 
 const GRID_PADDING = 12
 const GRID_GAP = 12
-
-const SORT_OPTIONS: Array<{ label: string; value: MangaSortBy }> = [
-  { label: '最近更新', value: 'updateAt' },
-  { label: '最近添加', value: 'createAt' },
-  { label: '出版日期', value: 'publishDate' },
-]
 
 export default function MangasScreen() {
   const { width } = useWindowDimensions()
@@ -208,31 +203,12 @@ function LibraryHeader({
           value={search}
         />
       </View>
-      <View style={styles.sortRow}>
-        <View style={styles.sortOptions}>
-          {SORT_OPTIONS.map(option => (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityState={{ selected: sortBy === option.value }}
-              key={option.value}
-              onPress={() => onChangeSort(option.value)}
-              style={[styles.sortChip, sortBy === option.value ? styles.sortChipActive : null]}
-            >
-              <Text style={sortBy === option.value ? styles.sortTextActive : styles.sortText}>
-                {option.label}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-        <Pressable accessibilityRole="button" onPress={onToggleOrder} style={styles.orderButton}>
-          <Ionicons
-            color={colors.brand}
-            name={sortOrder === 'desc' ? 'arrow-down' : 'arrow-up'}
-            size={17}
-          />
-          <Text style={styles.orderText}>{sortOrder === 'desc' ? '降序' : '升序'}</Text>
-        </Pressable>
-      </View>
+      <MangaSortControls
+        onChangeSort={onChangeSort}
+        onToggleOrder={onToggleOrder}
+        sortBy={sortBy}
+        sortOrder={sortOrder}
+      />
       <Text style={styles.count}>{countLabel}</Text>
     </View>
   )
@@ -322,47 +298,6 @@ const styles = StyleSheet.create({
     flex: 1,
     color: colors.text,
     fontSize: 16,
-  },
-  sortRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  sortOptions: {
-    flex: 1,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  sortChip: {
-    paddingHorizontal: 9,
-    paddingVertical: 7,
-    borderRadius: 999,
-    backgroundColor: '#e9edf3',
-  },
-  sortChipActive: {
-    backgroundColor: colors.brand,
-  },
-  sortText: {
-    color: colors.muted,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  sortTextActive: {
-    color: '#ffffff',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  orderButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    paddingVertical: 6,
-  },
-  orderText: {
-    color: colors.brand,
-    fontSize: 12,
-    fontWeight: '600',
   },
   count: {
     color: colors.muted,

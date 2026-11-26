@@ -9,6 +9,11 @@
   server requests and when displaying loaded pages.
 - Reading progress, favorites, and download state remain visible on manga cards.
 - Stable manga UUIDs are used to deduplicate shifting offset pages.
+- Tag details use the same sort controls as the manga library: recently updated,
+  recently added, and publication date, with ascending/descending order. The tag
+  UUID, search, sort field, and order are included in the paginated query key.
+  Sort choices belong to the current tag screen only, default to updated time
+  descending on a new visit, and survive opening a manga or reader and returning.
 
 ## Persistence and privacy
 

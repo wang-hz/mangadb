@@ -18,8 +18,9 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ApiError } from '@/api/client'
 import { nextMangaPage, uniqueMangas } from '@/api/mangas'
 import { getMangasByTag, getTag } from '@/api/tags'
-import type { MangaSummary } from '@/api/types'
+import type { MangaSortBy, MangaSummary, SortOrder } from '@/api/types'
 import { MangaCard } from '@/components/MangaCard'
+import { MangaSortControls } from '@/components/catalog/MangaSortControls'
 import { PrimaryButton } from '@/components/PrimaryButton'
 import { ScreenHeader } from '@/components/ScreenHeader'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
@@ -40,6 +41,8 @@ export default function TagMangasScreen() {
   const insets = useSafeAreaInsets()
   const { api, auth, serverUrl } = useSession()
   const [search, setSearch] = useState('')
+  const [sortBy, setSortBy] = useState<MangaSortBy>('updateAt')
+  const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
   const debouncedSearch = useDebouncedValue(search.trim(), 350)
   const recentReading = useRecentReading(serverUrl, auth?.user.uuid)
   const grid = useMemo(() => adaptiveGridLayout(width, {
@@ -54,11 +57,17 @@ export default function TagMangasScreen() {
     enabled,
   })
   const mangasQuery = useInfiniteQuery({
-    queryKey: ['tag-mangas', serverUrl, auth?.user.uuid, tagUuid, { search: debouncedSearch }],
+    queryKey: ['tag-mangas', serverUrl, auth?.user.uuid, tagUuid, {
+      search: debouncedSearch,
+      sortBy,
+      sortOrder,
+    }],
     queryFn: ({ pageParam, signal }) => getMangasByTag(api!, {
       tagUuid: tagUuid!,
       page: pageParam,
       search: debouncedSearch,
+      sortBy,
+      sortOrder,
     }, signal),
     initialPageParam: 1,
     getNextPageParam: nextMangaPage,
@@ -147,6 +156,12 @@ export default function TagMangasScreen() {
                         value={search}
                       />
                     </View>
+                    <MangaSortControls
+                      onChangeSort={setSortBy}
+                      onToggleOrder={() => setSortOrder(order => order === 'desc' ? 'asc' : 'desc')}
+                      sortBy={sortBy}
+                      sortOrder={sortOrder}
+                    />
                     <Text style={styles.count}>{total > 0 ? `共 ${total} 本` : '标签漫画'}</Text>
                   </View>
                 )}
