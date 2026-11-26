@@ -1,9 +1,8 @@
-import { Ionicons } from '@expo/vector-icons'
 import { useEffect, useRef, useState } from 'react'
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import type { MangaDetail } from '@/api/types'
 import { readerChrome } from './readerChrome'
+import { ReaderSheet } from './ReaderSheet'
 
 interface ReaderInfoModalProps {
   visible: boolean
@@ -16,7 +15,6 @@ interface ReaderInfoModalProps {
 export function ReaderInfoModal({
   visible, manga, onClose, onReturnToDetail, onReturnToList,
 }: ReaderInfoModalProps) {
-  const insets = useSafeAreaInsets()
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const acting = useRef(false)
@@ -59,76 +57,42 @@ export function ReaderInfoModal({
   )
 
   return (
-    <Modal
-      animationType="slide"
-      onRequestClose={onClose}
-      statusBarTranslucent
-      supportedOrientations={[
-        'portrait',
-        'portrait-upside-down',
-        'landscape-left',
-        'landscape-right',
-      ]}
-      transparent
-      visible={visible}
-    >
-      <View style={styles.backdrop}>
-        <View style={[styles.sheet, {
-          paddingBottom: Math.max(insets.bottom, 18),
-          marginLeft: insets.left + 8,
-          marginRight: insets.right + 8,
-          marginTop: insets.top + 8,
-        }]}>
-          <View style={styles.handle} />
-          <View style={styles.header}>
-            <Text style={styles.heading}>漫画信息</Text>
-            <Pressable
-              accessibilityLabel="关闭漫画信息"
-              accessibilityRole="button"
-              hitSlop={10}
-              onPress={onClose}
-              style={styles.closeButton}
-            >
-              <Ionicons color={readerChrome.text} name="close" size={25} />
-            </Pressable>
+    <ReaderSheet title="漫画信息" visible={visible} onClose={onClose}>
+      <ScrollView contentContainerStyle={styles.content}>
+        <Text selectable style={styles.title}>{title}</Text>
+        {manga.originalTitle && manga.originalTitle !== title
+          ? <Text selectable style={styles.originalTitle}>{manga.originalTitle}</Text>
+          : null}
+        <View style={styles.metadata}>
+          <View style={styles.metadataRow}>
+            <Text style={styles.label}>出版日期</Text>
+            <Text selectable style={styles.value}>{displayDate(manga.publishDate)}</Text>
           </View>
-          <ScrollView contentContainerStyle={styles.content}>
-            <Text selectable style={styles.title}>{title}</Text>
-            {manga.originalTitle && manga.originalTitle !== title
-              ? <Text selectable style={styles.originalTitle}>{manga.originalTitle}</Text>
-              : null}
-            <View style={styles.metadata}>
-              <View style={styles.metadataRow}>
-                <Text style={styles.label}>出版日期</Text>
-                <Text selectable style={styles.value}>{displayDate(manga.publishDate)}</Text>
-              </View>
-              <View style={styles.metadataRow}>
-                <Text style={styles.label}>页数</Text>
-                <Text style={styles.value}>{manga.pages.length} 页</Text>
-              </View>
-            </View>
-            <View style={styles.tagSection}>
-              <Text style={styles.label}>标签</Text>
-              {tags.length > 0 ? (
-                <View style={styles.tags}>
-                  {tags.map(({ tag }) => (
-                    <Text key={tag.uuid} selectable style={styles.tag}>
-                      {tag.tagType.name} · {tag.name}
-                    </Text>
-                  ))}
-                </View>
-              ) : <Text style={styles.empty}>暂无标签</Text>}
-            </View>
-            <View style={styles.actions}>
-              <ReturnAction disabled={pending} label="返回漫画" onPress={() => { void runAction(onReturnToDetail) }} />
-              <ReturnAction disabled={pending} label="返回列表" onPress={() => { void runAction(onReturnToList) }} />
-            </View>
-            {pending ? <Text accessibilityLiveRegion="polite" style={styles.empty}>正在保存阅读状态…</Text> : null}
-            {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
-          </ScrollView>
+          <View style={styles.metadataRow}>
+            <Text style={styles.label}>页数</Text>
+            <Text style={styles.value}>{manga.pages.length} 页</Text>
+          </View>
         </View>
-      </View>
-    </Modal>
+        <View style={styles.tagSection}>
+          <Text style={styles.label}>标签</Text>
+          {tags.length > 0 ? (
+            <View style={styles.tags}>
+              {tags.map(({ tag }) => (
+                <Text key={tag.uuid} selectable style={styles.tag}>
+                  {tag.tagType.name} · {tag.name}
+                </Text>
+              ))}
+            </View>
+          ) : <Text style={styles.empty}>暂无标签</Text>}
+        </View>
+        <View style={styles.actions}>
+          <ReturnAction disabled={pending} label="返回漫画" onPress={() => { void runAction(onReturnToDetail) }} />
+          <ReturnAction disabled={pending} label="返回列表" onPress={() => { void runAction(onReturnToList) }} />
+        </View>
+        {pending ? <Text accessibilityLiveRegion="polite" style={styles.empty}>正在保存阅读状态…</Text> : null}
+        {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
+      </ScrollView>
+    </ReaderSheet>
   )
 }
 
@@ -159,28 +123,6 @@ function displayDate(value: string | null): string {
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.55)' },
-  sheet: {
-    maxHeight: '88%',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: readerChrome.border,
-    backgroundColor: readerChrome.surface,
-  },
-  handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: '#66666d', alignSelf: 'center', marginTop: 9 },
-  header: {
-    minHeight: 74,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-    paddingHorizontal: 18,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#3b4049',
-  },
-  heading: { flex: 1, color: readerChrome.text, fontSize: 19, fontWeight: '700' },
-  closeButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 21, backgroundColor: '#292e36' },
   content: { padding: 18, paddingBottom: 28, gap: 14 },
   title: { color: readerChrome.text, fontSize: 21, lineHeight: 29, fontWeight: '700' },
   originalTitle: { color: readerChrome.muted, fontSize: 14, lineHeight: 20 },
