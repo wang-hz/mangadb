@@ -7,7 +7,6 @@ const entries = [
   { title: '账号与服务器', route: 'account', icon: 'person-outline' },
   { title: '阅读设置', route: 'reading', icon: 'book-outline' },
   { title: '下载', route: 'downloads', icon: 'cloud-download-outline' },
-  { title: '稳定性诊断', route: 'diagnostics', icon: 'pulse-outline' },
 ] as const
 
 export default function SettingsScreen() {

@@ -116,7 +116,7 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
     <RouteErrorFallback
       error={error}
       leaveLabel={mangaUuid ? '返回漫画详情' : '返回漫画库'}
-      message="阅读器已安全退出，本次错误已记录在本机。你可以重新加载或返回详情页。"
+      message="阅读器已安全退出。你可以重新加载或返回详情页。"
       onLeave={() => {
         if (mangaUuid) {
           router.replace({

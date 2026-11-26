@@ -1,12 +1,8 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native'
-import { recordDiagnostic } from '@/diagnostics/localDiagnostics'
+import { fireEvent, render, screen } from '@testing-library/react-native'
 import { RouteErrorFallback } from './RouteErrorFallback'
 
-jest.mock('@/diagnostics/localDiagnostics', () => ({ recordDiagnostic: jest.fn() }))
-
 describe('RouteErrorFallback', () => {
-  it('records the error and exposes retry and leave recovery actions', async () => {
-    jest.mocked(recordDiagnostic).mockResolvedValue(undefined)
+  it('exposes retry and leave recovery actions without private error details', () => {
     const retry = jest.fn().mockResolvedValue(undefined)
     const onLeave = jest.fn()
 
@@ -21,7 +17,6 @@ describe('RouteErrorFallback', () => {
       />,
     )
 
-    await waitFor(() => expect(recordDiagnostic).toHaveBeenCalledWith('js-error', 'TypeError'))
     expect(screen.queryByText('private details')).not.toBeOnTheScreen()
     fireEvent.press(screen.getByText('重试'))
     fireEvent.press(screen.getByText('返回'))

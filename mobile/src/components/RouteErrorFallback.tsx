@@ -1,7 +1,5 @@
 import { type ErrorBoundaryProps } from 'expo-router'
-import { useEffect } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { recordDiagnostic } from '@/diagnostics/localDiagnostics'
 import { colors } from '@/theme/colors'
 
 interface RouteErrorFallbackProps extends ErrorBoundaryProps {
@@ -12,17 +10,12 @@ interface RouteErrorFallbackProps extends ErrorBoundaryProps {
 }
 
 export function RouteErrorFallback({
-  error,
   retry,
   title,
   message,
   leaveLabel,
   onLeave,
 }: RouteErrorFallbackProps) {
-  useEffect(() => {
-    void recordDiagnostic('js-error', error.name || 'Error').catch(() => {})
-  }, [error])
-
   return (
     <View style={styles.root}>
       <Text accessibilityRole="header" style={styles.title}>{title}</Text>

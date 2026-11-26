@@ -9,7 +9,6 @@ export default function SettingsLayout() {
       <Stack.Screen name="reading" options={{ title: '阅读设置' }} />
       <Stack.Screen name="downloads" options={{ title: '下载' }} />
       <Stack.Screen name="download-settings" options={{ title: '下载设置' }} />
-      <Stack.Screen name="diagnostics" options={{ title: '稳定性诊断' }} />
     </Stack>
   )
 }

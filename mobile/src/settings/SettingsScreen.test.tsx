@@ -1,5 +1,4 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { Share } from 'react-native'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native'
 import SettingsOptions from './SettingsOptions'
 import { useDownloads } from '@/downloads/DownloadContext'
@@ -64,38 +63,6 @@ describe('SettingsScreen reading preferences', () => {
     expect(screen.getByText('阅读设置')).toBeOnTheScreen()
     await waitFor(() => expect(screen.getByLabelText('翻页')).not.toBeDisabled())
     expect(screen.getByLabelText('阅读时保持屏幕常亮')).toBeOnTheScreen()
-  })
-
-  it('shares only the bounded local diagnostic payload', async () => {
-    const diagnostic = {
-      schemaVersion: 1,
-      id: 'record-1',
-      timestamp: '2026-08-20T00:00:00.000Z',
-      appVersion: '0.1.0',
-      platform: 'ios',
-      category: 'reader',
-      code: 'page-stall.paged',
-      route: '/reader/:id',
-      viewport: 'landscape-900x400',
-    }
-    jest.mocked(AsyncStorage.getItem).mockImplementation(async key =>
-      key === 'mangadb.localDiagnostics.v1' ? JSON.stringify([diagnostic]) : null)
-    const share = jest.spyOn(Share, 'share').mockResolvedValue({ action: Share.sharedAction })
-
-    render(
-      <ReaderPreferencesProvider>
-        <SettingsOptions section="diagnostics" />
-      </ReaderPreferencesProvider>,
-    )
-
-    expect(await screen.findByText('当前共 1 条记录')).toBeOnTheScreen()
-    fireEvent.press(screen.getByText('分享诊断记录'))
-    await waitFor(() => expect(share).toHaveBeenCalledTimes(1))
-    const sharePayload = share.mock.calls[0]?.[0]
-    if (!sharePayload) throw new Error('missing share payload')
-    expect(sharePayload.message).toContain('page-stall.paged')
-    expect(sharePayload.message).not.toContain('https://')
-    expect(sharePayload.message).not.toContain('token')
   })
 
   it('catches Wi-Fi preference failures and allows a retry', async () => {

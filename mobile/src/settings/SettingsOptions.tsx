@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons'
-import { useEffect, useState } from 'react'
-import { Alert, AppState, Share } from 'react-native'
+import { useState } from 'react'
+import { Alert } from 'react-native'
 import {
   ActivityIndicator,
   Pressable,
@@ -14,50 +14,24 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { logout } from '@/api/auth'
 import { ReaderPreferencesControls } from '@/components/reader/ReaderPreferencesControls'
 import { useDownloads } from '@/downloads/DownloadContext'
-import { clearDiagnostics, loadDiagnostics } from '@/diagnostics/localDiagnostics'
 import { useSession } from '@/session/SessionContext'
 import { colors } from '@/theme/colors'
 
 type PendingAction = 'signout' | 'switch-server' | null
 type PendingDownloadAction = 'clear-current' | 'clear-all' | null
-type PendingDiagnosticAction = 'share' | 'clear' | null
 
 export default function SettingsOptions({ section }: {
-  section: 'account' | 'reading' | 'downloads' | 'diagnostics'
+  section: 'account' | 'reading' | 'downloads'
 }) {
   const session = useSession()
   const downloads = useDownloads()
   const [pendingAction, setPendingAction] = useState<PendingAction>(null)
   const [pendingDownloadAction, setPendingDownloadAction] =
     useState<PendingDownloadAction>(null)
-  const [pendingDiagnosticAction, setPendingDiagnosticAction] =
-    useState<PendingDiagnosticAction>(null)
   const [wifiPending, setWifiPending] = useState(false)
-  const [diagnosticCount, setDiagnosticCount] = useState(0)
   const [sessionError, setSessionError] = useState<string | null>(null)
   const [downloadError, setDownloadError] = useState<string | null>(null)
-  const [diagnosticError, setDiagnosticError] = useState<string | null>(null)
   const account = session.auth?.user
-
-  useEffect(() => {
-    if (section !== 'diagnostics') return
-    let active = true
-    const refresh = () => {
-      void loadDiagnostics().then(records => {
-        if (active) setDiagnosticCount(records.length)
-      }).catch(() => {
-        if (active) setDiagnosticError('无法读取本机诊断记录。')
-      })
-    }
-    refresh()
-    const subscription = AppState.addEventListener('change', state => {
-      if (state === 'active') refresh()
-    })
-    return () => {
-      active = false
-      subscription.remove()
-    }
-  }, [section])
 
   const runAction = async (action: Exclude<PendingAction, null>) => {
     if (pendingAction) return
@@ -118,37 +92,6 @@ export default function SettingsOptions({ section }: {
         : '无法清除全部离线内容，请重试。')
     } finally {
       setPendingDownloadAction(null)
-    }
-  }
-
-  const runDiagnosticAction = async (
-    action: Exclude<PendingDiagnosticAction, null>,
-  ) => {
-    if (pendingDiagnosticAction) return
-    setPendingDiagnosticAction(action)
-    setDiagnosticError(null)
-    try {
-      if (action === 'clear') {
-        await clearDiagnostics()
-        setDiagnosticCount(0)
-        return
-      }
-      const records = await loadDiagnostics()
-      await Share.share({
-        title: 'MangaDB 本机诊断记录',
-        message: JSON.stringify({
-          schemaVersion: 1,
-          generatedAt: new Date().toISOString(),
-          records,
-        }, null, 2),
-      })
-      setDiagnosticCount(records.length)
-    } catch {
-      setDiagnosticError(
-        action === 'share' ? '无法分享本机诊断记录。' : '无法清除本机诊断记录。',
-      )
-    } finally {
-      setPendingDiagnosticAction(null)
     }
   }
 
@@ -246,37 +189,6 @@ export default function SettingsOptions({ section }: {
               />
               {downloadError
                 ? <Text accessibilityRole="alert" style={styles.error}>{downloadError}</Text>
-                : null}
-            </View>
-
-          </>
-        ) : null}
-        {section === 'diagnostics' ? (
-          <>
-            <Text style={styles.sectionTitle}>稳定性诊断</Text>
-            <View style={styles.actionCard}>
-              <Text style={styles.explanation}>
-                本机最多保留 50 条脱敏记录，不包含账号、服务器地址、漫画标识或登录凭证。
-              </Text>
-              <Text style={styles.explanation}>当前共 {diagnosticCount} 条记录</Text>
-              <ActionButton
-                disabled={pendingDiagnosticAction !== null}
-                icon="share-outline"
-                label="分享诊断记录"
-                loading={pendingDiagnosticAction === 'share'}
-                onPress={() => { void runDiagnosticAction('share') }}
-                tone="brand"
-              />
-              <ActionButton
-                disabled={pendingDiagnosticAction !== null}
-                icon="trash-bin-outline"
-                label="清除诊断记录"
-                loading={pendingDiagnosticAction === 'clear'}
-                onPress={() => { void runDiagnosticAction('clear') }}
-                tone="danger"
-              />
-              {diagnosticError
-                ? <Text accessibilityRole="alert" style={styles.error}>{diagnosticError}</Text>
                 : null}
             </View>
 
