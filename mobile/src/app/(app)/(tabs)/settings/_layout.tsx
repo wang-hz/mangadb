@@ -1,13 +1,25 @@
 import { Stack } from 'expo-router'
+import { Platform } from 'react-native'
 import { colors } from '@/theme/colors'
 
 export default function SettingsLayout() {
   return (
-    <Stack screenOptions={{
+    <Stack screenOptions={({ navigation, route }) => ({
       headerStyle: { backgroundColor: colors.header },
       headerTintColor: '#ffffff',
       headerBackButtonDisplayMode: 'minimal',
-    }}>
+      unstable_headerLeftItems: Platform.OS === 'ios' && route.name !== 'index'
+        ? ({ canGoBack, tintColor }) => canGoBack ? [{
+            type: 'button',
+            label: '',
+            icon: { type: 'sfSymbol', name: 'chevron.left' },
+            tintColor,
+            accessibilityLabel: '返回',
+            hidesSharedBackground: true,
+            onPress: () => navigation.goBack(),
+          }] : []
+        : undefined,
+    })}>
       <Stack.Screen name="index" options={{ title: '设置' }} />
       <Stack.Screen name="account" options={{ title: '账号与服务器' }} />
       <Stack.Screen name="reading" options={{ title: '阅读设置' }} />

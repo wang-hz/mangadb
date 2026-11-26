@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react-native'
+import { Platform } from 'react-native'
 import { router } from 'expo-router'
 import TabLayout from '@/app/(app)/(tabs)/_layout'
 import SettingsLayout from '@/app/(app)/(tabs)/settings/_layout'
@@ -11,6 +12,8 @@ jest.mock('expo-router', () => ({
   Stack: Object.assign(() => null, { Screen: () => null }),
   Redirect: () => null,
 }))
+
+afterEach(() => jest.restoreAllMocks())
 
 it('orders visible tabs and keeps the library as the initial screen', () => {
   const layout = TabLayout()
@@ -42,9 +45,38 @@ it('omits stability diagnostics from settings', () => {
 
 it('uses icon-only native back buttons throughout the settings stack', () => {
   const layout = SettingsLayout()
-  expect(layout.props.screenOptions.headerBackButtonDisplayMode).toBe('minimal')
-  expect(layout.props.screenOptions.headerLeft).toBeUndefined()
-  expect(layout.props.screenOptions.gestureEnabled).toBeUndefined()
+  const options = layout.props.screenOptions({ route: { name: 'index' }, navigation: {} })
+  expect(options.headerBackButtonDisplayMode).toBe('minimal')
+  expect(options.headerLeft).toBeUndefined()
+  expect(options.gestureEnabled).toBeUndefined()
+  expect(options.unstable_headerLeftItems).toBeUndefined()
   expect(layout.props.children.find((child: { props: { name: string } }) => child.props.name === 'history')
     .props.options.title).toBe('历史记录')
+})
+
+it('removes the iOS settings back button background and returns through the current stack', () => {
+  jest.replaceProperty(Platform, 'OS', 'ios')
+  const layout = SettingsLayout()
+  const goBack = jest.fn()
+  for (const name of ['account', 'reading', 'history', 'downloads', 'download-settings']) {
+    const options = layout.props.screenOptions({ route: { name }, navigation: { goBack } })
+    const items = options.unstable_headerLeftItems({ canGoBack: true, tintColor: '#ffffff' })
+    expect(items).toHaveLength(1)
+    expect(items[0]).toMatchObject({
+      type: 'button', label: '', icon: { type: 'sfSymbol', name: 'chevron.left' },
+      tintColor: '#ffffff', accessibilityLabel: '返回', hidesSharedBackground: true,
+    })
+    items[0].onPress()
+    expect(options.unstable_headerLeftItems({ canGoBack: false })).toEqual([])
+    expect(options.gestureEnabled).toBeUndefined()
+  }
+  expect(goBack).toHaveBeenCalledTimes(5)
+})
+
+it('retains the platform back button on Android settings subpages', () => {
+  jest.replaceProperty(Platform, 'OS', 'android')
+  const layout = SettingsLayout()
+  const options = layout.props.screenOptions({ route: { name: 'account' }, navigation: {} })
+  expect(options.unstable_headerLeftItems).toBeUndefined()
+  expect(options.headerLeft).toBeUndefined()
 })
