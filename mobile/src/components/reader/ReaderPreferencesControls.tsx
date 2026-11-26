@@ -50,8 +50,11 @@ export function ReaderPreferencesControls({
 
   return (
     <View accessibilityLabel="阅读设置" style={styles.root}>
-      {dark ? <Text accessibilityRole="header" style={styles.groupTitle}>阅读方式</Text> : null}
-      <PreferenceRow label={currentMode ? '阅读模式' : '默认阅读模式'} palette={palette}>
+      <Text style={[styles.help, { color: palette.muted }]}>
+        阅读偏好保存在本机，所有服务器和账号共用。已读漫画优先沿用上次阅读模式；阅读器内修改会立即应用，并保存为本机默认值。
+      </Text>
+      <Text accessibilityRole="header" style={[styles.groupTitle, { color: palette.muted }]}>阅读方式</Text>
+      <PreferenceRow label="阅读模式" palette={palette}>
         <SegmentedControl
           disabled={disabled}
           onChange={value => { void update('defaultMode', value) }}
@@ -77,7 +80,7 @@ export function ReaderPreferencesControls({
         />
       </PreferenceRow>
 
-      {dark ? <Text accessibilityRole="header" style={styles.groupTitle}>画面</Text> : null}
+      <Text accessibilityRole="header" style={[styles.groupTitle, { color: palette.muted }]}>画面</Text>
       <PreferenceRow label="翻页图片显示" palette={palette}>
         <SegmentedControl
           disabled={disabled}
@@ -105,24 +108,7 @@ export function ReaderPreferencesControls({
         />
       </PreferenceRow>
 
-      <PreferenceRow label="阅读画面亮度" palette={palette}>
-        <SegmentedControl
-          disabled={disabled}
-          onChange={value => { void update('readerDimLevel', value) }}
-          options={[
-            { label: '跟随系统', value: 0 },
-            { label: '柔和', value: 0.2 },
-            { label: '夜间', value: 0.4 },
-          ]}
-          palette={palette}
-          value={preferences.readerDimLevel}
-        />
-        <Text style={[styles.help, { color: palette.muted }]}>
-          仅调暗阅读画面，不修改设备系统亮度
-        </Text>
-      </PreferenceRow>
-
-      {dark ? <Text accessibilityRole="header" style={styles.groupTitle}>交互</Text> : null}
+      <Text accessibilityRole="header" style={[styles.groupTitle, { color: palette.muted }]}>交互</Text>
       <PreferenceRow label="控制栏自动隐藏" palette={palette}>
         <SegmentedControl
           disabled={disabled}
@@ -223,7 +209,7 @@ function SegmentedControl<Value extends string | number | null>({
             disabled={disabled}
             key={`${option.label}:${String(option.value)}`}
             onPress={() => onChange(option.value)}
-            style={[styles.segment, palette === darkPalette ? { minHeight: 44 } : null, selected ? { backgroundColor: palette.active } : null]}
+            style={[styles.segment, selected ? { backgroundColor: palette.active } : null]}
           >
             <Text style={[
               styles.segmentText,
@@ -259,7 +245,7 @@ const darkPalette: Palette = {
 }
 
 const styles = StyleSheet.create({
-  groupTitle: { color: readerChrome.muted, fontSize: 12, fontWeight: '700', marginTop: 6 },
+  groupTitle: { fontSize: 12, fontWeight: '700', marginTop: 6 },
   root: {
     gap: 18,
   },
@@ -283,6 +269,7 @@ const styles = StyleSheet.create({
   },
   segment: {
     minWidth: 56,
+    minHeight: 44,
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',

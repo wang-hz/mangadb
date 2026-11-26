@@ -8,7 +8,6 @@ export type PagedDirection = 'ltr' | 'rtl'
 export type PagedFit = 'contain' | 'cover'
 export type ScrollGap = 0 | 8 | 16
 export type ControlsAutoHideMs = 3000 | 5000 | null
-export type ReaderDimLevel = 0 | 0.2 | 0.4
 export type DoubleTapZoomScale = 2 | 3 | null
 
 export interface ReaderPreferences {
@@ -18,7 +17,6 @@ export interface ReaderPreferences {
   scrollGap: ScrollGap
   controlsAutoHideMs: ControlsAutoHideMs
   keepAwake: boolean
-  readerDimLevel: ReaderDimLevel
   doubleTapZoomScale: DoubleTapZoomScale
 }
 
@@ -29,7 +27,6 @@ export const DEFAULT_READER_PREFERENCES: ReaderPreferences = {
   scrollGap: 0,
   controlsAutoHideMs: 3000,
   keepAwake: false,
-  readerDimLevel: 0,
   doubleTapZoomScale: 2,
 }
 
@@ -82,10 +79,6 @@ function normalizeReaderPreferences(value: unknown): ReaderPreferences {
     keepAwake: typeof stored.keepAwake === 'boolean'
       ? stored.keepAwake
       : DEFAULT_READER_PREFERENCES.keepAwake,
-    readerDimLevel: stored.readerDimLevel === 0 ||
-      stored.readerDimLevel === 0.2 || stored.readerDimLevel === 0.4
-      ? stored.readerDimLevel
-      : DEFAULT_READER_PREFERENCES.readerDimLevel,
     doubleTapZoomScale: stored.doubleTapZoomScale === 2 ||
       stored.doubleTapZoomScale === 3 || stored.doubleTapZoomScale === null
       ? stored.doubleTapZoomScale

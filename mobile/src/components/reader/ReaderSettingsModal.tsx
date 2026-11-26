@@ -35,10 +35,7 @@ export function ReaderSettingsModal({
         <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 18), marginLeft: insets.left + 8, marginRight: insets.right + 8, marginTop: insets.top + 8 }]}>
           <View style={styles.handle} />
           <View style={styles.header}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.title}>阅读设置</Text>
-              <Text style={styles.subtitle}>修改会立即生效并保存为本机默认值</Text>
-            </View>
+            <Text style={styles.title}>阅读设置</Text>
             <Pressable
               accessibilityLabel="关闭阅读设置"
               accessibilityRole="button"
@@ -84,14 +81,10 @@ const styles = StyleSheet.create({
     borderBottomColor: '#3b4049',
   },
   title: {
+    flex: 1,
     color: '#ffffff',
     fontSize: 19,
     fontWeight: '700',
-  },
-  subtitle: {
-    marginTop: 3,
-    color: '#aeb4bf',
-    fontSize: 12,
   },
   closeButton: {
     width: 44,

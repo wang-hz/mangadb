@@ -23,12 +23,33 @@ describe('reader preferences storage', () => {
       scrollGap: 16 as const,
       controlsAutoHideMs: null,
       keepAwake: true,
-      readerDimLevel: 0.4 as const,
       doubleTapZoomScale: 3 as const,
     }
     jest.mocked(AsyncStorage.getItem).mockResolvedValue(JSON.stringify(preferences))
 
     await expect(loadReaderPreferences()).resolves.toEqual(preferences)
+  })
+
+  it('discards a saved brightness level while preserving the remaining preferences', async () => {
+    const preferences = {
+      ...DEFAULT_READER_PREFERENCES,
+      defaultMode: 'scroll' as const,
+      pagedDirection: 'rtl' as const,
+      keepAwake: true,
+    }
+    jest.mocked(AsyncStorage.getItem).mockResolvedValue(JSON.stringify({
+      ...preferences,
+      readerDimLevel: 0.4,
+    }))
+
+    const loaded = await loadReaderPreferences()
+    expect(loaded).toEqual(preferences)
+    expect(loaded).not.toHaveProperty('readerDimLevel')
+    await saveReaderPreferences(loaded)
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith(
+      'mangadb.readerPreferences.v1',
+      JSON.stringify(preferences),
+    )
   })
 
   it('keeps valid fields and defaults missing or invalid fields', async () => {

@@ -173,12 +173,9 @@ describe('PagedReader preferences', () => {
     expect(screen.getAllByLabelText('页面图片-cover').length).toBeGreaterThan(0)
   })
 
-  it('dims only the reading surface when a dim level is selected', () => {
-    renderReader({ readerDimLevel: 0.4 })
-    expect(screen.getByTestId(
-      'reader-dimmer',
-      { includeHiddenElements: true },
-    )).toHaveStyle({ opacity: 0.4 })
+  it('keeps the reading surface free of a dimming overlay', () => {
+    renderReader()
+    expect(screen.queryByTestId('reader-dimmer', { includeHiddenElements: true })).toBeNull()
   })
 
   it('locks paging while the visible page is zoomed and exposes reset', () => {

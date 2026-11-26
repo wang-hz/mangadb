@@ -125,9 +125,6 @@ export default function SettingsOptions({ section }: {
           <>
             <Text style={styles.sectionTitle}>阅读设置</Text>
             <View style={styles.preferencesCard}>
-              <Text style={styles.explanation}>
-                本机所有服务器和账号共用。已读漫画仍优先使用该漫画上次选择的模式。
-              </Text>
               <ReaderPreferencesControls />
             </View>
 

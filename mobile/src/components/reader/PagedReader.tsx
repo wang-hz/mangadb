@@ -14,7 +14,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { ApiClient } from '@/api/client'
 import type { MangaDetail } from '@/api/types'
 import { ReaderCompletionPanel } from '@/components/reader/ReaderCompletionPanel'
-import { ReaderDimmer } from '@/components/reader/ReaderDimmer'
 import { ReaderControls } from '@/components/reader/ReaderControls'
 import { ZoomableReaderImage } from '@/components/reader/ZoomableReaderImage'
 import {
@@ -222,8 +221,6 @@ export function PagedReader({
         windowSize={3}
         testID={`paged-reader-list-${epoch}`}
       />
-      <ReaderDimmer level={preferences.readerDimLevel} />
-
       {controlsVisible ? (
         <ReaderControls
           key={epoch}

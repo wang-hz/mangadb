@@ -20,6 +20,24 @@ describe('ReaderPreferencesControls', () => {
     return onDefaultModeChange
   }
 
+  it.each([false, true])('shares the reading content without brightness controls when dark=%s', async dark => {
+    render(
+      <ReaderPreferencesProvider>
+        <ReaderPreferencesControls dark={dark} />
+      </ReaderPreferencesProvider>,
+    )
+    await waitFor(() => expect(screen.getByLabelText('翻页')).not.toBeDisabled())
+
+    expect(screen.getAllByRole('header').map(header => header.props.children)).toEqual([
+      '阅读方式', '画面', '交互',
+    ])
+    expect(screen.getByText('阅读模式')).toBeOnTheScreen()
+    expect(screen.getByText('阅读偏好保存在本机，所有服务器和账号共用。已读漫画优先沿用上次阅读模式；阅读器内修改会立即应用，并保存为本机默认值。')).toBeOnTheScreen()
+    expect(screen.queryByText('默认阅读模式')).toBeNull()
+    expect(screen.queryByText('阅读画面亮度')).toBeNull()
+    expect(screen.queryByLabelText('夜间')).toBeNull()
+  })
+
   it('updates every reading preference', async () => {
     const onDefaultModeChange = await renderControls()
 
@@ -38,14 +56,11 @@ describe('ReaderPreferencesControls', () => {
     fireEvent.press(screen.getByLabelText('5 秒'))
     await waitFor(() => expect(screen.getByLabelText('5 秒').props.accessibilityState.checked).toBe(true))
     await waitFor(() => expect(AsyncStorage.setItem).toHaveBeenCalledTimes(5))
-    fireEvent.press(screen.getByLabelText('夜间'))
-    await waitFor(() => expect(screen.getByLabelText('夜间').props.accessibilityState.checked).toBe(true))
-    await waitFor(() => expect(AsyncStorage.setItem).toHaveBeenCalledTimes(6))
     fireEvent.press(screen.getByLabelText('3 倍'))
     await waitFor(() => expect(screen.getByLabelText('3 倍').props.accessibilityState.checked).toBe(true))
-    await waitFor(() => expect(AsyncStorage.setItem).toHaveBeenCalledTimes(7))
+    await waitFor(() => expect(AsyncStorage.setItem).toHaveBeenCalledTimes(6))
     fireEvent(screen.getByLabelText('阅读时保持屏幕常亮'), 'valueChange', true)
-    await waitFor(() => expect(AsyncStorage.setItem).toHaveBeenCalledTimes(8))
+    await waitFor(() => expect(AsyncStorage.setItem).toHaveBeenCalledTimes(7))
 
     const saved = JSON.parse(jest.mocked(AsyncStorage.setItem).mock.calls.at(-1)![1])
     expect(saved).toMatchObject({
@@ -54,7 +69,6 @@ describe('ReaderPreferencesControls', () => {
       pagedFit: 'cover',
       scrollGap: 16,
       controlsAutoHideMs: 5000,
-      readerDimLevel: 0.4,
       doubleTapZoomScale: 3,
       keepAwake: true,
     })
