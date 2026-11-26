@@ -22,6 +22,34 @@ describe('ReaderProgressControls', () => {
     jest.spyOn(AppState, 'addEventListener').mockReturnValue({ remove: jest.fn() } as NativeEventSubscription)
   })
   afterEach(() => jest.restoreAllMocks())
+
+  it.each([9, 99, 999])('keeps maximum page-number space reserved when crossing page %i', page => {
+    const props = { pageCount: 1111, onJump: jest.fn(), onInteractionChange: jest.fn() }
+    const view = render(<ReaderProgressControls {...props} pageIndex={page - 1} />)
+    const reserve = screen.getByTestId('reader-page-number-reserve', { includeHiddenElements: true })
+    expect(reserve).toHaveTextContent('1111 / 1111')
+    expect(screen.queryByText('1111 / 1111')).toBeNull()
+    expect(screen.getByText(`${page} / 1111`)).toBeOnTheScreen()
+
+    view.rerender(<ReaderProgressControls {...props} pageIndex={page} />)
+
+    expect(screen.getByTestId('reader-page-number-reserve', { includeHiddenElements: true })).toHaveTextContent('1111 / 1111')
+    expect(screen.getByText(`${page + 1} / 1111`)).toBeOnTheScreen()
+    expect(screen.getByLabelText('跳转页码')).toHaveStyle({ minWidth: 44, minHeight: 44, flexShrink: 0 })
+  })
+
+  it('preserves maximum page-number space during scrubbing without exposing duplicate labels', () => {
+    const { slider, onJump } = renderControls(1111)
+    beginDrag(slider)
+    fireEvent(slider, 'responderMove', { nativeEvent: { pageX: 1000 } })
+
+    expect(screen.getAllByText('1111 / 1111')).toHaveLength(1)
+    expect(screen.getByTestId('reader-page-number-reserve', { includeHiddenElements: true })).toHaveTextContent('1111 / 1111')
+    expect(onJump).not.toHaveBeenCalled()
+    fireEvent(slider, 'responderRelease')
+    expect(onJump).toHaveBeenCalledWith(1110)
+  })
+
   it('previews while dragging and commits just once on release', () => {
     const { slider, onJump, onInteractionChange } = renderControls()
     beginDrag(slider)

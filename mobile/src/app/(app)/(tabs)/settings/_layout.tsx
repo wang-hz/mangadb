@@ -3,7 +3,11 @@ import { colors } from '@/theme/colors'
 
 export default function SettingsLayout() {
   return (
-    <Stack screenOptions={{ headerStyle: { backgroundColor: colors.header }, headerTintColor: '#ffffff' }}>
+    <Stack screenOptions={{
+      headerStyle: { backgroundColor: colors.header },
+      headerTintColor: '#ffffff',
+      headerBackButtonDisplayMode: 'minimal',
+    }}>
       <Stack.Screen name="index" options={{ title: '设置' }} />
       <Stack.Screen name="account" options={{ title: '账号与服务器' }} />
       <Stack.Screen name="reading" options={{ title: '阅读设置' }} />

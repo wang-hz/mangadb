@@ -121,7 +121,7 @@ export function ReaderInfoModal({
             </View>
             <View style={styles.actions}>
               <ReturnAction disabled={pending} label="返回漫画" onPress={() => { void runAction(onReturnToDetail) }} />
-              <ReturnAction disabled={pending} label="返回列表" onPress={() => { void runAction(onReturnToList) }} primary />
+              <ReturnAction disabled={pending} label="返回列表" onPress={() => { void runAction(onReturnToList) }} />
             </View>
             {pending ? <Text accessibilityLiveRegion="polite" style={styles.empty}>正在保存阅读状态…</Text> : null}
             {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
@@ -132,11 +132,10 @@ export function ReaderInfoModal({
   )
 }
 
-function ReturnAction({ label, onPress, disabled, primary = false }: {
+function ReturnAction({ label, onPress, disabled }: {
   label: string
   onPress: () => void
   disabled: boolean
-  primary?: boolean
 }) {
   return (
     <Pressable
@@ -145,12 +144,11 @@ function ReturnAction({ label, onPress, disabled, primary = false }: {
       onPress={onPress}
       style={({ pressed }) => [
         styles.action,
-        primary && styles.primaryAction,
         disabled && styles.disabledAction,
         pressed && !disabled && styles.pressedAction,
       ]}
     >
-      <Text style={[styles.actionText, primary && styles.primaryActionText]}>{label}</Text>
+      <Text style={styles.actionText}>{label}</Text>
     </Pressable>
   )
 }
@@ -196,10 +194,8 @@ const styles = StyleSheet.create({
   empty: { color: readerChrome.muted, fontSize: 13, lineHeight: 19 },
   actions: { flexDirection: 'row', gap: 10, marginTop: 4 },
   action: { flex: 1, minHeight: 48, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: readerChrome.border, borderRadius: 12, paddingHorizontal: 12 },
-  primaryAction: { backgroundColor: '#ffffff', borderColor: '#ffffff' },
   disabledAction: { opacity: 0.55 },
   pressedAction: { opacity: 0.72 },
   actionText: { color: readerChrome.text, fontSize: 15, fontWeight: '700' },
-  primaryActionText: { color: '#222222' },
   error: { color: '#fca5a5', fontSize: 13, lineHeight: 19 },
 })

@@ -107,7 +107,19 @@ export function ReaderProgressControls({
         onPress={() => { setJumpVisible(true); interactionRef.current(true) }}
         style={styles.pageButton}
       >
-        <Text style={styles.pageText}>{shownPage + 1} / {pageCount}</Text>
+        <Text
+          accessibilityElementsHidden
+          accessible={false}
+          importantForAccessibility="no-hide-descendants"
+          numberOfLines={1}
+          style={[styles.pageText, styles.pageReserve]}
+          testID="reader-page-number-reserve"
+        >
+          {pageCount} / {pageCount}
+        </Text>
+        <View pointerEvents="none" style={styles.pageLabel}>
+          <Text numberOfLines={1} style={styles.pageText}>{shownPage + 1} / {pageCount}</Text>
+        </View>
       </Pressable>
       <PageJumpModal
         currentPage={pageIndex + 1}
@@ -127,6 +139,8 @@ const styles = StyleSheet.create({
   fill: { height: 4, borderRadius: 2, backgroundColor: '#ffffff' },
   thumb: { position: 'absolute', top: -8, width: 20, height: 20, marginLeft: -10, borderRadius: 10, backgroundColor: '#ffffff' },
   disabled: { opacity: 0.35 },
-  pageButton: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  pageButton: { minWidth: 44, minHeight: 44, flexShrink: 0, alignItems: 'center', justifyContent: 'center' },
+  pageReserve: { opacity: 0 },
+  pageLabel: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
   pageText: { color: '#ffffff', fontSize: 15, fontWeight: '700', fontVariant: ['tabular-nums'] },
 })

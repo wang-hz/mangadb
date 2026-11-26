@@ -1,12 +1,14 @@
 import { fireEvent, render, screen } from '@testing-library/react-native'
 import { router } from 'expo-router'
 import TabLayout from '@/app/(app)/(tabs)/_layout'
+import SettingsLayout from '@/app/(app)/(tabs)/settings/_layout'
 import SettingsScreen from '@/app/(app)/(tabs)/settings/index'
 import LegacyDownloadsScreen from '@/app/(app)/(tabs)/downloads'
 
 jest.mock('expo-router', () => ({
   router: { push: jest.fn() },
   Tabs: Object.assign(() => null, { Screen: () => null }),
+  Stack: Object.assign(() => null, { Screen: () => null }),
   Redirect: () => null,
 }))
 
@@ -36,4 +38,11 @@ it('redirects the legacy downloads URL to the settings subpage', () => {
 it('omits stability diagnostics from settings', () => {
   render(<SettingsScreen />)
   expect(screen.queryByText('稳定性诊断')).not.toBeOnTheScreen()
+})
+
+it('uses icon-only native back buttons throughout the settings stack', () => {
+  const layout = SettingsLayout()
+  expect(layout.props.screenOptions.headerBackButtonDisplayMode).toBe('minimal')
+  expect(layout.props.screenOptions.headerLeft).toBeUndefined()
+  expect(layout.props.screenOptions.gestureEnabled).toBeUndefined()
 })
