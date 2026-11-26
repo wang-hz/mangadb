@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons'
-import { useInfiniteQuery, useQueries } from '@tanstack/react-query'
+import { useInfiniteQuery } from '@tanstack/react-query'
 import { router } from 'expo-router'
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo } from 'react'
 import {
   ActivityIndicator,
   FlatList,
@@ -16,10 +16,8 @@ import {
 } from 'react-native'
 import { ApiError } from '@/api/client'
 import { getMangas, nextMangaPage, uniqueMangas } from '@/api/mangas'
-import { getTag, getTags, nextTagPage, uniqueTags } from '@/api/tags'
-import type { MangaSortBy, MangaSummary, SortOrder, Tag } from '@/api/types'
+import type { MangaSortBy, MangaSummary, SortOrder } from '@/api/types'
 import { MangaCard } from '@/components/MangaCard'
-import { CatalogFilterSheet } from '@/components/catalog/CatalogFilterSheet'
 import { PrimaryButton } from '@/components/PrimaryButton'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { useFavorites } from '@/hooks/useFavorites'
@@ -27,9 +25,6 @@ import { useCatalogFilters } from '@/hooks/useCatalogFilters'
 import { useAdaptiveGridAnchor } from '@/hooks/useAdaptiveGridAnchor'
 import { useRecentReading } from '@/hooks/useRecentReading'
 import { useSession } from '@/session/SessionContext'
-import { useDownloadedMangaUuids } from '@/downloads/DownloadContext'
-import { matchesLocalMangaFilters } from '@/catalog/mangaFilters'
-import { activeCatalogFilterCount } from '@/storage/catalogFilters'
 import { colors } from '@/theme/colors'
 import { adaptiveGridLayout } from '@/utils/grid'
 
@@ -45,47 +40,11 @@ const SORT_OPTIONS: Array<{ label: string; value: MangaSortBy }> = [
 export default function MangasScreen() {
   const { width } = useWindowDimensions()
   const { api, auth, serverUrl } = useSession()
-  const [filtersVisible, setFiltersVisible] = useState(false)
-  const [tagSearch, setTagSearch] = useState('')
   const catalog = useCatalogFilters(serverUrl, auth?.user.uuid)
   const { filters } = catalog
   const debouncedSearch = useDebouncedValue(filters.search.trim(), 350)
-  const debouncedTagSearch = useDebouncedValue(tagSearch.trim(), 300)
   const recentReading = useRecentReading(serverUrl, auth?.user.uuid)
   const favorites = useFavorites(serverUrl, auth?.user.uuid)
-  const downloadedUuids = useDownloadedMangaUuids()
-  const tagsQuery = useInfiniteQuery({
-    queryKey: ['catalog-filter-tags', serverUrl, auth?.user.uuid, debouncedTagSearch],
-    queryFn: ({ pageParam, signal }) => getTags(api!, {
-      page: pageParam,
-      search: debouncedTagSearch,
-    }, signal),
-    initialPageParam: 1,
-    getNextPageParam: nextTagPage,
-    enabled: Boolean(api && auth && serverUrl && filtersVisible),
-    staleTime: 5 * 60 * 1000,
-  })
-  const selectedTagQueries = useQueries({
-    queries: filters.tagUuids.map(tagUuid => ({
-      queryKey: ['catalog-filter-tag', serverUrl, auth?.user.uuid, tagUuid],
-      queryFn: ({ signal }: { signal: AbortSignal }) => getTag(api!, tagUuid, signal),
-      enabled: Boolean(api && auth && serverUrl && filtersVisible),
-      staleTime: 5 * 60 * 1000,
-    })),
-  })
-  const pagedFilterTags = useMemo(
-    () => uniqueTags(tagsQuery.data?.pages ?? []),
-    [tagsQuery.data],
-  )
-  const filterTags = useMemo(
-    () => mergeSelectedTags(
-      filters.tagUuids,
-      selectedTagQueries.flatMap(result => result.data ? [result.data] : []),
-      pagedFilterTags,
-    ),
-    [filters.tagUuids, pagedFilterTags, selectedTagQueries],
-  )
-  const selectedTagError = selectedTagQueries.find(result => result.error)?.error
   const grid = useMemo(() => adaptiveGridLayout(width, {
     horizontalPadding: GRID_PADDING,
     gap: GRID_GAP,
@@ -100,9 +59,6 @@ export default function MangasScreen() {
         search: debouncedSearch,
         sortBy: filters.sortBy,
         sortOrder: filters.sortOrder,
-        tagUuids: filters.tagUuids,
-        publishYearFrom: filters.publishYearFrom,
-        publishYearTo: filters.publishYearTo,
       },
     ],
     queryFn: ({ pageParam, signal }) => getMangas(api!, {
@@ -110,16 +66,13 @@ export default function MangasScreen() {
       search: debouncedSearch,
       sortBy: filters.sortBy,
       sortOrder: filters.sortOrder,
-      tagUuids: filters.tagUuids,
-      publishYearFrom: filters.publishYearFrom ?? undefined,
-      publishYearTo: filters.publishYearTo ?? undefined,
     }, signal),
     initialPageParam: 1,
     getNextPageParam: nextMangaPage,
     enabled: Boolean(api && auth && serverUrl && catalog.loaded),
   })
 
-  const serverMangas = useMemo(
+  const mangas = useMemo(
     () => uniqueMangas(query.data?.pages ?? []),
     [query.data],
   )
@@ -127,18 +80,6 @@ export default function MangasScreen() {
     () => new Map(recentReading.allEntries.map(entry => [entry.mangaUuid, entry])),
     [recentReading.allEntries],
   )
-  const mangas = useMemo(() => serverMangas.filter(manga =>
-    matchesLocalMangaFilters(
-      manga.uuid,
-      filters,
-      progressByManga.get(manga.uuid),
-      favorites.uuids.has(manga.uuid),
-      downloadedUuids.has(manga.uuid),
-    )), [downloadedUuids, favorites.uuids, filters, progressByManga, serverMangas])
-  const activeFilterCount = activeCatalogFilterCount(filters)
-  const hasLocalFilters = filters.readingState !== 'all' ||
-    filters.favoriteOnly ||
-    filters.downloadedOnly
   const gridAnchor = useAdaptiveGridAnchor<MangaSummary>(grid.columns, mangas.length)
   const total = query.data?.pages[0]?.total ?? 0
   const cardWidth = grid.cardWidth
@@ -149,8 +90,7 @@ export default function MangasScreen() {
     if (query.hasNextPage && !query.isFetchingNextPage) void query.fetchNextPage()
   }
   return (
-    <>
-      <FlatList
+    <FlatList
       columnWrapperStyle={styles.row}
       contentContainerStyle={styles.content}
       data={mangas}
@@ -164,10 +104,7 @@ export default function MangasScreen() {
           error={query.error}
           loading={query.isPending}
           onRetry={() => { void query.refetch() }}
-          onContinueLoading={hasLocalFilters && query.hasNextPage
-            ? () => { void query.fetchNextPage() }
-            : undefined}
-          searching={Boolean(debouncedSearch || activeFilterCount)}
+          searching={Boolean(debouncedSearch)}
         />
       )}
       ListFooterComponent={query.isFetchingNextPage
@@ -190,13 +127,9 @@ export default function MangasScreen() {
             : null}
       ListHeaderComponent={(
         <LibraryHeader
-          activeFilterCount={activeFilterCount}
-          countLabel={hasLocalFilters
-            ? `已显示 ${mangas.length} 本 · 服务器筛选匹配 ${total} 本`
-            : total > 0 ? `共 ${total} 本` : '漫画库'}
+          countLabel={total > 0 ? `共 ${total} 本` : '漫画库'}
           onChangeSearch={search => catalog.updateFilters({ ...filters, search })}
           onChangeSort={sortBy => catalog.updateFilters({ ...filters, sortBy })}
-          onOpenFilters={() => setFiltersVisible(true)}
           onToggleOrder={() => catalog.updateFilters({
             ...filters,
             sortOrder: filters.sortOrder === 'desc' ? 'asc' : 'desc',
@@ -236,69 +169,27 @@ export default function MangasScreen() {
       )}
       style={styles.list}
       windowSize={7}
-      />
-      <CatalogFilterSheet
-        filters={filters}
-        onChangeTagSearch={setTagSearch}
-        onApply={catalog.updateFilters}
-        onClose={() => setFiltersVisible(false)}
-        onLoadMoreTags={() => { void tagsQuery.fetchNextPage() }}
-        onRetryTags={() => {
-          void tagsQuery.refetch()
-          selectedTagQueries.forEach(result => { void result.refetch() })
-        }}
-        tags={filterTags}
-        tagsError={tagQueryErrorMessage(tagsQuery.error ?? selectedTagError)}
-        tagsFetchingMore={tagsQuery.isFetchingNextPage}
-        tagsHasMore={Boolean(tagsQuery.hasNextPage)}
-        tagsLoading={tagsQuery.isPending}
-        tagSearch={tagSearch}
-        visible={filtersVisible}
-      />
-    </>
+    />
   )
-}
-
-export function mergeSelectedTags(
-  selectedTagUuids: readonly string[],
-  selectedTags: readonly Tag[],
-  pagedTags: readonly Tag[],
-): Tag[] {
-  const tagsByUuid = new Map(pagedTags.map(tag => [tag.uuid, tag]))
-  selectedTags.forEach(tag => tagsByUuid.set(tag.uuid, tag))
-  const selected = selectedTagUuids.flatMap(uuid => {
-    const tag = tagsByUuid.get(uuid)
-    return tag ? [tag] : []
-  })
-  const selectedUuids = new Set(selectedTagUuids)
-  return [...selected, ...pagedTags.filter(tag => !selectedUuids.has(tag.uuid))]
-}
-
-function tagQueryErrorMessage(error: unknown): string | null {
-  return error instanceof Error ? error.message : null
 }
 
 interface LibraryHeaderProps {
   search: string
   sortBy: MangaSortBy
   sortOrder: SortOrder
-  activeFilterCount: number
   countLabel: string
   onChangeSearch: (value: string) => void
   onChangeSort: (value: MangaSortBy) => void
-  onOpenFilters: () => void
   onToggleOrder: () => void
 }
 
 function LibraryHeader({
-  activeFilterCount,
   countLabel,
   search,
   sortBy,
   sortOrder,
   onChangeSearch,
   onChangeSort,
-  onOpenFilters,
   onToggleOrder,
 }: LibraryHeaderProps) {
   return (
@@ -341,24 +232,6 @@ function LibraryHeader({
           />
           <Text style={styles.orderText}>{sortOrder === 'desc' ? '降序' : '升序'}</Text>
         </Pressable>
-        <Pressable
-          accessibilityLabel={`筛选${activeFilterCount > 0 ? `，已启用 ${activeFilterCount} 项` : ''}`}
-          accessibilityRole="button"
-          onPress={onOpenFilters}
-          style={[styles.filterButton, activeFilterCount > 0 ? styles.filterButtonActive : null]}
-        >
-          <Ionicons
-            color={activeFilterCount > 0 ? '#ffffff' : colors.brand}
-            name="options-outline"
-            size={17}
-          />
-          <Text style={[
-            styles.filterButtonText,
-            activeFilterCount > 0 ? styles.filterButtonTextActive : null,
-          ]}>
-            筛选{activeFilterCount > 0 ? ` ${activeFilterCount}` : ''}
-          </Text>
-        </Pressable>
       </View>
       <Text style={styles.count}>{countLabel}</Text>
     </View>
@@ -370,7 +243,6 @@ interface LibraryStateProps {
   error: Error | null
   searching: boolean
   onRetry: () => void
-  onContinueLoading?: () => void
 }
 
 function LibraryState({
@@ -378,7 +250,6 @@ function LibraryState({
   error,
   searching,
   onRetry,
-  onContinueLoading,
 }: LibraryStateProps) {
   if (loading) {
     return (
@@ -405,9 +276,6 @@ function LibraryState({
       <Text style={styles.stateMessage}>
         {searching ? '换个关键词再试试。' : '服务器中添加漫画后，可在这里下拉刷新。'}
       </Text>
-      {onContinueLoading
-        ? <PrimaryButton onPress={onContinueLoading}>继续加载并筛选</PrimaryButton>
-        : null}
     </View>
   )
 }
@@ -495,27 +363,6 @@ const styles = StyleSheet.create({
     color: colors.brand,
     fontSize: 12,
     fontWeight: '600',
-  },
-  filterButton: {
-    minHeight: 36,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    borderWidth: 1,
-    borderColor: colors.brand,
-    borderRadius: 999,
-  },
-  filterButtonActive: {
-    backgroundColor: colors.brand,
-  },
-  filterButtonText: {
-    color: colors.brand,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  filterButtonTextActive: {
-    color: '#ffffff',
   },
   count: {
     color: colors.muted,

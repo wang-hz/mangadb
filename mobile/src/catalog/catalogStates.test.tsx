@@ -1,21 +1,29 @@
 import { fireEvent, render, screen } from '@testing-library/react-native'
+import { FlatList } from 'react-native'
 import { ApiError } from '@/api/client'
-import MangasScreen, { mergeSelectedTags } from '@/app/(app)/(tabs)/mangas'
+import { getMangas } from '@/api/mangas'
+import MangasScreen from '@/app/(app)/(tabs)/mangas'
 import TagsScreen from '@/app/(app)/(tabs)/tags'
+import type { CatalogFilters } from '@/storage/catalogFilters'
 
 const mockUseInfiniteQuery = jest.fn()
 const mockUseQuery = jest.fn()
-const mockUseQueries = jest.fn()
 const mockMangaRefetch = jest.fn()
 const mockTagRefetch = jest.fn()
 const mockTagTypesRefetch = jest.fn()
-let mockCatalogTagUuids: string[] = []
+let mockSavedFilters: Partial<CatalogFilters> = {}
 
 jest.mock('@tanstack/react-query', () => ({
   useInfiniteQuery: (...args: unknown[]) => mockUseInfiniteQuery(...args),
-  useQueries: (...args: unknown[]) => mockUseQueries(...args),
   useQuery: (...args: unknown[]) => mockUseQuery(...args),
 }))
+
+jest.mock('@/api/mangas', () => ({
+  ...jest.requireActual('@/api/mangas'),
+  getMangas: jest.fn(),
+}))
+
+jest.mock('expo-image', () => ({ Image: () => null }))
 
 jest.mock('expo-router', () => ({
   router: { push: jest.fn() },
@@ -51,56 +59,25 @@ jest.mock('@/hooks/useCatalogFilters', () => ({
       search: '',
       sortBy: 'updateAt',
       sortOrder: 'desc',
-      tagUuids: mockCatalogTagUuids,
+      tagUuids: [],
       publishYearFrom: null,
       publishYearTo: null,
       readingState: 'all',
       favoriteOnly: false,
       downloadedOnly: false,
+      ...mockSavedFilters,
     })
     return { filters, loaded: true, updateFilters }
   },
 }))
 
 jest.mock('@/downloads/DownloadContext', () => ({
-  useDownloadedMangaUuids: () => new Set(),
-  useDownloads: () => ({
-    snapshot: { manifests: [] },
-  }),
-}))
-
-jest.mock('@/components/catalog/CatalogFilterSheet', () => ({
-  CatalogFilterSheet: ({ visible, tags, filters, onApply }: {
-    visible: boolean
-    tags: Array<{ uuid: string; name: string }>
-    filters: { tagUuids: string[] }
-    onApply: (filters: { tagUuids: string[] }) => void
-  }) => {
-    if (!visible) return null
-    const React = require('react')
-    const { Pressable, Text, View } = require('react-native')
-    return React.createElement(
-      View,
-      null,
-      ...tags.map(tag => React.createElement(
-        Pressable,
-        {
-          accessibilityLabel: `筛选标签 ${tag.uuid}`,
-          key: tag.uuid,
-          onPress: () => onApply({
-            ...filters,
-            tagUuids: filters.tagUuids.filter(uuid => uuid !== tag.uuid),
-          }),
-        },
-        React.createElement(Text, null, tag.name),
-      )),
-    )
-  },
+  useDownloadManifest: () => null,
 }))
 
 jest.mock('@/session/SessionContext', () => ({
   useSession: () => ({
-    api: {},
+    api: { url: (path: string) => path, authorizationHeaders: () => ({}) },
     auth: { user: { uuid: 'user-1' } },
     serverUrl: 'https://example.com',
   }),
@@ -108,8 +85,7 @@ jest.mock('@/session/SessionContext', () => ({
 
 describe('catalog empty and failure states', () => {
   beforeEach(() => {
-    mockCatalogTagUuids = []
-    mockUseQueries.mockReturnValue([])
+    mockSavedFilters = {}
     mockUseInfiniteQuery.mockReturnValue(emptyInfiniteQuery(mockMangaRefetch))
     mockUseQuery.mockReturnValue({
       data: [],
@@ -161,51 +137,46 @@ describe('catalog empty and failure states', () => {
     expect(mockTagRefetch).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps fetched selected tags ahead of and deduplicated from search pages', () => {
-    const selected = {
-      uuid: 'selected',
-      name: '已选标签',
-      createAt: '2026-08-20T00:00:00.000Z',
-      updateAt: '2026-08-20T00:00:00.000Z',
-      tagType: { uuid: 'type', name: '题材' },
+  it('ignores saved server and local filters while keeping all returned mangas visible', async () => {
+    mockSavedFilters = {
+      tagUuids: ['old-tag'],
+      publishYearFrom: 2000,
+      publishYearTo: 2010,
+      readingState: 'completed',
+      favoriteOnly: true,
+      downloadedOnly: true,
     }
-    const searched = {
-      ...selected,
-      uuid: 'searched',
-      name: '搜索结果',
-    }
+    const manga = { uuid: 'm1', displayTitle: '保留的漫画', originalTitle: 'Test',
+      cover: 0, publishDate: null, createAt: '', updateAt: '' }
+    mockUseInfiniteQuery.mockReturnValue({
+      ...emptyInfiniteQuery(mockMangaRefetch),
+      data: { pages: [{ items: [manga], total: 1, page: 1, limit: 24 }] },
+    })
+    const view = render(<MangasScreen />)
 
-    expect(mergeSelectedTags(
-      ['selected'],
-      [selected],
-      [searched, { ...selected, name: '分页中的旧值' }],
-    )).toEqual([selected, searched])
+    expect(screen.queryByRole('button', { name: /筛选/ })).toBeNull()
+    expect(screen.getByText('保留的漫画')).toBeOnTheScreen()
+    expect(view.UNSAFE_getByType(FlatList).props.data).toEqual([manga])
+    const options = mockUseInfiniteQuery.mock.calls.at(-1)![0]
+    expect(options.queryKey.at(-1)).toEqual({ search: '', sortBy: 'updateAt', sortOrder: 'desc' })
+    const signal = new AbortController().signal
+    await options.queryFn({ pageParam: 1, signal })
+    expect(getMangas).toHaveBeenLastCalledWith(expect.anything(), {
+      page: 1, search: '', sortBy: 'updateAt', sortOrder: 'desc',
+    }, signal)
   })
 
-  it('fetches a selected tag missing from search pages and lets the sheet remove it', () => {
-    const selected = {
-      uuid: 'selected',
-      name: '已选标签',
-      createAt: '2026-08-20T00:00:00.000Z',
-      updateAt: '2026-08-20T00:00:00.000Z',
-      tagType: { uuid: 'type', name: '题材' },
-    }
-    mockCatalogTagUuids = [selected.uuid]
-    mockUseQueries.mockReturnValue([{
-      data: selected,
-      error: null,
-      refetch: jest.fn(),
-    }])
-
+  it('retains saved search and sort and keeps sort controls working', () => {
+    mockSavedFilters = { search: '科幻', sortBy: 'publishDate', sortOrder: 'asc' }
     render(<MangasScreen />)
-    fireEvent.press(screen.getByLabelText('筛选，已启用 1 项'))
 
-    expect(screen.getByLabelText('筛选标签 selected')).toBeOnTheScreen()
-    expect(mockUseQueries.mock.calls.some(([options]) =>
-      options.queries[0]?.queryKey.at(-1) === 'selected' &&
-      options.queries[0]?.enabled === true)).toBe(true)
-    fireEvent.press(screen.getByLabelText('筛选标签 selected'))
-    expect(screen.queryByLabelText('筛选标签 selected')).toBeNull()
+    expect(screen.getByLabelText('搜索漫画').props.value).toBe('科幻')
+    expect(screen.getByRole('button', { name: '出版日期' })).toBeSelected()
+    expect(screen.getByText('升序')).toBeOnTheScreen()
+    fireEvent.press(screen.getByText('最近添加'))
+    fireEvent.press(screen.getByText('升序'))
+    expect(mockUseInfiniteQuery.mock.calls.at(-1)![0].queryKey.at(-1))
+      .toEqual({ search: '科幻', sortBy: 'createAt', sortOrder: 'desc' })
   })
 })
 
