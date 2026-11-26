@@ -88,17 +88,17 @@ describe('ScrollingReader preferences', () => {
     scroll.mockRestore()
   })
 
-  it('jumps from thumbnails, resets zoom, and drops stale scrolling callbacks', () => {
+  it('jumps by page number, resets zoom, and drops stale scrolling callbacks', () => {
     const scroll = jest.spyOn(FlatList.prototype, 'scrollToOffset').mockImplementation(() => {})
-    const center = jest.spyOn(FlatList.prototype, 'scrollToIndex').mockImplementation(() => {})
     const onPageChange = jest.fn()
     const { view, rerenderViewport } = renderReader({ onPageChange })
     const list = view.UNSAFE_getByType(FlatList)
     act(() => list.props.onScrollBeginDrag())
     act(() => list.props.renderItem({ item: '0.jpg', index: 0 }).props.onTap())
     fireEvent(screen.getByLabelText('第 1 页图片'), 'accessibilityAction', { nativeEvent: { actionName: 'increment' } })
-    fireEvent.press(screen.getByLabelText('展开页面缩略图'))
-    fireEvent.press(screen.getByLabelText('跳转到第 3 页'))
+    fireEvent.press(screen.getByLabelText('跳转页码'))
+    fireEvent.changeText(screen.getByLabelText('目标页码'), '3')
+    fireEvent.press(screen.getByText('跳转'))
     expect(onPageChange).toHaveBeenLastCalledWith(2)
     expect(scroll).toHaveBeenLastCalledWith({ offset: list.props.getItemLayout(null, 2).offset, animated: false })
     expect(view.UNSAFE_getAllByType(FlatList)[0].props.scrollEnabled).toBe(true)
@@ -108,9 +108,8 @@ describe('ScrollingReader preferences', () => {
     })
     expect(onPageChange).toHaveBeenCalledTimes(1)
     rerenderViewport({ ...stableViewport, width: 844, height: 390, epoch: 1 })
-    expect(screen.queryByLabelText('页面缩略图导航')).toBeNull()
+    expect(screen.queryByLabelText('目标页码')).toBeNull()
     view.unmount()
-    center.mockRestore()
     scroll.mockRestore()
   })
 
@@ -202,7 +201,6 @@ function renderReader({
         manga={manga}
         mode="scroll"
         onBack={jest.fn()}
-        onModeChange={jest.fn()}
         onMarkCompleted={jest.fn().mockResolvedValue(undefined)}
         onOpenSettings={jest.fn()}
         onPageChange={onPageChange}

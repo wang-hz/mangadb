@@ -43,7 +43,6 @@ interface ScrollingReaderProps {
   onBack: () => void
   onRefreshMetadata: () => Promise<void>
   mode: ReaderMode
-  onModeChange: (mode: ReaderMode) => void
   preferences: ReaderPreferences
   settingsVisible: boolean
   onOpenSettings: () => void
@@ -68,7 +67,6 @@ export function ScrollingReader({
   onBack,
   onRefreshMetadata,
   mode,
-  onModeChange,
   preferences,
   settingsVisible,
   onOpenSettings,
@@ -300,11 +298,9 @@ export function ScrollingReader({
       {controlsVisible ? (
         <ReaderControls
           key={epoch}
-          api={api} manga={manga} serverUrl={serverUrl} userUuid={userUuid}
-          localPageUris={localPageUris} settingsVisible={settingsVisible}
           title={manga.displayTitle} mode={mode} direction={preferences.pagedDirection}
           pageIndex={pageIndex} pageCount={manga.pages.length}
-          onBack={onBack} onOpenSettings={onOpenSettings} onModeChange={onModeChange}
+          onBack={onBack} onOpenSettings={onOpenSettings}
           onJump={jumpToPage}
           onInteractionChange={setProgressInteracting}
         />

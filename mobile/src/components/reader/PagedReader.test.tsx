@@ -73,7 +73,6 @@ function renderReader(
         localPageUris={localPageUris}
         mode="paged"
         onBack={jest.fn()}
-        onModeChange={jest.fn()}
         onMarkCompleted={jest.fn().mockResolvedValue(undefined)}
         onOpenSettings={jest.fn()}
         onPageChange={onPageChange}
@@ -145,12 +144,13 @@ describe('PagedReader preferences', () => {
     scroll.mockRestore()
   })
 
-  it('jumps from thumbnails using logical RTL pages and resets zoom', () => {
+  it('jumps to a logical RTL page and resets zoom', () => {
     const scroll = jest.spyOn(FlatList.prototype, 'scrollToIndex').mockImplementation(() => {})
     const { onPageChange, view } = renderReader({ pagedDirection: 'rtl' })
     fireEvent(screen.getByLabelText('第 2 页图片'), 'accessibilityAction', { nativeEvent: { actionName: 'increment' } })
-    fireEvent.press(screen.getByLabelText('展开页面缩略图'))
-    fireEvent.press(screen.getByLabelText('跳转到第 1 页'))
+    fireEvent.press(screen.getByLabelText('跳转页码'))
+    fireEvent.changeText(screen.getByLabelText('目标页码'), '1')
+    fireEvent.press(screen.getByText('跳转'))
     expect(onPageChange).toHaveBeenLastCalledWith(0)
     expect(view.UNSAFE_getAllByType(FlatList)[0].props.scrollEnabled).toBe(true)
     expect(scroll).toHaveBeenCalledWith({ index: 3, animated: false })
@@ -347,23 +347,21 @@ describe('PagedReader preferences', () => {
     jest.useRealTimers()
   })
 
-  it('pauses auto-hide while thumbnails are open and resumes after closing', () => {
-    const scroll = jest.spyOn(FlatList.prototype, 'scrollToIndex').mockImplementation(() => {})
+  it('pauses auto-hide while the page jump is open and resumes after closing', () => {
     jest.useFakeTimers()
     try {
       const { view } = renderReader()
-      fireEvent.press(screen.getByLabelText('展开页面缩略图'))
+      fireEvent.press(screen.getByLabelText('跳转页码'))
       act(() => jest.advanceTimersByTime(10000))
-      expect(screen.getByLabelText('收起页面缩略图')).toBeOnTheScreen()
-      fireEvent.press(screen.getByLabelText('收起页面缩略图'))
+      expect(screen.getByLabelText('目标页码')).toBeOnTheScreen()
+      fireEvent.press(screen.getByText('取消'))
       act(() => jest.advanceTimersByTime(2999))
-      expect(screen.getByLabelText('展开页面缩略图')).toBeOnTheScreen()
+      expect(screen.getByLabelText('跳转页码')).toBeOnTheScreen()
       act(() => jest.advanceTimersByTime(1))
-      expect(screen.queryByLabelText('展开页面缩略图')).toBeNull()
+      expect(screen.queryByLabelText('跳转页码')).toBeNull()
       view.unmount()
     } finally {
       jest.useRealTimers()
-      scroll.mockRestore()
     }
   })
 })

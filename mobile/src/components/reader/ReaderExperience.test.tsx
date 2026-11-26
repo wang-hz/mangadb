@@ -30,10 +30,30 @@ jest.mock('@/storage/progress', () => ({
 }))
 
 jest.mock('@/components/reader/ReaderSettingsModal', () => ({
-  ReaderSettingsModal: ({ visible }: { visible: boolean }) => {
+  ReaderSettingsModal: ({ visible, onDefaultModeChange, onClose }: {
+    visible: boolean
+    onDefaultModeChange: (mode: 'paged' | 'scroll') => void
+    onClose: () => void
+  }) => {
     const React = require('react')
-    const { Text } = require('react-native')
-    return visible ? React.createElement(Text, null, 'settings-open') : null
+    const { Pressable, Text, View } = require('react-native')
+    return visible ? React.createElement(
+      View,
+      null,
+      React.createElement(Text, null, 'settings-open'),
+      React.createElement(Pressable, {
+        accessibilityLabel: '切换到滚动模式',
+        onPress: () => onDefaultModeChange('scroll'),
+      }),
+      React.createElement(Pressable, {
+        accessibilityLabel: '切换到翻页模式',
+        onPress: () => onDefaultModeChange('paged'),
+      }),
+      React.createElement(Pressable, {
+        accessibilityLabel: '关闭阅读设置',
+        onPress: onClose,
+      }),
+    ) : null
   },
 }))
 
@@ -41,10 +61,9 @@ jest.mock('@/components/reader/PagedReader', () => {
   const React = require('react')
   const { Pressable, Text, View } = require('react-native')
   return {
-    PagedReader: ({ pageIndex, onPageChange, onModeChange, onReread, onOpenSettings, viewport }: {
+    PagedReader: ({ pageIndex, onPageChange, onReread, onOpenSettings, viewport }: {
       pageIndex: number
       onPageChange: (pageIndex: number) => void
-      onModeChange: (mode: 'scroll') => void
       onReread: () => Promise<void>
       onOpenSettings: () => void
       viewport: { epoch: number }
@@ -63,10 +82,6 @@ jest.mock('@/components/reader/PagedReader', () => {
           onPress: () => onPageChange(pageIndex + 2),
         }),
         React.createElement(Pressable, {
-          accessibilityLabel: '切换到滚动模式',
-          onPress: () => onModeChange('scroll'),
-        }),
-        React.createElement(Pressable, {
           accessibilityLabel: '从头重读',
           onPress: () => { void onReread() },
         }),
@@ -83,10 +98,10 @@ jest.mock('@/components/reader/ScrollingReader', () => {
   const React = require('react')
   const { Pressable, Text, View } = require('react-native')
   return {
-    ScrollingReader: ({ pageIndex, onPageChange, onModeChange }: {
+    ScrollingReader: ({ pageIndex, onPageChange, onOpenSettings }: {
       pageIndex: number
       onPageChange: (pageIndex: number) => void
-      onModeChange: (mode: 'paged') => void
+      onOpenSettings: () => void
     }) => React.createElement(
       View,
       null,
@@ -96,8 +111,8 @@ jest.mock('@/components/reader/ScrollingReader', () => {
         onPress: () => onPageChange(pageIndex + 1),
       }),
       React.createElement(Pressable, {
-        accessibilityLabel: '切换到翻页模式',
-        onPress: () => onModeChange('paged'),
+        accessibilityLabel: '打开阅读设置',
+        onPress: onOpenSettings,
       }),
     ),
   }
@@ -175,12 +190,16 @@ describe('ReaderExperience', () => {
     fireEvent.press(screen.getByLabelText('翻页模式更新页码'))
     expect(screen.getByText('paged:5')).toBeTruthy()
 
+    fireEvent.press(screen.getByLabelText('打开阅读设置'))
     fireEvent.press(screen.getByLabelText('切换到滚动模式'))
+    fireEvent.press(screen.getByLabelText('关闭阅读设置'))
     expect(screen.getByText('scroll:5')).toBeTruthy()
 
     fireEvent.press(screen.getByLabelText('滚动模式更新页码'))
     expect(screen.getByText('scroll:6')).toBeTruthy()
+    fireEvent.press(screen.getByLabelText('打开阅读设置'))
     fireEvent.press(screen.getByLabelText('切换到翻页模式'))
+    fireEvent.press(screen.getByLabelText('关闭阅读设置'))
     expect(screen.getByText('paged:6')).toBeTruthy()
     expect(mockSaveReadingProgress).toHaveBeenCalledTimes(1)
 

@@ -154,7 +154,6 @@ export function ReaderExperience({
     onBack,
     onMarkCompleted: completion.complete,
     onRefreshMetadata,
-    onModeChange: changeMode,
     onPageChange: changePage,
     pageIndex: currentPageIndex,
     serverUrl,
