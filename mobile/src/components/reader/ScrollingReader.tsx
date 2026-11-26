@@ -10,10 +10,8 @@ import {
   Text,
   View,
 } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { ApiClient } from '@/api/client'
 import type { MangaDetail } from '@/api/types'
-import { ReaderCompletionPanel } from '@/components/reader/ReaderCompletionPanel'
 import { ReaderControls } from '@/components/reader/ReaderControls'
 import { ZoomableReaderImage } from '@/components/reader/ZoomableReaderImage'
 import {
@@ -43,16 +41,10 @@ interface ScrollingReaderProps {
   onRefreshMetadata: () => Promise<void>
   mode: ReaderMode
   preferences: ReaderPreferences
-  settingsVisible: boolean
+  modalVisible: boolean
   onOpenSettings: () => void
+  onOpenInfo: () => void
   localPageUris?: readonly string[]
-  completed: boolean
-  onMarkCompleted: () => Promise<void>
-  onReturnToDetail: () => void
-  onReturnToList: () => void
-  onReread: () => Promise<void>
-  completionPending: boolean
-  completionError: string | null
   viewport: StableViewport
 }
 
@@ -67,20 +59,13 @@ export function ScrollingReader({
   onRefreshMetadata,
   mode,
   preferences,
-  settingsVisible,
+  modalVisible,
   onOpenSettings,
+  onOpenInfo,
   localPageUris,
-  completed,
-  onMarkCompleted,
-  onReturnToDetail,
-  onReturnToList,
-  onReread,
-  completionPending,
-  completionError,
   viewport,
 }: ScrollingReaderProps) {
   const { width, height, scale, epoch } = viewport
-  const insets = useSafeAreaInsets()
   const screenReaderEnabled = useScreenReaderEnabled()
   const listRef = useRef<FlatList<string>>(null)
   const callbackRef = useRef(onPageChange)
@@ -138,11 +123,11 @@ export function ScrollingReader({
   }, [epoch])
 
   useEffect(() => {
-    if (!controlsVisible || settingsVisible || progressInteracting) return
+    if (!controlsVisible || modalVisible || progressInteracting) return
     if (preferences.controlsAutoHideMs === null) return
     const timeout = setTimeout(() => setControlsVisible(false), preferences.controlsAutoHideMs)
     return () => clearTimeout(timeout)
-  }, [controlsVisible, settingsVisible, progressInteracting, pageIndex, preferences.controlsAutoHideMs])
+  }, [controlsVisible, modalVisible, progressInteracting, pageIndex, preferences.controlsAutoHideMs])
 
   // Keep the selected page anchored while its estimated image sizes resolve.
   const restoreJumpTarget = useCallback(() => {
@@ -231,22 +216,6 @@ export function ScrollingReader({
         initialScrollIndex={pageIndex}
         key={`scroll:${epoch}`}
         keyExtractor={(_, index) => String(index)}
-        ListFooterComponent={pageIndex === manga.pages.length - 1 ? (
-          <View style={[
-            styles.completionFooter,
-            { paddingBottom: Math.max(24, insets.bottom + 110) },
-          ]}>
-            <ReaderCompletionPanel
-              completed={completed}
-              onMarkCompleted={onMarkCompleted}
-              onReread={onReread}
-              onReturnToDetail={onReturnToDetail}
-              onReturnToList={onReturnToList}
-              pending={completionPending}
-              error={completionError}
-            />
-          </View>
-        ) : null}
         maxToRenderPerBatch={1}
         onScrollBeginDrag={() => {
           if (!isCurrentEpoch(epoch)) return
@@ -295,9 +264,10 @@ export function ScrollingReader({
       {controlsVisible ? (
         <ReaderControls
           key={epoch}
-          title={manga.displayTitle} mode={mode} direction={preferences.pagedDirection}
-          pageIndex={pageIndex} pageCount={manga.pages.length}
-          onBack={onBack} onOpenSettings={onOpenSettings}
+          manga={manga} api={api} serverUrl={serverUrl} userUuid={userUuid}
+          localPageUris={localPageUris} mode={mode} direction={preferences.pagedDirection}
+          pageIndex={pageIndex}
+          onBack={onBack} onOpenSettings={onOpenSettings} onOpenInfo={onOpenInfo}
           onJump={jumpToPage}
           onInteractionChange={setProgressInteracting}
         />
@@ -506,10 +476,6 @@ const styles = StyleSheet.create({
   loading: {
     position: 'absolute',
     alignSelf: 'center',
-  },
-  completionFooter: {
-    padding: 14,
-    backgroundColor: colors.reader,
   },
   scrollFailure: {
     alignItems: 'center',

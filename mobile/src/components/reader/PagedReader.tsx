@@ -10,10 +10,8 @@ import {
   Text,
   View,
 } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { ApiClient } from '@/api/client'
 import type { MangaDetail } from '@/api/types'
-import { ReaderCompletionPanel } from '@/components/reader/ReaderCompletionPanel'
 import { ReaderControls } from '@/components/reader/ReaderControls'
 import { ZoomableReaderImage } from '@/components/reader/ZoomableReaderImage'
 import {
@@ -44,16 +42,10 @@ interface PagedReaderProps {
   onRefreshMetadata: () => Promise<void>
   mode: ReaderMode
   preferences: ReaderPreferences
-  settingsVisible: boolean
+  modalVisible: boolean
   onOpenSettings: () => void
+  onOpenInfo: () => void
   localPageUris?: readonly string[]
-  completed: boolean
-  onMarkCompleted: () => Promise<void>
-  onReturnToDetail: () => void
-  onReturnToList: () => void
-  onReread: () => Promise<void>
-  completionPending: boolean
-  completionError: string | null
   viewport: StableViewport
 }
 
@@ -68,20 +60,13 @@ export function PagedReader({
   onRefreshMetadata,
   mode,
   preferences,
-  settingsVisible,
+  modalVisible,
   onOpenSettings,
+  onOpenInfo,
   localPageUris,
-  completed,
-  onMarkCompleted,
-  onReturnToDetail,
-  onReturnToList,
-  onReread,
-  completionPending,
-  completionError,
   viewport,
 }: PagedReaderProps) {
   const { width, height, scale, epoch } = viewport
-  const insets = useSafeAreaInsets()
   const screenReaderEnabled = useScreenReaderEnabled()
   const listRef = useRef<FlatList<number>>(null)
   const mountedRef = useRef(true)
@@ -122,11 +107,11 @@ export function PagedReader({
   }, [epoch])
 
   useEffect(() => {
-    if (!controlsVisible || progressInteracting || settingsVisible) return
+    if (!controlsVisible || progressInteracting || modalVisible) return
     if (preferences.controlsAutoHideMs === null) return
     const timeout = setTimeout(() => setControlsVisible(false), preferences.controlsAutoHideMs)
     return () => clearTimeout(timeout)
-  }, [controlsVisible, progressInteracting, settingsVisible, pageIndex, preferences.controlsAutoHideMs])
+  }, [controlsVisible, progressInteracting, modalVisible, pageIndex, preferences.controlsAutoHideMs])
 
   const scrollToPage = (nextIndex: number, animated = true) => {
     if (!isCurrentEpoch(epoch)) return
@@ -224,18 +209,12 @@ export function PagedReader({
       {controlsVisible ? (
         <ReaderControls
           key={epoch}
-          title={manga.displayTitle} mode={mode} direction={preferences.pagedDirection}
-          pageIndex={pageIndex} pageCount={manga.pages.length}
-          onBack={onBack} onOpenSettings={onOpenSettings}
+          manga={manga} api={api} serverUrl={serverUrl} userUuid={userUuid}
+          localPageUris={localPageUris} mode={mode} direction={preferences.pagedDirection}
+          pageIndex={pageIndex}
+          onBack={onBack} onOpenSettings={onOpenSettings} onOpenInfo={onOpenInfo}
           onJump={jumpToPage}
           onInteractionChange={setProgressInteracting}
-            completion={pageIndex === manga.pages.length - 1 ? (
-              <ReaderCompletionPanel
-                completed={completed} onMarkCompleted={onMarkCompleted} onReread={onReread}
-                onReturnToDetail={onReturnToDetail} onReturnToList={onReturnToList}
-                pending={completionPending} error={completionError}
-              />
-            ) : null}
         />
       ) : null}
     </View>

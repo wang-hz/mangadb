@@ -27,11 +27,21 @@ const manga: MangaDetail = {
 }
 
 describe('ScrollingReader preferences', () => {
+  it('ends at the last image without appending completion content', () => {
+    const { view } = renderReader({ pageIndex: 2 })
+    expect(view.UNSAFE_getAllByType(FlatList)[0]!.props.ListFooterComponent).toBeUndefined()
+    expect(screen.getByLabelText('页面缩略图导航')).toBeOnTheScreen()
+    expect(screen.getByLabelText('漫画信息')).toBeOnTheScreen()
+    for (const text of ['已读到最后一页', '从头重读', '返回漫画', '返回列表']) {
+      expect(screen.queryByText(text)).toBeNull()
+    }
+  })
+
   it('includes the selected gap in list layouts and rendered pages', () => {
     const { view } = renderReader({
       preferences: { ...DEFAULT_READER_PREFERENCES, scrollGap: 16 },
     })
-    const list = view.UNSAFE_getByType(FlatList)
+    const list = view.UNSAFE_getAllByType(FlatList)[0]!
     const first = list.props.getItemLayout(null, 0)
     const second = list.props.getItemLayout(null, 1)
     const last = list.props.getItemLayout(null, 2)
@@ -45,7 +55,7 @@ describe('ScrollingReader preferences', () => {
     const scroll = jest.spyOn(FlatList.prototype, 'scrollToOffset').mockImplementation(() => {})
     const onPageChange = jest.fn()
     const { view } = renderReader({ onPageChange })
-    const list = view.UNSAFE_getByType(FlatList)
+    const list = view.UNSAFE_getAllByType(FlatList)[0]!
     // A prior manual scroll must not overwrite the explicit target.
     act(() => list.props.onScrollBeginDrag())
     // Reveal the controls again with the page tap handler.
@@ -67,7 +77,7 @@ describe('ScrollingReader preferences', () => {
   it('keeps a jump anchored as image sizes resolve, then releases it on manual scrolling', async () => {
     const scroll = jest.spyOn(FlatList.prototype, 'scrollToOffset').mockImplementation(() => {})
     const { view } = renderReader()
-    const list = view.UNSAFE_getByType(FlatList)
+    const list = view.UNSAFE_getAllByType(FlatList)[0]!
     fireEvent.press(screen.getByLabelText('跳转页码'))
     fireEvent.changeText(screen.getByLabelText('目标页码'), '3')
     fireEvent.press(screen.getByText('跳转'))
@@ -75,7 +85,7 @@ describe('ScrollingReader preferences', () => {
       list.props.renderItem({ item: '0.jpg', index: 0 }).props.onAspectRatio(0, 1)
       await new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
     })
-    const updatedList = view.UNSAFE_getByType(FlatList)
+    const updatedList = view.UNSAFE_getAllByType(FlatList)[0]!
     expect(scroll).toHaveBeenLastCalledWith({ offset: updatedList.props.getItemLayout(null, 2).offset, animated: false })
     scroll.mockClear()
     act(() => updatedList.props.onContentSizeChange())
@@ -92,7 +102,7 @@ describe('ScrollingReader preferences', () => {
     const scroll = jest.spyOn(FlatList.prototype, 'scrollToOffset').mockImplementation(() => {})
     const onPageChange = jest.fn()
     const { view, rerenderViewport } = renderReader({ onPageChange })
-    const list = view.UNSAFE_getByType(FlatList)
+    const list = view.UNSAFE_getAllByType(FlatList)[0]!
     act(() => list.props.onScrollBeginDrag())
     act(() => list.props.renderItem({ item: '0.jpg', index: 0 }).props.onTap())
     fireEvent(screen.getByLabelText('第 1 页图片'), 'accessibilityAction', { nativeEvent: { actionName: 'increment' } })
@@ -121,15 +131,15 @@ describe('ScrollingReader preferences', () => {
       { nativeEvent: { actionName: 'increment' } },
     )
 
-    expect(view.UNSAFE_getByType(FlatList).props.scrollEnabled).toBe(false)
+    expect(view.UNSAFE_getAllByType(FlatList)[0]!.props.scrollEnabled).toBe(false)
     fireEvent.press(screen.getByLabelText('重置缩放'))
-    expect(view.UNSAFE_getByType(FlatList).props.scrollEnabled).toBe(true)
+    expect(view.UNSAFE_getAllByType(FlatList)[0]!.props.scrollEnabled).toBe(true)
   })
 
   it('remounts at the current page for a new epoch and drops stale list callbacks', () => {
     const onPageChange = jest.fn()
     const { rerenderViewport, view } = renderReader({ pageIndex: 1, onPageChange })
-    const oldList = view.UNSAFE_getByType(FlatList)
+    const oldList = view.UNSAFE_getAllByType(FlatList)[0]!
     const staleBeginDrag = oldList.props.onScrollBeginDrag
     const staleScroll = oldList.props.onScroll
     const staleMomentumEnd = oldList.props.onMomentumScrollEnd
@@ -148,7 +158,7 @@ describe('ScrollingReader preferences', () => {
       epoch: 1,
     })
 
-    const nextList = view.UNSAFE_getByType(FlatList)
+    const nextList = view.UNSAFE_getAllByType(FlatList)[0]!
     expect(screen.getByTestId('scrolling-reader-list-1')).toBeOnTheScreen()
     expect(nextList.props.initialScrollIndex).toBe(1)
     expect(nextList.props.scrollEnabled).toBe(true)
@@ -194,22 +204,16 @@ function renderReader({
           authorizationHeaders: () => ({ Authorization: 'Bearer token' }),
           url: (path: string) => `https://example.com${path}`,
         } as unknown as ApiClient}
-        completed={false}
-        completionPending={false}
-        completionError={null}
-        onReread={jest.fn().mockResolvedValue(undefined)}
         manga={manga}
         mode="scroll"
         onBack={jest.fn()}
-        onMarkCompleted={jest.fn().mockResolvedValue(undefined)}
         onOpenSettings={jest.fn()}
+        onOpenInfo={jest.fn()}
         onPageChange={onPageChange}
         onRefreshMetadata={jest.fn().mockResolvedValue(undefined)}
-        onReturnToDetail={jest.fn()}
-        onReturnToList={jest.fn()}
         pageIndex={pageIndex}
         preferences={preferences}
-        settingsVisible={false}
+        modalVisible={false}
         serverUrl="https://example.com"
         userUuid="user-1"
         viewport={viewport}

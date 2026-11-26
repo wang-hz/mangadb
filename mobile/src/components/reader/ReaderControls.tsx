@@ -1,50 +1,68 @@
 import { Ionicons } from '@expo/vector-icons'
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import type { ApiClient } from '@/api/client'
+import type { MangaDetail } from '@/api/types'
 import type { PagedDirection } from '@/storage/readerPreferences'
 import type { ReaderMode } from '@/utils/reader'
 import { ReaderProgressControls } from './ReaderProgressControls'
+import { ReaderThumbnails } from './ReaderThumbnails'
 import { ReaderTopBar } from './ReaderTopBar'
 import { readerChrome } from './readerChrome'
 
 interface ReaderControlsProps {
-  title: string
+  manga: MangaDetail
+  api: ApiClient
+  serverUrl: string
+  userUuid: string
+  localPageUris?: readonly string[]
   mode: ReaderMode
   direction: PagedDirection
   pageIndex: number
-  pageCount: number
   onBack: () => void
+  onOpenInfo: () => void
   onOpenSettings: () => void
   onJump: (pageIndex: number) => void
   onInteractionChange: (interacting: boolean) => void
-  completion?: ReactNode
 }
 
 export function ReaderControls({
-  title, mode, direction, pageIndex, pageCount, onBack, onOpenSettings,
-  onJump, onInteractionChange, completion,
+  manga, api, serverUrl, userUuid, localPageUris, mode, direction, pageIndex,
+  onBack, onOpenInfo, onOpenSettings, onJump, onInteractionChange,
 }: ReaderControlsProps) {
   const insets = useSafeAreaInsets()
   const [progressInteracting, setProgressInteracting] = useState(false)
+  const [thumbnailsInteracting, setThumbnailsInteracting] = useState(false)
   const interactionRef = useRef(onInteractionChange)
   interactionRef.current = onInteractionChange
   useEffect(() => {
-    interactionRef.current(progressInteracting)
-    return () => interactionRef.current(false)
-  }, [progressInteracting])
+    interactionRef.current(progressInteracting || thumbnailsInteracting)
+  }, [progressInteracting, thumbnailsInteracting])
+  useEffect(() => () => interactionRef.current(false), [])
   const rtl = mode === 'paged' && direction === 'rtl'
+  const pageCount = manga.pages.length
   return (
     <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
       <View style={[styles.top, { top: insets.top + 8, left: insets.left + 12, right: insets.right + 12 }]}>
-        <ReaderTopBar title={title} onBack={onBack} onOpenSettings={onOpenSettings} />
+        <ReaderTopBar title={manga.displayTitle} onBack={onBack} onOpenInfo={onOpenInfo} onOpenSettings={onOpenSettings} />
       </View>
       <View style={[styles.bottom, {
         bottom: Math.max(insets.bottom, 8), left: insets.left + 12, right: insets.right + 12,
         top: insets.top + 76,
       }]} pointerEvents="box-none">
         <ScrollView style={styles.panel} contentContainerStyle={styles.content} bounces={false}>
-          {completion}
+          <ReaderThumbnails
+            api={api}
+            manga={manga}
+            serverUrl={serverUrl}
+            userUuid={userUuid}
+            localPageUris={localPageUris}
+            pageIndex={pageIndex}
+            direction={rtl ? 'rtl' : 'ltr'}
+            onJump={onJump}
+            onInteractionChange={setThumbnailsInteracting}
+          />
           <View style={styles.progress}>
             {mode === 'paged' ? <PageButton delta={rtl ? 1 : -1} index={pageIndex} count={pageCount} onJump={onJump} icon="chevron-back" /> : null}
             <ReaderProgressControls

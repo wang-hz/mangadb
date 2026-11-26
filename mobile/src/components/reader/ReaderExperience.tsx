@@ -6,6 +6,7 @@ import { AppState, StyleSheet, View } from 'react-native'
 import type { ApiClient } from '@/api/client'
 import type { MangaDetail } from '@/api/types'
 import { PagedReader } from '@/components/reader/PagedReader'
+import { ReaderInfoModal } from '@/components/reader/ReaderInfoModal'
 import { ReaderSettingsModal } from '@/components/reader/ReaderSettingsModal'
 import { ScrollingReader } from '@/components/reader/ScrollingReader'
 import { useStableViewport } from '@/hooks/useStableViewport'
@@ -51,8 +52,12 @@ export function ReaderExperience({
   const viewport = useStableViewport()
   const [pageIndex, setPageIndex] = useState(initialPageIndex)
   const [mode, setMode] = useState<ReaderMode>(initialMode)
-  const [settingsVisible, setSettingsVisible] = useState(false)
-  const [readingRun, setReadingRun] = useState(0)
+  const [activeModal, setActiveModal] = useState<'settings' | 'info' | null>(null)
+  const returnRevision = useRef(0)
+  const closeModal = useCallback(() => {
+    returnRevision.current += 1
+    setActiveModal(null)
+  }, [])
   const pageIndexRef = useRef(initialPageIndex)
   const modeRef = useRef<ReaderMode>(initialMode)
   const initialStateRef = useRef({ pageIndex: initialPageIndex, mode: initialMode })
@@ -85,6 +90,7 @@ export function ReaderExperience({
     void progressWriter.flush().catch(() => {})
     onReaderReadyRef.current()
     return () => {
+      returnRevision.current += 1
       void progressWriter.flush().then(() => synchronizeProgress(serverUrl, userUuid, true)).catch(() => {})
     }
   }, [persist, progressWriter])
@@ -92,16 +98,16 @@ export function ReaderExperience({
   useEffect(() => {
     const subscription = AppState.addEventListener('change', state => {
       if (state !== 'active') {
-        setSettingsVisible(false)
+        closeModal()
         void progressWriter.flush().then(() => synchronizeProgress(serverUrl, userUuid, true)).catch(() => {})
       }
     })
     return () => subscription.remove()
-  }, [progressWriter])
+  }, [progressWriter, closeModal])
 
   useEffect(() => {
-    if (viewport.isTransitioning) setSettingsVisible(false)
-  }, [viewport.isTransitioning])
+    if (viewport.isTransitioning) closeModal()
+  }, [viewport.isTransitioning, closeModal])
 
   const currentPageIndex = clampPageIndex(pageIndex, manga.pages.length)
 
@@ -119,51 +125,53 @@ export function ReaderExperience({
     manga, serverUrl, userUuid, pageIndex: currentPageIndex, mode,
     initialCompleted: initialCompleted && initialPageIndex === manga.pages.length - 1,
     writer: progressWriter,
-    onRestart: () => {
-      pageIndexRef.current = 0
-      setPageIndex(0)
-      setReadingRun(value => value + 1)
-    },
   })
 
   const changePage = useCallback((nextPageIndex: number) => {
-    if (completion.restarting.current) return
     const clamped = clampPageIndex(nextPageIndex, manga.pages.length)
     if (clamped === pageIndexRef.current) return
     pageIndexRef.current = clamped
     setPageIndex(clamped)
     persist(clamped, modeRef.current)
-  }, [manga.pages.length, persist, completion.restarting])
+  }, [manga.pages.length, persist])
 
   const changeMode = useCallback((nextMode: ReaderMode) => {
-    if (completion.restarting.current || nextMode === modeRef.current) return
+    if (nextMode === modeRef.current) return
     modeRef.current = nextMode
     setMode(nextMode)
     persist(pageIndexRef.current, nextMode)
-  }, [persist, completion.restarting])
+  }, [persist])
+
+  const returnFromInfo = async (destination: 'detail' | 'list') => {
+    const revision = returnRevision.current
+    // A fresh write also makes retry possible after a previous flush failed.
+    persist(pageIndexRef.current, modeRef.current)
+    await progressWriter.flush()
+    if (pageIndexRef.current === mangaRef.current.pages.length - 1) {
+      await completion.complete()
+    }
+    if (revision !== returnRevision.current) return
+    closeModal()
+    if (destination === 'detail') onReturnToDetail()
+    else onReturnToList()
+  }
 
   const commonProps = {
     api,
-    completed: completion.completed,
-    completionPending: completion.pending,
-    completionError: completion.error,
-    onReread: completion.reread,
     manga,
     localPageUris,
     mode,
     onBack,
-    onMarkCompleted: completion.complete,
     onRefreshMetadata,
     onPageChange: changePage,
     pageIndex: currentPageIndex,
     serverUrl,
     userUuid,
     preferences,
-    settingsVisible,
+    modalVisible: activeModal !== null,
     viewport,
-    onOpenSettings: () => setSettingsVisible(true),
-    onReturnToDetail,
-    onReturnToList,
+    onOpenSettings: () => setActiveModal('settings'),
+    onOpenInfo: () => setActiveModal('info'),
   }
 
   const reader = viewport.isTransitioning
@@ -176,13 +184,13 @@ export function ReaderExperience({
       ? (
           <PagedReader
             {...commonProps}
-            key={`paged:${viewport.epoch}:${manga.pages.length}:${readingRun}`}
+            key={`paged:${viewport.epoch}:${manga.pages.length}`}
           />
         )
       : (
           <ScrollingReader
             {...commonProps}
-            key={`scroll:${viewport.epoch}:${manga.pages.length}:${readingRun}`}
+            key={`scroll:${viewport.epoch}:${manga.pages.length}`}
           />
         )
 
@@ -192,9 +200,16 @@ export function ReaderExperience({
       {reader}
       <ReaderSettingsModal
         currentMode={mode}
-        onClose={() => setSettingsVisible(false)}
+        onClose={closeModal}
         onDefaultModeChange={changeMode}
-        visible={settingsVisible && !viewport.isTransitioning}
+        visible={activeModal === 'settings' && !viewport.isTransitioning}
+      />
+      <ReaderInfoModal
+        manga={manga}
+        onClose={closeModal}
+        onReturnToDetail={() => returnFromInfo('detail')}
+        onReturnToList={() => returnFromInfo('list')}
+        visible={activeModal === 'info' && !viewport.isTransitioning}
       />
     </View>
   )

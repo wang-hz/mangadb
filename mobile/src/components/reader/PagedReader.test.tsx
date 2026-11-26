@@ -24,10 +24,10 @@ jest.mock('expo-image', () => ({
     const pageIndex = source.uri?.match(/\/pages\/(\d+)/)?.[1]
     return (
       <View
-        accessibilityLabel={`页面图片-${contentFit}`}
+        accessibilityLabel={source.uri?.includes('thumb=1') ? '缩略图' : `页面图片-${contentFit}`}
         onError={onError}
         onLoad={onLoad}
-        testID={source.uri?.startsWith('file:')
+        testID={source.uri?.includes('thumb=1') ? `thumbnail-${pageIndex}` : source.uri?.startsWith('file:')
           ? `local-page-${source.uri}`
           : `page-image-${pageIndex}`}
       />
@@ -57,6 +57,7 @@ function renderReader(
   onPageChange = jest.fn(),
   onRefreshMetadata = jest.fn().mockResolvedValue(undefined),
   localPageUris?: readonly string[],
+  { pageIndex = 1, modalVisible = false } = {},
 ) {
   const element = (viewport = stableViewport) => (
     <SafeAreaProvider initialMetrics={safeAreaMetrics}>
@@ -65,23 +66,17 @@ function renderReader(
           authorizationHeaders: () => ({ Authorization: 'Bearer token' }),
           url: (path: string) => `https://example.com${path}`,
         } as unknown as ApiClient}
-        completed={false}
-        completionPending={false}
-        completionError={null}
-        onReread={jest.fn().mockResolvedValue(undefined)}
         manga={manga}
         localPageUris={localPageUris}
         mode="paged"
         onBack={jest.fn()}
-        onMarkCompleted={jest.fn().mockResolvedValue(undefined)}
         onOpenSettings={jest.fn()}
+        onOpenInfo={jest.fn()}
         onPageChange={onPageChange}
         onRefreshMetadata={onRefreshMetadata}
-        onReturnToDetail={jest.fn()}
-        onReturnToList={jest.fn()}
-        pageIndex={1}
+        pageIndex={pageIndex}
         preferences={{ ...DEFAULT_READER_PREFERENCES, ...preferencePatch }}
-        settingsVisible={false}
+        modalVisible={modalVisible}
         serverUrl="https://example.com"
         userUuid="user-1"
         viewport={viewport}
@@ -111,9 +106,18 @@ const stableViewport = {
 }
 
 describe('PagedReader preferences', () => {
+  it('shows previews and information at the last page without a completion panel', () => {
+    renderReader({}, undefined, undefined, undefined, { pageIndex: 3 })
+    expect(screen.getByLabelText('页面缩略图导航')).toBeOnTheScreen()
+    expect(screen.getByLabelText('漫画信息')).toBeOnTheScreen()
+    for (const text of ['已读到最后一页', '从头重读', '返回漫画', '返回列表']) {
+      expect(screen.queryByText(text)).toBeNull()
+    }
+  })
+
   it('reverses display order while preserving logical page indices in RTL mode', () => {
     const { onPageChange, view } = renderReader({ pagedDirection: 'rtl' })
-    const list = view.UNSAFE_getByType(FlatList)
+    const list = view.UNSAFE_getAllByType(FlatList)[0]!
     expect(list.props.data).toEqual([3, 2, 1, 0])
     expect(list.props.initialScrollIndex).toBe(2)
 
@@ -128,7 +132,7 @@ describe('PagedReader preferences', () => {
   it.each(['ltr', 'rtl'] as const)('jumps immediately in %s mode and ignores stale momentum', direction => {
     const scroll = jest.spyOn(FlatList.prototype, 'scrollToIndex').mockImplementation(() => {})
     const { onPageChange, view } = renderReader({ pagedDirection: direction })
-    const list = view.UNSAFE_getByType(FlatList)
+    const list = view.UNSAFE_getAllByType(FlatList)[0]!
     fireEvent.press(screen.getByLabelText('跳转页码'))
     fireEvent.changeText(screen.getByLabelText('目标页码'), '4')
     fireEvent.press(screen.getByText('跳转'))
@@ -162,7 +166,7 @@ describe('PagedReader preferences', () => {
 
     await act(async () => {})
     expect(Image.prefetch).not.toHaveBeenCalled()
-    const list = view.UNSAFE_getByType(FlatList)
+    const list = view.UNSAFE_getAllByType(FlatList)[0]!
     expect(list.props.initialNumToRender).toBe(1)
     expect(list.props.maxToRenderPerBatch).toBe(1)
     expect(list.props.windowSize).toBe(3)
@@ -186,11 +190,11 @@ describe('PagedReader preferences', () => {
       { nativeEvent: { actionName: 'increment' } },
     )
 
-    expect(view.UNSAFE_getByType(FlatList).props.scrollEnabled).toBe(false)
+    expect(view.UNSAFE_getAllByType(FlatList)[0]!.props.scrollEnabled).toBe(false)
     expect(screen.getByLabelText('重置缩放')).toBeOnTheScreen()
 
     fireEvent.press(screen.getByLabelText('重置缩放'))
-    expect(view.UNSAFE_getByType(FlatList).props.scrollEnabled).toBe(true)
+    expect(view.UNSAFE_getAllByType(FlatList)[0]!.props.scrollEnabled).toBe(true)
   })
 
   it('uses verified local files and skips network prefetch', async () => {
@@ -201,7 +205,7 @@ describe('PagedReader preferences', () => {
     renderReader({}, jest.fn(), jest.fn().mockResolvedValue(undefined), localPageUris)
     await act(async () => {})
 
-    expect(screen.getByTestId('local-page-file:///downloads/000001.page')).toBeOnTheScreen()
+    expect(screen.getAllByTestId('local-page-file:///downloads/000001.page')[0]).toBeOnTheScreen()
     expect(Image.prefetch).not.toHaveBeenCalled()
   })
 
@@ -258,13 +262,13 @@ describe('PagedReader preferences', () => {
   it('remounts the list for a new viewport epoch, resets zoom, and ignores stale callbacks', () => {
     const onPageChange = jest.fn()
     const { rerenderViewport, view } = renderReader({}, onPageChange)
-    const staleMomentumEnd = view.UNSAFE_getByType(FlatList).props.onMomentumScrollEnd
+    const staleMomentumEnd = view.UNSAFE_getAllByType(FlatList)[0]!.props.onMomentumScrollEnd
     fireEvent(
       screen.getByLabelText('第 2 页图片'),
       'accessibilityAction',
       { nativeEvent: { actionName: 'increment' } },
     )
-    expect(view.UNSAFE_getByType(FlatList).props.scrollEnabled).toBe(false)
+    expect(view.UNSAFE_getAllByType(FlatList)[0]!.props.scrollEnabled).toBe(false)
 
     rerenderViewport({
       ...stableViewport,
@@ -274,9 +278,9 @@ describe('PagedReader preferences', () => {
     })
 
     expect(screen.getByTestId('paged-reader-list-1')).toBeOnTheScreen()
-    expect(view.UNSAFE_getByType(FlatList).props.initialScrollIndex).toBe(1)
-    expect(view.UNSAFE_getByType(FlatList).props.scrollEnabled).toBe(true)
-    expect(view.UNSAFE_getByType(FlatList).props.onScrollToIndexFailed).toBeUndefined()
+    expect(view.UNSAFE_getAllByType(FlatList)[0]!.props.initialScrollIndex).toBe(1)
+    expect(view.UNSAFE_getAllByType(FlatList)[0]!.props.scrollEnabled).toBe(true)
+    expect(view.UNSAFE_getAllByType(FlatList)[0]!.props.onScrollToIndexFailed).toBeUndefined()
 
     act(() => {
       staleMomentumEnd({ nativeEvent: { contentOffset: { x: 0 } } })
@@ -342,6 +346,36 @@ describe('PagedReader preferences', () => {
     expect(screen.getByLabelText('退出阅读器')).toBeOnTheScreen()
     view.unmount()
     jest.useRealTimers()
+  })
+
+  it('keeps controls and previews visible while an information or settings modal is open', () => {
+    jest.useFakeTimers()
+    try {
+      const { view } = renderReader({}, undefined, undefined, undefined, { modalVisible: true })
+      act(() => jest.advanceTimersByTime(10000))
+      expect(screen.getByLabelText('页面缩略图导航')).toBeOnTheScreen()
+      expect(screen.getByLabelText('漫画信息')).toBeOnTheScreen()
+      view.unmount()
+    } finally {
+      jest.useRealTimers()
+    }
+  })
+
+  it('pauses automatic hiding while browsing previews and resumes after release', () => {
+    jest.useFakeTimers()
+    try {
+      const { view } = renderReader()
+      fireEvent(screen.getByLabelText('页面缩略图导航'), 'touchStart')
+      act(() => jest.advanceTimersByTime(10000))
+      expect(screen.getByLabelText('漫画信息')).toBeOnTheScreen()
+      fireEvent(screen.getByLabelText('页面缩略图导航'), 'touchEnd')
+      act(() => jest.advanceTimersByTime(20))
+      act(() => jest.advanceTimersByTime(3000))
+      expect(screen.queryByLabelText('页面缩略图导航')).toBeNull()
+      view.unmount()
+    } finally {
+      jest.useRealTimers()
+    }
   })
 
   it('pauses auto-hide while the page jump is open and resumes after closing', () => {

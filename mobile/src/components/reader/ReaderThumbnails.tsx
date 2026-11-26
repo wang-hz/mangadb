@@ -1,6 +1,6 @@
 import { Image, type ImageSource } from 'expo-image'
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
-import { FlatList, Platform, Pressable, StyleSheet, Text, View } from 'react-native'
+import { AppState, FlatList, Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import type { ApiClient } from '@/api/client'
 import type { MangaDetail } from '@/api/types'
 import { localPageImageSource, mangaPageImageSource } from '@/media/images'
@@ -17,14 +17,53 @@ interface ReaderThumbnailsProps {
   pageIndex: number
   direction: PagedDirection
   onJump: (index: number) => void
+  onInteractionChange: (interacting: boolean) => void
 }
 
 const ITEM_WIDTH = 72
 
 export function ReaderThumbnails({
   api, manga, serverUrl, userUuid, localPageUris, pageIndex, direction, onJump,
+  onInteractionChange,
 }: ReaderThumbnailsProps) {
   const list = useRef<FlatList<number>>(null)
+  const interactionRef = useRef(onInteractionChange)
+  interactionRef.current = onInteractionChange
+  const interaction = useRef({ touch: false, drag: false, momentum: false })
+  const releaseFrame = useRef<number | null>(null)
+
+  const cancelRelease = () => {
+    if (releaseFrame.current !== null) cancelAnimationFrame(releaseFrame.current)
+    releaseFrame.current = null
+  }
+  const releaseInteraction = () => {
+    cancelRelease()
+    interaction.current = { touch: false, drag: false, momentum: false }
+    interactionRef.current(false)
+  }
+  const changeInteraction = (kind: keyof typeof interaction.current, active: boolean) => {
+    cancelRelease()
+    interaction.current[kind] = active
+    if (Object.values(interaction.current).some(Boolean)) {
+      interactionRef.current(true)
+      return
+    }
+    // Momentum starts after the drag ends; keep the controls visible between them.
+    releaseFrame.current = requestAnimationFrame(() => {
+      releaseFrame.current = null
+      interactionRef.current(false)
+    })
+  }
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', state => {
+      if (state !== 'active') releaseInteraction()
+    })
+    return () => {
+      subscription.remove()
+      releaseInteraction()
+    }
+  }, [])
   const indexes = useMemo(() => pageIndexesForDirection(manga.pages.length, direction), [manga.pages.length, direction])
   const displayIndex = displayIndexForPage(pageIndex, manga.pages.length, direction)
   const centerCurrentPage = () => {
@@ -60,6 +99,13 @@ export function ReaderThumbnails({
       maxToRenderPerBatch={3}
       onLayout={centerAfterLayout}
       onContentSizeChange={centerAfterLayout}
+      onTouchStart={() => changeInteraction('touch', true)}
+      onTouchEnd={() => changeInteraction('touch', false)}
+      onTouchCancel={() => changeInteraction('touch', false)}
+      onScrollBeginDrag={() => changeInteraction('drag', true)}
+      onScrollEndDrag={() => changeInteraction('drag', false)}
+      onMomentumScrollBegin={() => changeInteraction('momentum', true)}
+      onMomentumScrollEnd={() => changeInteraction('momentum', false)}
       ref={list}
       renderItem={({ item: index }) => {
         const localUri = localPageUris?.[index]

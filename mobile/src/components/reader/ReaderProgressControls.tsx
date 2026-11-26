@@ -121,12 +121,12 @@ export function ReaderProgressControls({
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, minWidth: 0 },
-  slider: { height: 44, justifyContent: 'center', paddingHorizontal: 10 },
+  root: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  slider: { flex: 1, minWidth: 44, height: 44, justifyContent: 'center', paddingHorizontal: 10 },
   track: { height: 4, borderRadius: 2, backgroundColor: '#666' },
   fill: { height: 4, borderRadius: 2, backgroundColor: '#ffffff' },
   thumb: { position: 'absolute', top: -8, width: 20, height: 20, marginLeft: -10, borderRadius: 10, backgroundColor: '#ffffff' },
   disabled: { opacity: 0.35 },
-  pageButton: { minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  pageButton: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   pageText: { color: '#ffffff', fontSize: 15, fontWeight: '700', fontVariant: ['tabular-nums'] },
 })

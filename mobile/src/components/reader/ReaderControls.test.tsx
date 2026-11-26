@@ -1,6 +1,8 @@
-import { fireEvent, render, screen } from '@testing-library/react-native'
-import { Text } from 'react-native'
+import { act, fireEvent, render, screen } from '@testing-library/react-native'
+import { FlatList } from 'react-native'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
+import { ApiClient } from '@/api/client'
+import type { MangaDetail } from '@/api/types'
 import { ReaderControls } from './ReaderControls'
 
 const metrics = {
@@ -8,11 +10,19 @@ const metrics = {
   insets: { top: 44, left: 0, right: 0, bottom: 34 },
 }
 
+const manga: MangaDetail = {
+  uuid: 'manga-1', displayTitle: '测试漫画', originalTitle: '测试漫画',
+  fullname: 'test-manga', publishDate: null, cover: 0,
+  createAt: '2026-07-19T00:00:00.000Z', updateAt: '2026-07-19T00:00:00.000Z',
+  pages: ['0.jpg', '1.jpg', '2.jpg', '3.jpg'], mangaTags: [],
+}
+
 function renderControls(patch: Partial<React.ComponentProps<typeof ReaderControls>> = {}) {
   const props = {
-    title: '测试漫画', mode: 'paged' as const, direction: 'ltr' as const,
-    pageIndex: 1, pageCount: 4,
-    onBack: jest.fn(), onOpenSettings: jest.fn(),
+    manga, api: new ApiClient('https://example.com', { token: 'token' }),
+    serverUrl: 'https://example.com', userUuid: 'user-1',
+    mode: 'paged' as const, direction: 'ltr' as const, pageIndex: 1,
+    onBack: jest.fn(), onOpenInfo: jest.fn(), onOpenSettings: jest.fn(),
     onJump: jest.fn(), onInteractionChange: jest.fn(), ...patch,
   }
   const view = render(
@@ -24,11 +34,12 @@ function renderControls(patch: Partial<React.ComponentProps<typeof ReaderControl
 }
 
 describe('ReaderControls', () => {
-  it('keeps navigation, settings, and completion without the bottom actions', () => {
-    const { props } = renderControls({ completion: <Text>阅读完成</Text> })
+  it('keeps navigation, information, settings, and page previews visible together', () => {
+    const { props } = renderControls()
 
     expect(screen.getByText('测试漫画')).toBeOnTheScreen()
-    expect(screen.getByText('阅读完成')).toBeOnTheScreen()
+    expect(screen.getByLabelText('页面缩略图导航')).toBeOnTheScreen()
+    expect(screen.getByLabelText('跳转到第 2 页')).toBeSelected()
     expect(screen.getByLabelText('阅读进度')).toBeOnTheScreen()
     expect(screen.queryByLabelText('展开页面缩略图')).toBeNull()
     expect(screen.queryByRole('tablist')).toBeNull()
@@ -37,8 +48,10 @@ describe('ReaderControls', () => {
     }
 
     fireEvent.press(screen.getByLabelText('退出阅读器'))
+    fireEvent.press(screen.getByLabelText('漫画信息'))
     fireEvent.press(screen.getByLabelText('打开阅读设置'))
     expect(props.onBack).toHaveBeenCalledTimes(1)
+    expect(props.onOpenInfo).toHaveBeenCalledTimes(1)
     expect(props.onOpenSettings).toHaveBeenCalledTimes(1)
   })
 
@@ -68,7 +81,7 @@ describe('ReaderControls', () => {
   })
 
   it('disables page arrows for a single page and omits them in scrolling mode', () => {
-    const single = renderControls({ pageIndex: 0, pageCount: 1 })
+    const single = renderControls({ pageIndex: 0, manga: { ...manga, pages: ['0.jpg'] } })
     expect(screen.getByLabelText('上一页')).toBeDisabled()
     expect(screen.getByLabelText('下一页')).toBeDisabled()
     single.unmount()
@@ -77,5 +90,39 @@ describe('ReaderControls', () => {
     expect(screen.queryByLabelText('上一页')).toBeNull()
     expect(screen.queryByLabelText('下一页')).toBeNull()
     expect(screen.getByLabelText('跳转页码')).toBeOnTheScreen()
+  })
+
+  it('uses RTL previews only for paged reading', () => {
+    const paged = renderControls({ direction: 'rtl' })
+    expect(screen.UNSAFE_getByType(FlatList).props.data).toEqual([3, 2, 1, 0])
+    paged.unmount()
+
+    renderControls({ mode: 'scroll', direction: 'rtl' })
+    expect(screen.UNSAFE_getByType(FlatList).props.data).toEqual([0, 1, 2, 3])
+  })
+
+  it('keeps the interaction lock until both thumbnails and page controls finish', () => {
+    jest.useFakeTimers()
+    const { props, unmount } = renderControls()
+    const thumbnails = screen.UNSAFE_getByType(FlatList)
+
+    fireEvent(thumbnails, 'touchStart')
+    expect(props.onInteractionChange).toHaveBeenLastCalledWith(true)
+    fireEvent.press(screen.getByLabelText('跳转页码'))
+    fireEvent(thumbnails, 'touchEnd')
+    act(() => jest.advanceTimersByTime(20))
+    expect(props.onInteractionChange).toHaveBeenLastCalledWith(true)
+    fireEvent.press(screen.getByText('取消'))
+    expect(props.onInteractionChange).toHaveBeenLastCalledWith(false)
+
+    fireEvent(thumbnails, 'touchStart')
+    fireEvent.press(screen.getByLabelText('跳转页码'))
+    fireEvent.press(screen.getByText('取消'))
+    expect(props.onInteractionChange).toHaveBeenLastCalledWith(true)
+    fireEvent(thumbnails, 'touchCancel')
+    act(() => jest.advanceTimersByTime(20))
+    expect(props.onInteractionChange).toHaveBeenLastCalledWith(false)
+    unmount()
+    jest.useRealTimers()
   })
 })
