@@ -76,10 +76,10 @@ implementation is selected and physical Android testing covers:
 - `返回漫画` pops to the adjacent current-manga detail, or replaces a directly
   opened reader with that detail. `返回列表` pops both the reader and adjacent
   detail to preserve the original list's state. A reader opened directly from
-  recent reading pops back to that tab. Missing list history falls back to the
+  reading history pops back to that tab. Missing list history falls back to the
   manga library. The ordinary reader back button retains its existing behavior.
-- Tabs are ordered `继续阅读`, `漫画`, `标签`, `设置`; startup still opens `漫画`.
-  Recent reading lists unfinished, non-hidden local records for the current
-  account and server. Downloads live under Settings, alongside account/server,
-  reading preferences, and diagnostics; download preferences are a further
-  subpage of Downloads.
+- Tabs are ordered `漫画`, `标签`, `历史记录`, `设置`, with `漫画` opening at startup.
+  Reading history lists up to 100 visible reading and completed records for the
+  current account and server, newest first. Downloads live under Settings,
+  alongside account/server, reading preferences, and diagnostics; download
+  preferences are a further subpage of Downloads.

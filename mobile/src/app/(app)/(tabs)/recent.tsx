@@ -1,5 +1,5 @@
 import { ReadingRecordsScreen } from '@/components/ReadingRecordsScreen'
 
-export default function RecentReadingScreen() {
+export default function ReadingHistoryScreen() {
   return <ReadingRecordsScreen />
 }

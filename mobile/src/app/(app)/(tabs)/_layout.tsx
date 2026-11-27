@@ -16,15 +16,6 @@ export default function TabLayout() {
       }}
     >
       <Tabs.Screen
-        name="recent"
-        options={{
-          title: '继续阅读',
-          tabBarIcon: ({ color, focused, size }) => (
-            <Ionicons color={color} name={focused ? 'book' : 'book-outline'} size={size} />
-          ),
-        }}
-      />
-      <Tabs.Screen
         name="mangas"
         options={{
           title: '漫画',
@@ -39,6 +30,15 @@ export default function TabLayout() {
           title: '标签',
           tabBarIcon: ({ color, focused, size }) => (
             <Ionicons color={color} name={focused ? 'pricetags' : 'pricetags-outline'} size={size} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="recent"
+        options={{
+          title: '历史记录',
+          tabBarIcon: ({ color, focused, size }) => (
+            <Ionicons color={color} name={focused ? 'time' : 'time-outline'} size={size} />
           ),
         }}
       />

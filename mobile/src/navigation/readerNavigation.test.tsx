@@ -2,10 +2,15 @@ import { useState } from 'react'
 import { Pressable, Text } from 'react-native'
 import { router, Stack, Tabs } from 'expo-router'
 import { act, fireEvent, renderRouter, screen, waitFor } from 'expo-router/testing-library'
+import LegacyReadingHistoryScreen from '@/app/(app)/settings/history'
 import { useReaderReturn } from './useReaderReturn'
 
 function Root() { return <Stack screenOptions={{ headerShown: false, animation: 'none' }} /> }
-function TabLayout() { return <Tabs screenOptions={{ headerShown: false }} /> }
+function TabLayout() {
+  return <Tabs screenOptions={{ headerShown: false }}>
+    <Tabs.Screen name="settings" options={{ tabBarButtonTestID: 'settings-tab' }} />
+  </Tabs>
+}
 function SettingsLayout() { return <Stack screenOptions={{ headerShown: false, animation: 'none' }} /> }
 function Source({ direct = false }: { direct?: boolean }) {
   const [filter, setFilter] = useState('all')
@@ -35,8 +40,9 @@ const routes = {
   '(app)/(tabs)/mangas': Source,
   '(app)/(tabs)/recent': () => <Source direct />,
   '(app)/(tabs)/settings/_layout': SettingsLayout,
+  '(app)/(tabs)/settings/index': () => <Text>设置首页</Text>,
   '(app)/(tabs)/settings/downloads': Source,
-  '(app)/(tabs)/settings/history': () => <Source direct />,
+  '(app)/settings/history': LegacyReadingHistoryScreen,
   '(app)/tag/[uuid]': Source,
   '(app)/manga/[uuid]': Detail,
   '(app)/reader/[uuid]': Reader,
@@ -62,22 +68,41 @@ it('reuses the existing detail without leaving a duplicate in history', async ()
   await waitFor(() => expect(view.getPathname()).toBe('/mangas'))
 })
 
-it.each(['/recent', '/settings/history'])('returns directly to %s or replaces the reader with detail', async initialUrl => {
+it.each(['/recent', '/settings/history'])('returns to the history tab after opening the reader from %s', async initialUrl => {
   const view = renderRouter(routes, { initialUrl })
+  await waitFor(() => expect(view.getPathname()).toBe('/recent'))
   fireEvent.press(screen.getByText('选择筛选'))
   fireEvent.press(screen.getByText('打开漫画'))
   fireEvent.press(await screen.findByText('返回列表'))
-  await waitFor(() => expect(view.getPathname()).toBe(initialUrl))
+  await waitFor(() => expect(view.getPathname()).toBe('/recent'))
   expect(screen.getByText('filter:reading')).toBeOnTheScreen()
   fireEvent.press(screen.getByText('打开漫画'))
   fireEvent.press(await screen.findByText('返回漫画'))
   await waitFor(() => expect(view.getPathname()).toBe('/manga/m1'))
   act(() => router.back())
-  await waitFor(() => expect(view.getPathname()).toBe(initialUrl))
+  await waitFor(() => expect(view.getPathname()).toBe('/recent'))
 })
 
 it.each(['返回列表', '返回漫画'])('handles a direct reader deep link with %s', async label => {
   const view = renderRouter(routes, { initialUrl: '/reader/m1' })
   fireEvent.press(screen.getByText(label))
   await waitFor(() => expect(view.getPathname()).toBe(label === '返回漫画' ? '/manga/m1' : '/mangas'))
+})
+
+it('opens Settings after redirecting a legacy history deep link', async () => {
+  const view = renderRouter(routes, { initialUrl: '/settings/history' })
+  await waitFor(() => expect(view.getPathname()).toBe('/recent'))
+  fireEvent.press(screen.getByTestId('settings-tab'))
+  await waitFor(() => expect(view.getPathname()).toBe('/settings'))
+  expect(screen.getByText('设置首页')).toBeOnTheScreen()
+})
+
+it('reuses existing tabs when opening a legacy history link while the app is open', async () => {
+  const view = renderRouter(routes, { initialUrl: '/mangas' })
+  fireEvent.press(screen.getByText('选择筛选'))
+  act(() => router.push('/settings/history'))
+  await waitFor(() => expect(view.getPathname()).toBe('/recent'))
+  act(() => router.navigate('/mangas'))
+  await waitFor(() => expect(view.getPathname()).toBe('/mangas'))
+  expect(screen.getByText('filter:reading')).toBeOnTheScreen()
 })

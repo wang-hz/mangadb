@@ -21,13 +21,12 @@ it('orders visible tabs and keeps the library as the initial screen', () => {
   const tabs = layout.props.children.filter((child: { props: { options: { href?: unknown } } }) =>
     child.props.options.href !== null)
   expect(tabs.map((child: { props: { options: { title: string } } }) => child.props.options.title))
-    .toEqual(['继续阅读', '漫画', '标签', '设置'])
+    .toEqual(['漫画', '标签', '历史记录', '设置'])
   expect(tabs[3].props.options.headerShown).toBe(false)
 })
 
 it.each([
-  ['账号与服务器', 'account'], ['阅读设置', 'reading'],
-  ['历史记录', 'history'], ['下载', 'downloads'],
+  ['账号与服务器', 'account'], ['阅读设置', 'reading'], ['下载', 'downloads'],
 ])('opens the %s settings subpage', (title, route) => {
   render(<SettingsScreen />)
   fireEvent.press(screen.getByText(title))
@@ -43,6 +42,11 @@ it('omits stability diagnostics from settings', () => {
   expect(screen.queryByText('稳定性诊断')).not.toBeOnTheScreen()
 })
 
+it('omits reading history from settings', () => {
+  render(<SettingsScreen />)
+  expect(screen.queryByText('历史记录')).not.toBeOnTheScreen()
+})
+
 it('uses icon-only native back buttons throughout the settings stack', () => {
   const layout = SettingsLayout()
   const options = layout.props.screenOptions({ route: { name: 'index' }, navigation: {} })
@@ -50,15 +54,13 @@ it('uses icon-only native back buttons throughout the settings stack', () => {
   expect(options.headerLeft).toBeUndefined()
   expect(options.gestureEnabled).toBeUndefined()
   expect(options.unstable_headerLeftItems).toBeUndefined()
-  expect(layout.props.children.find((child: { props: { name: string } }) => child.props.name === 'history')
-    .props.options.title).toBe('历史记录')
 })
 
 it('removes the iOS settings back button background and returns through the current stack', () => {
   jest.replaceProperty(Platform, 'OS', 'ios')
   const layout = SettingsLayout()
   const goBack = jest.fn()
-  for (const name of ['account', 'reading', 'history', 'downloads', 'download-settings']) {
+  for (const name of ['account', 'reading', 'downloads', 'download-settings']) {
     const options = layout.props.screenOptions({ route: { name }, navigation: { goBack } })
     const items = options.unstable_headerLeftItems({ canGoBack: true, tintColor: '#ffffff' })
     expect(items).toHaveLength(1)
@@ -70,7 +72,7 @@ it('removes the iOS settings back button background and returns through the curr
     expect(options.unstable_headerLeftItems({ canGoBack: false })).toEqual([])
     expect(options.gestureEnabled).toBeUndefined()
   }
-  expect(goBack).toHaveBeenCalledTimes(5)
+  expect(goBack).toHaveBeenCalledTimes(4)
 })
 
 it('retains the platform back button on Android settings subpages', () => {

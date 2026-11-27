@@ -6,7 +6,6 @@ import { colors } from '@/theme/colors'
 const entries = [
   { title: '账号与服务器', route: 'account', icon: 'person-outline' },
   { title: '阅读设置', route: 'reading', icon: 'book-outline' },
-  { title: '历史记录', route: 'history', icon: 'time-outline' },
   { title: '下载', route: 'downloads', icon: 'cloud-download-outline' },
 ] as const
 

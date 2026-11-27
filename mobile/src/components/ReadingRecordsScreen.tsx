@@ -9,11 +9,11 @@ import { useSession } from '@/session/SessionContext'
 import { RECENT_READING_LIMIT } from '@/storage/progress'
 import { colors } from '@/theme/colors'
 
-export function ReadingRecordsScreen({ history = false }: { history?: boolean }) {
+export function ReadingRecordsScreen() {
   const { api, serverUrl, auth } = useSession()
   const recent = useRecentReading(serverUrl, auth?.user.uuid)
   const [refreshing, setRefreshing] = useState(false)
-  if (recent.status === 'loading') return <CenteredState title="正在读取阅读记录" loading />
+  if (recent.status === 'loading') return <CenteredState title="正在读取历史记录" loading />
   if (recent.status === 'error') {
     return (
       <View style={styles.state}>
@@ -22,19 +22,16 @@ export function ReadingRecordsScreen({ history = false }: { history?: boolean })
       </View>
     )
   }
-  const entries = recent.entries.filter(entry =>
-    !entry.hiddenFromRecent && (history || entry.state === 'reading'))
-  const records = history
-    ? entries.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, RECENT_READING_LIMIT)
-    : entries
+  const records = recent.entries
+    .filter(entry => !entry.hiddenFromRecent)
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    .slice(0, RECENT_READING_LIMIT)
   return (
     <FlatList
       contentContainerStyle={styles.content}
       data={records}
       keyExtractor={entry => entry.manga.uuid}
-      ListEmptyComponent={history
-        ? <CenteredState title="暂无阅读历史" message="开始阅读后，漫画会显示在这里。" />
-        : <CenteredState title="暂无继续阅读的漫画" message="开始阅读后，未完成的漫画会显示在这里。" />}
+      ListEmptyComponent={<CenteredState title="暂无阅读历史" message="开始阅读后，漫画会显示在这里。" />}
       onRefresh={() => {
         setRefreshing(true)
         void recent.refresh().finally(() => setRefreshing(false))

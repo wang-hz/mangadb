@@ -73,7 +73,7 @@ export function useRecentReading(
         entries: [],
         allEntries: [],
         status: 'error',
-        error: error instanceof Error ? error.message : '无法读取最近阅读',
+        error: error instanceof Error ? error.message : '无法读取历史记录',
       })
     }
   }, [identity, serverUrl, userUuid])

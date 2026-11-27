@@ -73,15 +73,15 @@ describe('ReadingProgressControls', () => {
     expect(onChange).toHaveBeenCalledWith(null)
   })
 
-  it('removes recent history without clearing the reading position', async () => {
+  it('removes a manga from history and preserves the reading position', async () => {
     const onChange = jest.fn()
     renderControls(progress, onChange)
 
-    fireEvent.press(screen.getByText('移出最近阅读'))
+    fireEvent.press(screen.getByText('移出历史记录'))
 
     await waitFor(() => expect(removeFromRecentReading).toHaveBeenCalled())
     expect(onChange).not.toHaveBeenCalled()
-    expect(screen.getByText('已移出最近阅读，阅读位置仍保留')).toBeOnTheScreen()
+    expect(screen.getByText('已移出历史记录，阅读位置仍保留')).toBeOnTheScreen()
   })
 })
 

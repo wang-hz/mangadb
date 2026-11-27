@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen } from '@testing-library/react-native'
 import { FlatList } from 'react-native'
 import { router } from 'expo-router'
-import ReadingHistoryScreen from '@/app/(app)/(tabs)/settings/history'
+import ReadingHistoryScreen from '@/app/(app)/(tabs)/recent'
 import { useRecentReading } from '@/hooks/useRecentReading'
 import { useSession } from '@/session/SessionContext'
 import type { RecentReadingEntry } from '@/storage/progress'
@@ -30,7 +30,7 @@ beforeEach(() => {
   })
 })
 
-it.each(['reading', 'completed'] as const)('opens a %s record without overriding the restored reading position', state => {
+it.each(['reading', 'completed'] as const)('opens a %s record for the current account without overriding the restored position', state => {
   jest.mocked(useRecentReading)(null, undefined).entries = [{ ...entry, state }]
   render(<ReadingHistoryScreen />)
   fireEvent.press(screen.getByLabelText('继续阅读 历史测试'))
@@ -72,7 +72,7 @@ it('shows loading and empty states and retries a local read failure', () => {
   const result = jest.mocked(useRecentReading)(null, undefined)
   result.status = 'loading'
   const view = render(<ReadingHistoryScreen />)
-  expect(screen.getByText('正在读取阅读记录')).toBeOnTheScreen()
+  expect(screen.getByText('正在读取历史记录')).toBeOnTheScreen()
   result.status = 'ready'
   result.entries = []
   view.rerender(<ReadingHistoryScreen />)

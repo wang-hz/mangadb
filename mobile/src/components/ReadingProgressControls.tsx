@@ -107,11 +107,11 @@ export function ReadingProgressControls({
               />
               <ProgressActionButton
                 disabled={pending !== null}
-                label={pending === 'remove-recent' ? '正在移除' : '移出最近阅读'}
+                label={pending === 'remove-recent' ? '正在移除' : '移出历史记录'}
                 onPress={() => {
                   void run('remove-recent', async () => {
                     await removeFromRecentReading(serverUrl, userUuid, manga.uuid)
-                    setMessage('已移出最近阅读，阅读位置仍保留')
+                    setMessage('已移出历史记录，阅读位置仍保留')
                   })
                 }}
               />
