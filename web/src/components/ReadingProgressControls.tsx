@@ -26,7 +26,7 @@ export default function ReadingProgressControls({ manga, pageCount, recent = fal
     {exists && <>
       <Button size="small" disabled={saving} onClick={() => void update({ pageIndex: 0, state: 'reading' })}>{t('progress.restart')}</Button>
       <Button size="small" disabled={saving} onClick={() => void update({ deleted: true })}>{t('progress.markUnread')}</Button>
-      {recent && <Button size="small" disabled={saving} onClick={() => void update({ hiddenFromRecent: true })}>{t('progress.removeRecent')}</Button>}
+      {recent && <Button size="small" disabled={saving} onClick={() => void update({ hiddenFromRecent: true })}>{t('progress.removeHistory')}</Button>}
     </>}
   </Space>
 }

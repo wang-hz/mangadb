@@ -1,6 +1,5 @@
 const zhTW = {
   'common.retry': '重試',
-  'progress.recent': '最近閱讀',
   'progress.history': '歷史記錄',
   'progress.continue': '繼續閱讀',
   'progress.reading': '閱讀中',
@@ -9,9 +8,9 @@ const zhTW = {
   'progress.markCompleted': '標記已完成',
   'progress.restart': '重新閱讀',
   'progress.markUnread': '標記未讀',
-  'progress.removeRecent': '移出最近閱讀',
+  'progress.removeHistory': '移出歷史記錄',
   'progress.pending': '等待同步',
-  'progress.noRecent': '暫無最近閱讀紀錄',
+  'progress.noHistory': '暫無閱讀紀錄',
   'progress.storageError': '無法儲存或讀取本機閱讀進度，請重試',
   'progress.emptyPages': '此漫畫沒有可閱讀的頁面',
 

@@ -13,8 +13,8 @@ export default function RecentReadingPage() {
   const entries = Object.values(records).filter(entry => !entry.deleted && !entry.hiddenFromRecent)
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 100)
   return <Space direction="vertical" size="large" style={{ width: '100%' }}>
-    <Typography.Title level={3}>{t('progress.recent')}</Typography.Title>
-    {!entries.length && <Empty description={t('progress.noRecent')} />}
+    <Typography.Title level={3}>{t('progress.history')}</Typography.Title>
+    {!entries.length && <Empty description={t('progress.noHistory')} />}
     {entries.map(entry => <div key={entry.mangaUuid} style={{ display: 'flex', gap: 16, paddingBottom: 16, borderBottom: '1px solid #eee' }}>
       <Link to={`/mangas/${entry.mangaUuid}`} style={{ flexShrink: 0 }}>
         <CoverImage uuid={entry.mangaUuid} cover={entry.manga.cover} thumb style={{ width: 70, height: 100, objectFit: 'cover' }} />

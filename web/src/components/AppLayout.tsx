@@ -39,13 +39,12 @@ export default function AppLayout() {
   const isMobile = screens.md === false
 
   const navItems = [
-    { key: 'recent', icon: <BookOutlined />, label: t('progress.recent'), onClick: () => navigate('/recent') },
     { key: 'mangas', icon: <BookOutlined />, label: t('nav.manga'), onClick: () => navigate('/mangas') },
     { key: 'tags', icon: <TagOutlined />, label: t('nav.tags'), onClick: () => navigate('/tags') },
+    { key: 'recent', icon: <HistoryOutlined />, label: t('progress.history'), onClick: () => navigate('/recent') },
   ]
 
   const userMenuItems: MenuProps['items'] = [
-    { key: 'history', icon: <HistoryOutlined />, label: t('progress.history'), onClick: () => navigate('/recent') },
     { key: 'change-password', icon: <KeyOutlined />, label: t('user.changePassword'), onClick: () => setChangePwOpen(true) },
     ...(isAdmin ? [
       { type: 'divider' as const },
